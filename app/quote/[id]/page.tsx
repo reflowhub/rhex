@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   Smartphone,
   ArrowLeft,
@@ -237,11 +238,14 @@ export default function QuoteResultPage({
             Back
           </Button>
           <div className="flex items-center gap-2">
-            <Smartphone className="h-5 w-5 text-primary" />
-            <span className="text-sm font-medium">
-              <span className="text-primary">rhex</span>{" "}
-              <span className="text-muted-foreground">Trade-In</span>
-            </span>
+            <Image
+              src="/logo-rhex.svg"
+              alt="rhex"
+              width={24}
+              height={24}
+              className="h-6 w-6"
+            />
+            <span className="text-sm font-bold tracking-tight">Trade-In</span>
           </div>
         </div>
       </header>
@@ -284,24 +288,6 @@ export default function QuoteResultPage({
             </div>
           )}
 
-          {/* Grade */}
-          <div className="mb-6 flex items-center justify-between rounded-lg border p-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Condition Grade</p>
-              <p className="text-lg font-semibold">
-                {GRADE_LABELS[quote.grade] || quote.grade}
-              </p>
-            </div>
-            <Badge
-              variant="outline"
-              className={cn(
-                "text-base px-3 py-1 font-bold",
-                GRADE_COLORS[quote.grade]
-              )}
-            >
-              Grade {quote.grade}
-            </Badge>
-          </div>
 
           {/* Price */}
           <div className="mb-6 rounded-lg bg-primary/5 p-6 text-center">

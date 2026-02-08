@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import {
   Smartphone,
   Power,
@@ -259,11 +260,14 @@ function QuotePageContent() {
             Back
           </Button>
           <div className="flex items-center gap-2">
-            <Smartphone className="h-5 w-5 text-primary" />
-            <span className="text-sm font-medium">
-              <span className="text-primary">rhex</span>{" "}
-              <span className="text-muted-foreground">Trade-In</span>
-            </span>
+            <Image
+              src="/logo-rhex.svg"
+              alt="rhex"
+              width={24}
+              height={24}
+              className="h-6 w-6"
+            />
+            <span className="text-sm font-bold tracking-tight">Trade-In</span>
           </div>
         </div>
       </header>
@@ -293,12 +297,6 @@ function QuotePageContent() {
           <div className="py-16 text-center">
             <Loader2 className="mx-auto mb-4 h-8 w-8 animate-spin text-primary" />
             <p className="font-semibold">Creating your quote...</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Device graded as{" "}
-              <span className="font-medium">
-                {determinedGrade} - {GRADE_LABELS[determinedGrade!]}
-              </span>
-            </p>
           </div>
         )}
 
@@ -378,26 +376,6 @@ function QuotePageContent() {
               </div>
             </div>
 
-            {/* Grade Legend */}
-            <div className="mt-8">
-              <p className="mb-3 text-sm font-medium text-muted-foreground">
-                Grade scale
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(GRADE_LABELS).map(([grade, label]) => (
-                  <Badge
-                    key={grade}
-                    variant="outline"
-                    className={cn(
-                      "text-xs",
-                      currentStep > 1 && "opacity-60"
-                    )}
-                  >
-                    {grade}: {label}
-                  </Badge>
-                ))}
-              </div>
-            </div>
           </>
         )}
       </div>
