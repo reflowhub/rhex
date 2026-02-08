@@ -1,17 +1,22 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Smartphone, ArrowRight, Search } from "lucide-react";
+import {
+  Smartphone,
+  ArrowRight,
+  Search,
+  Loader2,
+  ClipboardCheck,
+  Package,
+  Banknote,
+  ShieldCheck,
+  Clock,
+  Undo2,
+  ChevronDown,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 interface Device {
@@ -21,15 +26,53 @@ interface Device {
   storage: string;
 }
 
+const FAQ_ITEMS = [
+  {
+    q: "How does the trade-in process work?",
+    a: "Search for your device, answer a few quick questions about its condition to get an instant quote. If you're happy with the price, accept the quote, provide your details, and post your device to us. Once we receive and verify it, we'll send your payment.",
+  },
+  {
+    q: "How is my device graded?",
+    a: "We use a simple 5-grade system (A to E) based on your device's condition. Grade A is excellent (like new), Grade B has minor wear, Grade C has functional issues or noticeable wear, Grade D has screen problems, and Grade E is for devices that don't power on. You'll answer a short set of yes/no questions and we'll determine the grade for you.",
+  },
+  {
+    q: "How long is my quote valid?",
+    a: "Quotes are valid for 14 days from the date they're generated. After that, you can request a new quote — though prices may have changed.",
+  },
+  {
+    q: "What happens if you grade my device differently?",
+    a: "If our inspection finds the device is in a different condition than described, we'll send you a revised offer. You can accept the new price or request your device back free of charge — no risk to you.",
+  },
+  {
+    q: "How do I get paid?",
+    a: "We offer payment via PayID (using your mobile number) or direct bank transfer (BSB + account number). Payment is processed once your device passes our inspection.",
+  },
+  {
+    q: "How fast will I receive payment?",
+    a: "Once we receive and inspect your device, payment is typically processed within 3\u20135 business days.",
+  },
+  {
+    q: "Do I need to factory reset my phone before sending it?",
+    a: "Yes. Please back up your data, sign out of all accounts (iCloud, Google, Samsung, etc.), and perform a factory reset before shipping. This protects your personal information.",
+  },
+  {
+    q: "What devices do you accept?",
+    a: "We accept a wide range of smartphones from Apple, Samsung, Google, OPPO, Xiaomi, Huawei, and more. Search for your device above to check if it's in our system.",
+  },
+];
+
 export default function Home() {
   const router = useRouter();
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedMake, setSelectedMake] = useState("");
-  const [selectedModel, setSelectedModel] = useState("");
-  const [selectedStorage, setSelectedStorage] = useState("");
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
 
-  // Fetch all devices on mount
   useEffect(() => {
     async function fetchDevices() {
       try {
@@ -47,60 +90,57 @@ export default function Home() {
     fetchDevices();
   }, []);
 
-  // Derive unique makes
-  const makes = useMemo(() => {
-    const unique = [...new Set(devices.map((d) => d.make))];
-    return unique.sort((a, b) => a.localeCompare(b));
-  }, [devices]);
+  const filtered = useMemo(() => {
+    if (!query.trim()) return [];
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const matches = devices.filter((d) => {
+      const haystack = `${d.make} ${d.model} ${d.storage}`.toLowerCase();
+      return words.every((w) => haystack.includes(w));
+    });
+    return matches.slice(0, 8);
+  }, [devices, query]);
 
-  // Derive models filtered by selected make
-  const models = useMemo(() => {
-    if (!selectedMake) return [];
-    const filtered = devices.filter((d) => d.make === selectedMake);
-    const unique = [...new Set(filtered.map((d) => d.model))];
-    return unique.sort((a, b) => a.localeCompare(b));
-  }, [devices, selectedMake]);
+  useEffect(() => {
+    setHighlightIndex(0);
+  }, [filtered]);
 
-  // Derive storage options filtered by selected make + model
-  const storageOptions = useMemo(() => {
-    if (!selectedMake || !selectedModel) return [];
-    const filtered = devices.filter(
-      (d) => d.make === selectedMake && d.model === selectedModel
-    );
-    const unique = [...new Set(filtered.map((d) => d.storage))];
-    return unique.sort((a, b) => a.localeCompare(b));
-  }, [devices, selectedMake, selectedModel]);
+  useEffect(() => {
+    if (!listRef.current) return;
+    const item = listRef.current.children[highlightIndex] as HTMLElement;
+    item?.scrollIntoView({ block: "nearest" });
+  }, [highlightIndex]);
 
-  // Find the selected device ID
-  const selectedDeviceId = useMemo(() => {
-    if (!selectedMake || !selectedModel || !selectedStorage) return null;
-    const device = devices.find(
-      (d) =>
-        d.make === selectedMake &&
-        d.model === selectedModel &&
-        d.storage === selectedStorage
-    );
-    return device?.id ?? null;
-  }, [devices, selectedMake, selectedModel, selectedStorage]);
-
-  const handleMakeChange = (value: string) => {
-    setSelectedMake(value);
-    setSelectedModel("");
-    setSelectedStorage("");
+  const selectDevice = (device: Device) => {
+    setSelectedDevice(device);
+    setQuery(`${device.make} ${device.model} ${device.storage}`);
+    setOpen(false);
   };
 
-  const handleModelChange = (value: string) => {
-    setSelectedModel(value);
-    setSelectedStorage("");
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open || filtered.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightIndex((i) => Math.min(i + 1, filtered.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      selectDevice(filtered[highlightIndex]);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
   };
 
-  const handleStorageChange = (value: string) => {
-    setSelectedStorage(value);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setQuery(e.target.value);
+    setSelectedDevice(null);
+    setOpen(true);
   };
 
   const handleGetQuote = () => {
-    if (selectedDeviceId) {
-      router.push(`/quote?device=${selectedDeviceId}`);
+    if (selectedDevice) {
+      router.push(`/quote?device=${selectedDevice.id}`);
     }
   };
 
@@ -121,7 +161,7 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Hero Section */}
+      {/* Hero */}
       <section className="mx-auto max-w-5xl px-4 py-16 md:py-24">
         <div className="text-center">
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
@@ -129,95 +169,96 @@ export default function Home() {
             <span className="text-primary">for cash</span>
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-            Get an instant quote for your device. Fast, free, and fair.
+            Get an instant quote in seconds. No sign-up required.
           </p>
         </div>
 
-        {/* Device Selection Card */}
+        {/* Search Card */}
         <div className="mx-auto mt-12 max-w-lg">
           <div className="rounded-xl border bg-card p-6 shadow-sm">
-            <div className="mb-6 flex items-center gap-2">
-              <Search className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-semibold">Find your device</h2>
-            </div>
-
             <div className="space-y-4">
-              {/* Make Select */}
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
-                  Brand
-                </label>
-                <Select
-                  value={selectedMake}
-                  onValueChange={handleMakeChange}
-                  disabled={loading}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue
-                      placeholder={loading ? "Loading..." : "Select brand"}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {makes.map((make) => (
-                      <SelectItem key={make} value={make}>
-                        {make}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {/* Search Input */}
+              <div className="relative">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={query}
+                    onChange={handleInputChange}
+                    onFocus={() => query.trim() && setOpen(true)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={
+                      loading
+                        ? "Loading devices..."
+                        : "Search e.g. iPhone 15 128GB"
+                    }
+                    disabled={loading}
+                    className="flex h-12 w-full rounded-lg border border-input bg-background pl-10 pr-4 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    autoComplete="off"
+                  />
+                  {loading && (
+                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+
+                {/* Dropdown */}
+                {open && query.trim() && !loading && (
+                  <ul
+                    ref={listRef}
+                    className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-md border bg-popover p-1 shadow-md"
+                  >
+                    {filtered.length === 0 ? (
+                      <li className="px-3 py-6 text-center text-sm text-muted-foreground">
+                        No devices found
+                      </li>
+                    ) : (
+                      filtered.map((device, i) => (
+                        <li
+                          key={device.id}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            selectDevice(device);
+                          }}
+                          onMouseEnter={() => setHighlightIndex(i)}
+                          className={cn(
+                            "flex cursor-pointer items-center justify-between rounded-sm px-3 py-2.5 text-sm",
+                            i === highlightIndex &&
+                              "bg-accent text-accent-foreground"
+                          )}
+                        >
+                          <span>
+                            <span className="font-medium">{device.make}</span>{" "}
+                            {device.model}
+                          </span>
+                          <span className="ml-2 shrink-0 text-xs text-muted-foreground">
+                            {device.storage}
+                          </span>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                )}
               </div>
 
-              {/* Model Select */}
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
-                  Model
-                </label>
-                <Select
-                  value={selectedModel}
-                  onValueChange={handleModelChange}
-                  disabled={!selectedMake || models.length === 0}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {models.map((model) => (
-                      <SelectItem key={model} value={model}>
-                        {model}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Selected device chip */}
+              {selectedDevice && (
+                <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5">
+                  <Smartphone className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium">
+                    {selectedDevice.make} {selectedDevice.model}
+                  </span>
+                  <Badge variant="secondary" className="ml-auto text-xs">
+                    {selectedDevice.storage}
+                  </Badge>
+                </div>
+              )}
 
-              {/* Storage Select */}
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
-                  Storage
-                </label>
-                <Select
-                  value={selectedStorage}
-                  onValueChange={handleStorageChange}
-                  disabled={!selectedModel || storageOptions.length === 0}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select storage" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {storageOptions.map((storage) => (
-                      <SelectItem key={storage} value={storage}>
-                        {storage}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Get Quote Button */}
+              {/* CTA */}
               <Button
                 onClick={handleGetQuote}
-                disabled={!selectedDeviceId}
-                className="w-full mt-2"
+                disabled={!selectedDevice}
+                className="w-full"
                 size="lg"
               >
                 Get Quote
@@ -225,10 +266,10 @@ export default function Home() {
               </Button>
             </div>
 
-            {/* IMEI Option */}
-            <div className="mt-6 flex items-center justify-center gap-2 border-t pt-4">
+            {/* IMEI teaser */}
+            <div className="mt-5 flex items-center justify-center gap-2 border-t pt-4">
               <span className="text-sm text-muted-foreground">
-                I have an IMEI
+                Have your IMEI?
               </span>
               <Badge variant="secondary" className="text-xs">
                 Coming soon
@@ -238,46 +279,127 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Trust Signals */}
+      <section className="border-t bg-card py-12">
+        <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 px-4 sm:grid-cols-3">
+          {[
+            {
+              icon: ShieldCheck,
+              title: "Risk-free",
+              desc: "Don't like our revised offer? We'll return your device free of charge.",
+            },
+            {
+              icon: Clock,
+              title: "Fast payment",
+              desc: "Payment processed within 3\u20135 business days of inspection.",
+            },
+            {
+              icon: Undo2,
+              title: "14-day quotes",
+              desc: "Your quote is locked in for 14 days. No pressure.",
+            },
+          ].map((item) => (
+            <div
+              key={item.title}
+              className="flex items-start gap-4 rounded-lg p-4"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                <item.icon className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold">{item.title}</h3>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {item.desc}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* How It Works */}
-      <section className="border-t bg-card py-16">
+      <section className="border-t py-16">
         <div className="mx-auto max-w-5xl px-4">
-          <h2 className="mb-10 text-center text-2xl font-bold">
+          <h2 className="mb-12 text-center text-2xl font-bold">
             How it works
           </h2>
-          <div className="grid gap-8 sm:grid-cols-3">
+          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
             {[
               {
                 step: "1",
-                title: "Select your device",
-                description:
-                  "Choose your phone brand, model, and storage capacity.",
+                icon: Search,
+                title: "Find your device",
+                desc: "Search by brand, model, or storage to find your phone.",
               },
               {
                 step: "2",
-                title: "Grade your device",
-                description:
-                  "Answer a few quick questions about your device condition.",
+                icon: ClipboardCheck,
+                title: "Answer a few questions",
+                desc: "Quick yes/no questions about your device's condition to determine the grade.",
               },
               {
                 step: "3",
+                icon: Package,
+                title: "Ship it to us",
+                desc: "Accept your quote, then post your device to us with the shipping details provided.",
+              },
+              {
+                step: "4",
+                icon: Banknote,
                 title: "Get paid",
-                description:
-                  "Accept your quote, ship your device, and receive payment.",
+                desc: "We inspect your device and send payment via PayID or bank transfer.",
               },
             ].map((item) => (
               <div key={item.step} className="text-center">
+                <div className="relative mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                  <item.icon className="h-6 w-6" />
+                  <span className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-card text-xs font-bold text-foreground shadow-sm ring-2 ring-background">
+                    {item.step}
+                  </span>
+                </div>
+                <h3 className="mb-1 font-semibold">{item.title}</h3>
+                <p className="text-sm text-muted-foreground">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="border-t bg-card py-16">
+        <div className="mx-auto max-w-2xl px-4">
+          <h2 className="mb-10 text-center text-2xl font-bold">
+            Frequently asked questions
+          </h2>
+          <div className="divide-y rounded-xl border bg-background">
+            {FAQ_ITEMS.map((item, i) => (
+              <div key={i}>
+                <button
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  className="flex w-full items-center justify-between px-5 py-4 text-left text-sm font-medium hover:bg-muted/50 transition-colors"
+                >
+                  {item.q}
+                  <ChevronDown
+                    className={cn(
+                      "ml-4 h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                      openFaq === i && "rotate-180"
+                    )}
+                  />
+                </button>
                 <div
                   className={cn(
-                    "mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full",
-                    "bg-primary text-primary-foreground text-lg font-bold"
+                    "grid transition-all duration-200 ease-in-out",
+                    openFaq === i
+                      ? "grid-rows-[1fr] opacity-100"
+                      : "grid-rows-[0fr] opacity-0"
                   )}
                 >
-                  {item.step}
+                  <div className="overflow-hidden">
+                    <p className="px-5 pb-4 text-sm text-muted-foreground leading-relaxed">
+                      {item.a}
+                    </p>
+                  </div>
                 </div>
-                <h3 className="mb-2 font-semibold">{item.title}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {item.description}
-                </p>
               </div>
             ))}
           </div>
