@@ -2,24 +2,7 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow read access to all files
     match /{allPaths=**} {
-      allow read: if true;
-    }
-
-    // Allow write access to authenticated users only
-    match /uploads/{userId}/{allPaths=**} {
-      allow write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // Excel files for batches
-    match /batches/{batchId}/{fileName} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-
-    // Model library files
-    match /model-library/{fileName} {
       allow read: if true;
       allow write: if request.auth != null;
     }

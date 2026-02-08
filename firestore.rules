@@ -2,21 +2,8 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Temporary rules for development - CHANGE FOR PRODUCTION
-    // Allow read/write access on all documents to authenticated users
     match /{document=**} {
       allow read, write: if request.auth != null;
-    }
-
-    // Public read for certain collections
-    match /devices/{device} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-
-    match /batches/{batch} {
-      allow read: if true;
-      allow write: if request.auth != null;
     }
   }
 }
