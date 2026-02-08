@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
+import { getTodayFXRate, convertPrice } from "@/lib/fx";
 
 // POST /api/quote — Create a new quote
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { deviceId, grade } = body;
+    const { deviceId, grade, imei, displayCurrency } = body;
 
     if (!deviceId || !grade) {
       return NextResponse.json(
@@ -62,12 +63,26 @@ export async function POST(request: NextRequest) {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
+    // Currency conversion
+    const currency = displayCurrency === "AUD" ? "AUD" : "NZD";
+    let fxRate = 1;
+    let quotePriceDisplay = Number(quotePriceNZD);
+
+    if (currency === "AUD") {
+      const rates = await getTodayFXRate();
+      fxRate = rates.NZD_AUD;
+      quotePriceDisplay = convertPrice(Number(quotePriceNZD), "AUD", fxRate, 5);
+    }
+
     // Create quote document
     const quoteData = {
       deviceId,
       grade: normalizedGrade,
+      imei: imei || null,
       quotePriceNZD: Number(quotePriceNZD),
-      displayCurrency: "NZD",
+      quotePriceDisplay,
+      displayCurrency: currency,
+      fxRate,
       status: "quoted",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),

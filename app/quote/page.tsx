@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useCurrency } from "@/lib/currency-context";
 
 interface Device {
   id: string;
@@ -86,6 +87,8 @@ function QuotePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const deviceId = searchParams.get("device");
+  const imei = searchParams.get("imei");
+  const { currency } = useCurrency();
 
   const [device, setDevice] = useState<Device | null>(null);
   const [loadingDevice, setLoadingDevice] = useState(true);
@@ -132,7 +135,7 @@ function QuotePageContent() {
         const res = await fetch("/api/quote", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ deviceId, grade }),
+          body: JSON.stringify({ deviceId, grade, imei, displayCurrency: currency }),
         });
 
         if (res.ok) {

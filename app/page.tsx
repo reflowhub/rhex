@@ -15,10 +15,13 @@ import {
   Clock,
   Undo2,
   ChevronDown,
+  Hash,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useCurrency } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
 
 interface Device {
@@ -65,6 +68,7 @@ const FAQ_ITEMS = [
 
 export default function Home() {
   const router = useRouter();
+  const { currency, setCurrency } = useCurrency();
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -72,6 +76,12 @@ export default function Home() {
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [searchMode, setSearchMode] = useState<"name" | "imei">("name");
+  const [imeiInput, setImeiInput] = useState("");
+  const [imeiLoading, setImeiLoading] = useState(false);
+  const [imeiError, setImeiError] = useState<string | null>(null);
+  const [storageOptions, setStorageOptions] = useState<string[] | null>(null);
+  const [imeiDeviceName, setImeiDeviceName] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
@@ -140,9 +150,84 @@ export default function Home() {
     setOpen(true);
   };
 
+  const handleImeiLookup = async () => {
+    const cleaned = imeiInput.replace(/[\s\-]/g, "");
+    if (cleaned.length !== 15) {
+      setImeiError("IMEI must be 15 digits");
+      return;
+    }
+    if (!/^\d{15}$/.test(cleaned)) {
+      setImeiError("IMEI must contain only numbers");
+      return;
+    }
+
+    setImeiLoading(true);
+    setImeiError(null);
+    setStorageOptions(null);
+    setSelectedDevice(null);
+
+    try {
+      const res = await fetch("/api/imei", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imei: cleaned }),
+      });
+      const data = await res.json();
+
+      if (!data.valid) {
+        setImeiError(data.error || "Invalid IMEI number");
+        return;
+      }
+
+      if (data.deviceId) {
+        // Exact match found
+        setSelectedDevice({
+          id: data.deviceId,
+          make: data.make,
+          model: data.model,
+          storage: data.storage,
+        });
+        setStorageOptions(null);
+        setImeiDeviceName(null);
+      } else if (data.needsStorageSelection && data.storageOptions) {
+        // Device found but need to pick storage
+        setImeiDeviceName(data.deviceName);
+        setStorageOptions(data.storageOptions);
+      } else if (data.needsManualSelection) {
+        setImeiError(
+          "We couldn't identify this device. Try searching by name instead."
+        );
+      }
+    } catch {
+      setImeiError("Failed to look up IMEI. Please try again.");
+    } finally {
+      setImeiLoading(false);
+    }
+  };
+
+  const handleStorageSelect = (storage: string) => {
+    // Find the device with this storage from our loaded devices
+    const match = devices.find(
+      (d) =>
+        imeiDeviceName &&
+        `${d.make} ${d.model}`.toLowerCase() ===
+          imeiDeviceName.toLowerCase() &&
+        d.storage === storage
+    );
+    if (match) {
+      setSelectedDevice(match);
+      setStorageOptions(null);
+      setImeiDeviceName(null);
+    }
+  };
+
   const handleGetQuote = () => {
     if (selectedDevice) {
-      router.push(`/quote?device=${selectedDevice.id}`);
+      const params = new URLSearchParams({ device: selectedDevice.id });
+      if (searchMode === "imei" && imeiInput.trim()) {
+        params.set("imei", imeiInput.replace(/[\s\-]/g, ""));
+      }
+      router.push(`/quote?${params.toString()}`);
     }
   };
 
@@ -163,7 +248,33 @@ export default function Home() {
               Trade-In
             </span>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            <div className="flex items-center rounded-lg border bg-background p-0.5 text-xs font-medium">
+              <button
+                onClick={() => setCurrency("AUD")}
+                className={cn(
+                  "rounded-md px-2 py-1 transition-colors",
+                  currency === "AUD"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                AUD
+              </button>
+              <button
+                onClick={() => setCurrency("NZD")}
+                className={cn(
+                  "rounded-md px-2 py-1 transition-colors",
+                  currency === "NZD"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                NZD
+              </button>
+            </div>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
@@ -189,70 +300,199 @@ export default function Home() {
         {/* Search Card */}
         <div className="mx-auto mt-12 max-w-lg">
           <div className="rounded-xl border bg-card p-6 shadow-sm">
+            {/* Mode Tabs */}
+            <div className="mb-4 flex rounded-lg border bg-background p-1">
+              <button
+                onClick={() => {
+                  setSearchMode("name");
+                  setSelectedDevice(null);
+                  setImeiError(null);
+                  setStorageOptions(null);
+                }}
+                className={cn(
+                  "flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  searchMode === "name"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Search className="mr-1.5 inline-block h-3.5 w-3.5" />
+                Search by name
+              </button>
+              <button
+                onClick={() => {
+                  setSearchMode("imei");
+                  setSelectedDevice(null);
+                  setQuery("");
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  searchMode === "imei"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Hash className="mr-1.5 inline-block h-3.5 w-3.5" />
+                Search by IMEI
+              </button>
+            </div>
+
             <div className="space-y-4">
-              {/* Search Input */}
-              <div className="relative">
+              {/* Name Search Mode */}
+              {searchMode === "name" && (
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={query}
-                    onChange={handleInputChange}
-                    onFocus={() => query.trim() && setOpen(true)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={
-                      loading
-                        ? "Loading devices..."
-                        : "Search e.g. iPhone 15 128GB"
-                    }
-                    disabled={loading}
-                    className="flex h-12 w-full rounded-lg border border-input bg-background pl-10 pr-4 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    autoComplete="off"
-                  />
-                  {loading && (
-                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={query}
+                      onChange={handleInputChange}
+                      onFocus={() => query.trim() && setOpen(true)}
+                      onKeyDown={handleKeyDown}
+                      placeholder={
+                        loading
+                          ? "Loading devices..."
+                          : "Search e.g. iPhone 15 128GB"
+                      }
+                      disabled={loading}
+                      className="flex h-12 w-full rounded-lg border border-input bg-background pl-10 pr-4 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      autoComplete="off"
+                    />
+                    {loading && (
+                      <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+
+                  {/* Dropdown */}
+                  {open && query.trim() && !loading && (
+                    <ul
+                      ref={listRef}
+                      className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-md border bg-popover p-1 shadow-md"
+                    >
+                      {filtered.length === 0 ? (
+                        <li className="px-3 py-6 text-center text-sm text-muted-foreground">
+                          No devices found
+                        </li>
+                      ) : (
+                        filtered.map((device, i) => (
+                          <li
+                            key={device.id}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              selectDevice(device);
+                            }}
+                            onMouseEnter={() => setHighlightIndex(i)}
+                            className={cn(
+                              "flex cursor-pointer items-center justify-between rounded-sm px-3 py-2.5 text-sm",
+                              i === highlightIndex &&
+                                "bg-accent text-accent-foreground"
+                            )}
+                          >
+                            <span>
+                              <span className="font-medium">
+                                {device.make}
+                              </span>{" "}
+                              {device.model}
+                            </span>
+                            <span className="ml-2 shrink-0 text-xs text-muted-foreground">
+                              {device.storage}
+                            </span>
+                          </li>
+                        ))
+                      )}
+                    </ul>
                   )}
                 </div>
+              )}
 
-                {/* Dropdown */}
-                {open && query.trim() && !loading && (
-                  <ul
-                    ref={listRef}
-                    className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-md border bg-popover p-1 shadow-md"
-                  >
-                    {filtered.length === 0 ? (
-                      <li className="px-3 py-6 text-center text-sm text-muted-foreground">
-                        No devices found
-                      </li>
-                    ) : (
-                      filtered.map((device, i) => (
-                        <li
-                          key={device.id}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            selectDevice(device);
-                          }}
-                          onMouseEnter={() => setHighlightIndex(i)}
-                          className={cn(
-                            "flex cursor-pointer items-center justify-between rounded-sm px-3 py-2.5 text-sm",
-                            i === highlightIndex &&
-                              "bg-accent text-accent-foreground"
-                          )}
-                        >
-                          <span>
-                            <span className="font-medium">{device.make}</span>{" "}
-                            {device.model}
-                          </span>
-                          <span className="ml-2 shrink-0 text-xs text-muted-foreground">
-                            {device.storage}
-                          </span>
-                        </li>
-                      ))
+              {/* IMEI Search Mode */}
+              {searchMode === "imei" && (
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Hash className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={imeiInput}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^\d\s\-]/g, "");
+                        setImeiInput(val);
+                        setImeiError(null);
+                        setSelectedDevice(null);
+                        setStorageOptions(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleImeiLookup();
+                        }
+                      }}
+                      placeholder="Enter 15-digit IMEI"
+                      maxLength={17}
+                      className="flex h-12 w-full rounded-lg border border-input bg-background pl-10 pr-4 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      autoComplete="off"
+                    />
+                    {imeiLoading && (
+                      <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
                     )}
-                  </ul>
-                )}
-              </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Dial <span className="font-mono font-medium">*#06#</span>{" "}
+                    on your phone to find your IMEI
+                  </p>
+
+                  {/* IMEI Error */}
+                  {imeiError && (
+                    <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      {imeiError}
+                    </div>
+                  )}
+
+                  {/* Storage Selection */}
+                  {storageOptions && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">
+                        {imeiDeviceName} — Select storage:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {storageOptions.map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => handleStorageSelect(s)}
+                            className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Lookup Button */}
+                  {!selectedDevice && !storageOptions && (
+                    <Button
+                      onClick={handleImeiLookup}
+                      disabled={
+                        imeiLoading ||
+                        imeiInput.replace(/[\s\-]/g, "").length < 15
+                      }
+                      variant="secondary"
+                      className="w-full"
+                    >
+                      {imeiLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Looking up...
+                        </>
+                      ) : (
+                        "Look up device"
+                      )}
+                    </Button>
+                  )}
+                </div>
+              )}
 
               {/* Selected device chip */}
               {selectedDevice && (
@@ -277,16 +517,6 @@ export default function Home() {
                 Get Quote
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
-            </div>
-
-            {/* IMEI teaser */}
-            <div className="mt-5 flex items-center justify-center gap-2 border-t pt-4">
-              <span className="text-sm text-muted-foreground">
-                Have your IMEI?
-              </span>
-              <Badge variant="secondary" className="text-xs">
-                Coming soon
-              </Badge>
             </div>
           </div>
         </div>

@@ -31,7 +31,9 @@ interface QuoteData {
   deviceId: string;
   grade: string;
   quotePriceNZD: number;
+  quotePriceDisplay?: number;
   displayCurrency: string;
+  fxRate?: number;
   status: string;
   createdAt: string;
   expiresAt: string;
@@ -79,6 +81,7 @@ export default function QuoteResultPage({
   const [submitting, setSubmitting] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [requoting, setRequoting] = useState(false);
 
   // Form state
   const [customerName, setCustomerName] = useState("");
@@ -156,6 +159,32 @@ export default function QuoteResultPage({
       setError("Failed to accept quote. Please try again.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleRequote = async () => {
+    if (!quote) return;
+    setRequoting(true);
+    try {
+      const res = await fetch("/api/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceId: quote.deviceId,
+          grade: quote.grade,
+          displayCurrency: quote.displayCurrency,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        router.push(`/quote/${data.id}`);
+      } else {
+        setError("Failed to create new quote. Please try again.");
+      }
+    } catch {
+      setError("Failed to create new quote. Please try again.");
+    } finally {
+      setRequoting(false);
     }
   };
 
@@ -293,11 +322,16 @@ export default function QuoteResultPage({
           <div className="mb-6 rounded-lg bg-primary/5 p-6 text-center">
             <p className="text-sm text-muted-foreground">Your Quote</p>
             <p className="mt-1 text-4xl font-bold text-primary">
-              ${quote.quotePriceNZD.toFixed(2)}
+              ${(quote.quotePriceDisplay ?? quote.quotePriceNZD).toFixed(2)}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
               {quote.displayCurrency}
             </p>
+            {quote.displayCurrency === "AUD" && quote.fxRate && quote.fxRate !== 1 && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                NZD equivalent: ${quote.quotePriceNZD.toFixed(2)}
+              </p>
+            )}
           </div>
 
           {/* Expiry Notice */}
@@ -314,10 +348,25 @@ export default function QuoteResultPage({
           )}
 
           {isExpired && !accepted && (
-            <div className="mb-6 rounded-lg border border-destructive/20 bg-destructive/5 p-3">
+            <div className="mb-6 rounded-lg border border-destructive/20 bg-destructive/5 p-4">
               <p className="text-sm text-destructive font-medium">
-                This quote has expired. Please create a new quote.
+                This quote has expired. Prices may have changed.
               </p>
+              <Button
+                onClick={handleRequote}
+                disabled={requoting}
+                size="sm"
+                className="mt-3"
+              >
+                {requoting ? (
+                  <>
+                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Get New Quote"
+                )}
+              </Button>
             </div>
           )}
 
