@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
+import { Geist } from "next/font/google";
 import "./globals.css";
 
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
-  title: "My App",
-  description: "",
+  title: "Trade In | rhex",
+  description: "Trade in your phone for cash",
 };
 
 export default function RootLayout({
@@ -13,7 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className={geistSans.variable}>{children}</body>
     </html>
   );
 }
