@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Call imei.info API to resolve IMEI to device info
+// Call imei.info API (v5) to resolve IMEI to device info
 async function lookupIMEI(
   imei: string
 ): Promise<{ make: string; model: string; storage: string | null } | null> {
@@ -154,9 +154,11 @@ async function lookupIMEI(
   }
 
   try {
+    // imei.info API v5: GET /api/check/{service_id}/?API_KEY={key}&imei={imei}
+    // Service 0 = "Basic IMEI Check" — returns brand_name + model
     const res = await fetch(
-      `https://api.imei.info/v2/check?imei=${imei}&apikey=${apiKey}`,
-      { signal: AbortSignal.timeout(5000) }
+      `https://dash.imei.info/api/check/0/?API_KEY=${apiKey}&imei=${imei}`,
+      { signal: AbortSignal.timeout(10000) }
     );
 
     if (!res.ok) {
@@ -166,20 +168,60 @@ async function lookupIMEI(
 
     const data = await res.json();
 
-    // Extract device info from imei.info response
-    const make = data.brand || data.manufacturer || data.make || null;
-    const model = data.model || data.model_name || data.device || null;
-    const storage = data.storage || data.internal_memory || null;
-
-    if (!make || !model) {
+    // Handle async responses (status 202 / In_progress)
+    if (data.status === "In_progress" && data.id) {
+      // Poll for result (up to 3 attempts)
+      for (let i = 0; i < 3; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const pollRes = await fetch(
+          `https://dash.imei.info/api/search_history/${data.id}/?API_KEY=${apiKey}`,
+          { signal: AbortSignal.timeout(5000) }
+        );
+        if (pollRes.ok) {
+          const pollData = await pollRes.json();
+          if (pollData.status === "Done" && pollData.result) {
+            return extractDeviceInfo(pollData.result);
+          }
+        }
+      }
       return null;
     }
 
-    return { make, model, storage };
+    if (data.status === "Done" && data.result) {
+      return extractDeviceInfo(data.result);
+    }
+
+    return null;
   } catch (error) {
     console.error("imei.info API call failed:", error);
     return null;
   }
+}
+
+function extractDeviceInfo(
+  result: Record<string, unknown>
+): { make: string; model: string; storage: string | null } | null {
+  const make =
+    (result.brand_name as string) ||
+    (result.brand as string) ||
+    (result.manufacturer as string) ||
+    null;
+  const model =
+    (result.model as string) ||
+    (result.model_name as string) ||
+    (result.device as string) ||
+    null;
+  const storage = (result.storage as string) || null;
+
+  if (!make || !model) {
+    return null;
+  }
+
+  // Normalize make: "APPLE" → "Apple", "SAMSUNG" → "Samsung"
+  const normalizedMake =
+    make.charAt(0).toUpperCase() + make.slice(1).toLowerCase();
+
+  return { make: normalizedMake, model, storage };
 }
 
 // Match API result to our device library
