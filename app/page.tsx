@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   Smartphone,
   ArrowRight,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 interface Device {
@@ -148,21 +150,32 @@ export default function Home() {
     <main className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b bg-card">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-          <div className="flex items-center gap-2">
-            <Smartphone className="h-6 w-6 text-primary" />
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <Image
+              src="/logo-rhex.svg"
+              alt="rhex"
+              width={28}
+              height={28}
+              className="h-7 w-7"
+            />
             <span className="text-xl font-bold tracking-tight">
-              <span className="text-primary">rhex</span>{" "}
-              <span className="text-muted-foreground font-normal">
-                Trade-In
-              </span>
+              Trade-In
             </span>
           </div>
+          <ThemeToggle />
         </div>
       </header>
 
       {/* Hero */}
-      <section className="mx-auto max-w-5xl px-4 py-16 md:py-24">
+      <section className="relative overflow-hidden">
+        {/* Background illustration */}
+        <div
+          className="pointer-events-none absolute inset-0 bg-no-repeat bg-cover bg-center"
+          style={{ backgroundImage: "url(/hero-bg.svg)" }}
+          aria-hidden="true"
+        />
+        <div className="relative mx-auto max-w-5xl px-4 py-16 md:py-24">
         <div className="text-center">
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
             Trade in your phone{" "}
@@ -276,6 +289,7 @@ export default function Home() {
               </Badge>
             </div>
           </div>
+        </div>
         </div>
       </section>
 
@@ -408,7 +422,14 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t py-8">
-        <div className="mx-auto max-w-5xl px-4 text-center text-sm text-muted-foreground">
+        <div className="mx-auto flex max-w-5xl items-center justify-center gap-2 px-4 text-sm text-muted-foreground">
+          <Image
+            src="/logo-rhex.svg"
+            alt="rhex"
+            width={16}
+            height={16}
+            className="h-4 w-4 opacity-50"
+          />
           <p>rhex Trade-In Program</p>
         </div>
       </footer>

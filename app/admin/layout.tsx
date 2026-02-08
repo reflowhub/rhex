@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Smartphone,
   DollarSign,
@@ -98,7 +99,11 @@ export default function AdminLayout({
         </nav>
 
         {/* Sidebar footer */}
-        <div className="border-t border-sidebar-border px-3 py-4">
+        <div className="border-t border-sidebar-border px-3 py-4 space-y-1">
+          <div className="flex items-center justify-between px-3 py-1">
+            <span className="text-xs text-sidebar-foreground/50">Theme</span>
+            <ThemeToggle />
+          </div>
           <Link
             href="/"
             className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
@@ -112,16 +117,19 @@ export default function AdminLayout({
       {/* Main content */}
       <div className="flex flex-1 flex-col">
         {/* Top bar (mobile) */}
-        <header className="flex h-16 items-center border-b border-border bg-card px-4 lg:hidden">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu className="h-5 w-5" />
-            <span className="sr-only">Open sidebar</span>
-          </Button>
-          <span className="ml-3 text-lg font-semibold">Admin</span>
+        <header className="flex h-16 items-center justify-between border-b border-border bg-card px-4 lg:hidden">
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+              <span className="sr-only">Open sidebar</span>
+            </Button>
+            <span className="ml-3 text-lg font-semibold">Admin</span>
+          </div>
+          <ThemeToggle />
         </header>
 
         {/* Page content */}

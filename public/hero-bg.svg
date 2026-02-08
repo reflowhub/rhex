@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" fill="none" viewBox="0 0 1200 600">
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="1200" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c93365" stop-opacity=".04"/>
+      <stop offset="1" stop-color="#f1bed4" stop-opacity=".08"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="600" fill="url(#g1)"/>
+  <!-- floating phone outlines -->
+  <g stroke="#c93365" stroke-width="1.5" opacity=".08">
+    <!-- phone 1 top-left -->
+    <rect x="80" y="60" width="64" height="110" rx="12" transform="rotate(-12 112 115)"/>
+    <circle cx="112" cy="155" r="4" transform="rotate(-12 112 155)"/>
+    <rect x="98" y="72" width="28" height="4" rx="2" transform="rotate(-12 112 74)"/>
+    <!-- phone 2 top-right -->
+    <rect x="980" y="30" width="72" height="124" rx="14" transform="rotate(8 1016 92)"/>
+    <circle cx="1016" cy="138" r="5" transform="rotate(8 1016 138)"/>
+    <rect x="1000" y="44" width="32" height="4" rx="2" transform="rotate(8 1016 46)"/>
+    <!-- phone 3 bottom-left -->
+    <rect x="150" y="400" width="56" height="96" rx="10" transform="rotate(15 178 448)"/>
+    <circle cx="178" cy="484" r="4" transform="rotate(15 178 484)"/>
+    <!-- phone 4 bottom-right -->
+    <rect x="1020" y="380" width="68" height="118" rx="13" transform="rotate(-10 1054 439)"/>
+    <circle cx="1054" cy="484" r="5" transform="rotate(-10 1054 484)"/>
+    <rect x="1036" y="394" width="36" height="4" rx="2" transform="rotate(-10 1054 396)"/>
+    <!-- phone 5 mid-left -->
+    <rect x="30" y="220" width="48" height="82" rx="8" transform="rotate(20 54 261)"/>
+    <!-- phone 6 mid-right -->
+    <rect x="1120" y="200" width="52" height="90" rx="9" transform="rotate(-18 1146 245)"/>
+  </g>
+  <!-- scattered dots -->
+  <g fill="#c93365" opacity=".06">
+    <circle cx="300" cy="80" r="3"/>
+    <circle cx="900" cy="120" r="4"/>
+    <circle cx="200" cy="350" r="2.5"/>
+    <circle cx="1000" cy="300" r="3"/>
+    <circle cx="500" cy="520" r="2"/>
+    <circle cx="700" cy="50" r="3.5"/>
+    <circle cx="400" cy="480" r="2"/>
+    <circle cx="850" cy="500" r="3"/>
+    <circle cx="600" cy="560" r="2.5"/>
+    <circle cx="150" cy="150" r="2"/>
+    <circle cx="1050" cy="150" r="2.5"/>
+  </g>
+  <!-- currency symbols -->
+  <g font-family="system-ui,sans-serif" font-weight="700" fill="#c93365" opacity=".05">
+    <text x="320" y="180" font-size="28" transform="rotate(-8 320 180)">$</text>
+    <text x="850" y="80" font-size="34" transform="rotate(12 850 80)">$</text>
+    <text x="250" y="500" font-size="24" transform="rotate(6 250 500)">$</text>
+    <text x="950" y="460" font-size="30" transform="rotate(-15 950 460)">$</text>
+  </g>
+  <!-- subtle grid pattern in center -->
+  <g stroke="#c93365" stroke-width=".5" opacity=".03">
+    <line x1="400" y1="0" x2="400" y2="600"/>
+    <line x1="600" y1="0" x2="600" y2="600"/>
+    <line x1="800" y1="0" x2="800" y2="600"/>
+    <line x1="0" y1="200" x2="1200" y2="200"/>
+    <line x1="0" y1="400" x2="1200" y2="400"/>
+  </g>
+</svg>
