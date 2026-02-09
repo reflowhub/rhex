@@ -12,6 +12,7 @@ import {
   FileText,
   Package,
   Link2,
+  Users,
   Menu,
   X,
   ChevronLeft,
@@ -42,6 +43,11 @@ const sidebarLinks = [
     href: "/admin/aliases",
     label: "Aliases",
     icon: Link2,
+  },
+  {
+    href: "/admin/partners",
+    label: "Partners",
+    icon: Users,
   },
 ];
 
