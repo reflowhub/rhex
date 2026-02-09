@@ -54,6 +54,7 @@ const DEVICE_SYNONYMS = [
 const QUANTITY_SYNONYMS = ["quantity", "qty", "count", "units", "amount"];
 const STORAGE_SYNONYMS = ["storage", "capacity", "memory", "size", "gb"];
 const MAKE_SYNONYMS = ["make", "brand", "manufacturer", "oem"];
+const GRADE_SYNONYMS = ["grade", "condition", "quality", "tier"];
 
 function findColumnIndex(
   headers: string[],
@@ -117,6 +118,7 @@ export async function POST(request: NextRequest) {
     const quantityCol = findColumnIndex(headers, QUANTITY_SYNONYMS);
     const storageCol = findColumnIndex(headers, STORAGE_SYNONYMS);
     const makeCol = findColumnIndex(headers, MAKE_SYNONYMS);
+    const gradeCol = findColumnIndex(headers, GRADE_SYNONYMS);
 
     // If no device column found, use the first column
     const effectiveDeviceCol = deviceCol >= 0 ? deviceCol : 0;
@@ -140,17 +142,21 @@ export async function POST(request: NextRequest) {
     let matchedCount = 0;
     let unmatchedCount = 0;
 
-    // Fetch price list for pricing lookups
+    // Fetch price list for pricing lookups (all grades for per-row support)
     const priceSnapshot = await adminDb
       .collection("priceLists/FP-2B/prices")
       .get();
-    const priceMap = new Map<string, number>();
+    const priceMap = new Map<string, Record<string, number>>();
     priceSnapshot.docs.forEach((doc) => {
       const data = doc.data();
-      const gradeField = `grade${grade}`;
-      if (data[gradeField] !== undefined && data[gradeField] !== null) {
-        priceMap.set(doc.id, Number(data[gradeField]));
+      const grades: Record<string, number> = {};
+      for (const g of validGrades) {
+        const field = `grade${g}`;
+        if (data[field] !== undefined && data[field] !== null) {
+          grades[g] = Number(data[field]);
+        }
       }
+      priceMap.set(doc.id, grades);
     });
 
     for (let i = 1; i < lines.length; i++) {
@@ -176,12 +182,22 @@ export async function POST(request: NextRequest) {
         if (!isNaN(parsed) && parsed > 0) quantity = parsed;
       }
 
+      // Parse per-row grade (fall back to global assumed grade)
+      let rowGrade = grade;
+      if (gradeCol >= 0 && values[gradeCol]) {
+        const g = values[gradeCol].trim().toUpperCase();
+        if (validGrades.includes(g)) {
+          rowGrade = g;
+        }
+      }
+
       // Match device
       const match = await matchDeviceString(rawInput);
 
       let indicativePriceNZD = 0;
       if (match.deviceId) {
-        const price = priceMap.get(match.deviceId);
+        const devicePrices = priceMap.get(match.deviceId);
+        const price = devicePrices?.[rowGrade];
         if (price !== undefined) {
           indicativePriceNZD = price * quantity;
         }
@@ -198,7 +214,7 @@ export async function POST(request: NextRequest) {
         deviceName: match.deviceName,
         matchConfidence: match.matchConfidence,
         quantity,
-        assumedGrade: grade,
+        assumedGrade: rowGrade,
         indicativePriceNZD,
       });
     }

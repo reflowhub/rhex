@@ -58,6 +58,7 @@ interface ManualLine {
   key: number;
   device: Device;
   quantity: number;
+  grade: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -195,7 +196,7 @@ export default function EstimatePage() {
     const qty = Math.max(1, parseInt(addQuantity) || 1);
     setManualLines((prev) => [
       ...prev,
-      { key: lineCounter, device, quantity: qty },
+      { key: lineCounter, device, quantity: qty, grade: assumedGrade },
     ]);
     setLineCounter((c) => c + 1);
     setSearchQuery("");
@@ -213,6 +214,12 @@ export default function EstimatePage() {
     if (isNaN(parsed) || parsed < 1) return;
     setManualLines((prev) =>
       prev.map((l) => (l.key === key ? { ...l, quantity: parsed } : l))
+    );
+  };
+
+  const updateGrade = (key: number, grade: string) => {
+    setManualLines((prev) =>
+      prev.map((l) => (l.key === key ? { ...l, grade } : l))
     );
   };
 
@@ -234,10 +241,10 @@ export default function EstimatePage() {
 
   // Build CSV from manual list
   const buildManualCSV = (): string => {
-    const lines = ["Device,Quantity"];
+    const lines = ["Device,Quantity,Grade"];
     for (const line of manualLines) {
       const name = `${line.device.make} ${line.device.model} ${line.device.storage}`;
-      lines.push(`"${name}",${line.quantity}`);
+      lines.push(`"${name}",${line.quantity},${line.grade}`);
     }
     return lines.join("\n");
   };
@@ -714,6 +721,7 @@ export default function EstimatePage() {
                       <TableHead className="w-10">#</TableHead>
                       <TableHead>Device</TableHead>
                       <TableHead className="w-28">Storage</TableHead>
+                      <TableHead className="w-28">Grade</TableHead>
                       <TableHead className="w-24 text-center">Qty</TableHead>
                       <TableHead className="w-12" />
                     </TableRow>
@@ -728,6 +736,23 @@ export default function EstimatePage() {
                           {line.device.make} {line.device.model}
                         </TableCell>
                         <TableCell>{line.device.storage}</TableCell>
+                        <TableCell>
+                          <Select
+                            value={line.grade}
+                            onValueChange={(v) => updateGrade(line.key, v)}
+                          >
+                            <SelectTrigger className="h-8 w-24 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="A">A</SelectItem>
+                              <SelectItem value="B">B</SelectItem>
+                              <SelectItem value="C">C</SelectItem>
+                              <SelectItem value="D">D</SelectItem>
+                              <SelectItem value="E">E</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
                         <TableCell>
                           <Input
                             type="number"
