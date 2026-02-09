@@ -10,6 +10,8 @@ import {
   Smartphone,
   DollarSign,
   FileText,
+  Package,
+  Link2,
   Menu,
   X,
   ChevronLeft,
@@ -30,6 +32,16 @@ const sidebarLinks = [
     href: "/admin/quotes",
     label: "Quotes",
     icon: FileText,
+  },
+  {
+    href: "/admin/bulk-quotes",
+    label: "Bulk Quotes",
+    icon: Package,
+  },
+  {
+    href: "/admin/aliases",
+    label: "Aliases",
+    icon: Link2,
   },
 ];
 
