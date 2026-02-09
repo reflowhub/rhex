@@ -25,18 +25,18 @@ export async function getTodayFXRate(): Promise<FXRates> {
   if (apiKey) {
     try {
       const res = await fetch(
-        `https://v6.exchangerate-api.com/v6/${apiKey}/pair/NZD/AUD`,
+        `https://api.freecurrencyapi.com/v1/latest?apikey=${apiKey}&base_currency=NZD&currencies=AUD`,
         { signal: AbortSignal.timeout(5000) }
       );
 
       if (res.ok) {
         const data = await res.json();
-        if (data.result === "success" && data.conversion_rate) {
+        if (data.data?.AUD) {
           const rates: FXRates = {
-            NZD_AUD: data.conversion_rate,
-            AUD_NZD: 1 / data.conversion_rate,
+            NZD_AUD: data.data.AUD,
+            AUD_NZD: 1 / data.data.AUD,
             date: today,
-            source: "exchangerate-api.com",
+            source: "freecurrencyapi.com",
           };
 
           // Cache in Firestore
