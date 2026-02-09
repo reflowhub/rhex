@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import {
   Smartphone,
@@ -248,7 +249,13 @@ export default function Home() {
               Trade-In
             </span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/business"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Business
+            </Link>
             <div className="flex items-center rounded-lg border bg-background p-0.5 text-xs font-medium">
               <button
                 onClick={() => setCurrency("AUD")}
@@ -647,6 +654,22 @@ export default function Home() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Business CTA */}
+      <section className="border-t py-12">
+        <div className="mx-auto max-w-2xl px-4 text-center">
+          <h2 className="text-xl font-bold">Have multiple devices to trade in?</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Upload a manifest and get an instant bulk estimate for your business.
+          </p>
+          <Link href="/business">
+            <Button variant="outline" className="mt-4">
+              Business Estimator
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
         </div>
       </section>
 

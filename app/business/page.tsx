@@ -26,21 +26,29 @@ export default function BusinessPage() {
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <Image
-              src="/logo-rhex.svg"
-              alt="rhex"
-              width={28}
-              height={28}
-              className="h-7 w-7"
-            />
-            <span className="text-xl font-bold tracking-tight">
-              Trade-In
-            </span>
+            <Link href="/" className="flex items-center gap-2.5">
+              <Image
+                src="/logo-rhex.svg"
+                alt="rhex"
+                width={28}
+                height={28}
+                className="h-7 w-7"
+              />
+              <span className="text-xl font-bold tracking-tight">
+                Trade-In
+              </span>
+            </Link>
             <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
               Business
             </span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Personal
+            </Link>
             <div className="flex items-center rounded-lg border bg-background p-0.5 text-xs font-medium">
               <button
                 onClick={() => setCurrency("AUD")}
