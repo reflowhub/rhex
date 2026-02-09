@@ -18,9 +18,13 @@ import {
   ChevronDown,
   Hash,
   AlertCircle,
+  HelpCircle,
+  Send,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCurrency } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
@@ -85,6 +89,13 @@ export default function Home() {
   const [imeiDeviceName, setImeiDeviceName] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+
+  // "Can't find your device?" state
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [requestDevice, setRequestDevice] = useState("");
+  const [requestEmail, setRequestEmail] = useState("");
+  const [requestSubmitting, setRequestSubmitting] = useState(false);
+  const [requestSubmitted, setRequestSubmitted] = useState(false);
 
   useEffect(() => {
     async function fetchDevices() {
@@ -229,6 +240,27 @@ export default function Home() {
         params.set("imei", imeiInput.replace(/[\s\-]/g, ""));
       }
       router.push(`/quote?${params.toString()}`);
+    }
+  };
+
+  const handleDeviceRequest = async () => {
+    if (!requestDevice.trim()) return;
+    setRequestSubmitting(true);
+    try {
+      await fetch("/api/device-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          device: requestDevice.trim(),
+          email: requestEmail.trim() || null,
+        }),
+      });
+      setRequestSubmitted(true);
+    } catch {
+      // Still show success — request is best-effort
+      setRequestSubmitted(true);
+    } finally {
+      setRequestSubmitting(false);
     }
   };
 
@@ -525,6 +557,79 @@ export default function Home() {
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
+          </div>
+
+          {/* Can't find your device? */}
+          <div className="mt-4 text-center">
+            {!requestOpen && !requestSubmitted && (
+              <button
+                onClick={() => setRequestOpen(true)}
+                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <HelpCircle className="h-3.5 w-3.5" />
+                Can&apos;t find your device?
+              </button>
+            )}
+            {requestOpen && !requestSubmitted && (
+              <div className="mx-auto max-w-lg rounded-xl border bg-card p-4 text-left">
+                <p className="text-sm font-medium">
+                  Tell us which device you&apos;d like to trade in
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  We&apos;ll review your request and may add it to our supported devices.
+                </p>
+                <div className="mt-3 space-y-2.5">
+                  <Input
+                    placeholder="e.g. Samsung Galaxy S24 Ultra 512GB"
+                    value={requestDevice}
+                    onChange={(e) => setRequestDevice(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleDeviceRequest();
+                    }}
+                  />
+                  <Input
+                    type="email"
+                    placeholder="Email (optional — we'll notify you when added)"
+                    value={requestEmail}
+                    onChange={(e) => setRequestEmail(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleDeviceRequest();
+                    }}
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={handleDeviceRequest}
+                      disabled={!requestDevice.trim() || requestSubmitting}
+                      size="sm"
+                    >
+                      {requestSubmitting ? (
+                        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Send className="mr-2 h-3.5 w-3.5" />
+                      )}
+                      Submit Request
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setRequestOpen(false);
+                        setRequestDevice("");
+                        setRequestEmail("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {requestSubmitted && (
+              <div className="inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-400">
+                <CheckCircle2 className="h-4 w-4" />
+                Thanks! We&apos;ll review your request.
+              </div>
+            )}
           </div>
         </div>
         </div>
