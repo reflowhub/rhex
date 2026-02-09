@@ -31,19 +31,24 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Restore from localStorage
     const saved = localStorage.getItem("preferred-currency");
-    if (saved === "AUD" || saved === "NZD") {
+    const hasExplicitChoice = saved === "AUD" || saved === "NZD";
+    if (hasExplicitChoice) {
       setCurrencyState(saved);
     }
 
-    // Fetch FX rate
+    // Fetch FX rate (also returns geo country for auto-detection)
     async function fetchRate() {
       try {
         const res = await fetch("/api/fx");
         if (res.ok) {
           const data = await res.json();
           setFxRate(data.NZD_AUD || 1);
+
+          // Auto-detect currency from geo if user hasn't explicitly chosen
+          if (!hasExplicitChoice && data.country === "AU") {
+            setCurrencyState("AUD");
+          }
         }
       } catch {
         console.error("Failed to fetch FX rate");
