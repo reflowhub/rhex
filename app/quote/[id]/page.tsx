@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import {
   Smartphone,
@@ -266,7 +267,7 @@ export default function QuoteResultPage({
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back
           </Button>
-          <div className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2">
             <Image
               src="/logo-rhex.svg"
               alt="rhex"
@@ -275,7 +276,7 @@ export default function QuoteResultPage({
               className="h-6 w-6"
             />
             <span className="text-sm font-bold tracking-tight">Trade-In</span>
-          </div>
+          </Link>
         </div>
       </header>
 
@@ -327,11 +328,6 @@ export default function QuoteResultPage({
             <p className="mt-1 text-sm text-muted-foreground">
               {quote.displayCurrency}
             </p>
-            {quote.displayCurrency === "AUD" && quote.fxRate && quote.fxRate !== 1 && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                NZD equivalent: ${quote.quotePriceNZD.toFixed(2)}
-              </p>
-            )}
           </div>
 
           {/* Expiry Notice */}
@@ -582,7 +578,7 @@ export default function QuoteResultPage({
                 <p>Ship your device to:</p>
                 <div className="rounded-lg bg-muted p-3">
                   <p className="font-medium text-foreground">
-                    rhex Trade-In Program
+                    Reflow Hub Pty Ltd
                   </p>
                   <p>[Address]</p>
                   <p>[City, State, Postcode]</p>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import {
   Smartphone,
@@ -262,7 +263,7 @@ function QuotePageContent() {
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back
           </Button>
-          <div className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2">
             <Image
               src="/logo-rhex.svg"
               alt="rhex"
@@ -271,7 +272,7 @@ function QuotePageContent() {
               className="h-6 w-6"
             />
             <span className="text-sm font-bold tracking-tight">Trade-In</span>
-          </div>
+          </Link>
         </div>
       </header>
 

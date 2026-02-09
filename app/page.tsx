@@ -237,7 +237,7 @@ export default function Home() {
       {/* Header */}
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2.5">
+          <Link href="/" className="flex items-center gap-2.5">
             <Image
               src="/logo-rhex.svg"
               alt="rhex"
@@ -248,7 +248,7 @@ export default function Home() {
             <span className="text-xl font-bold tracking-tight">
               Trade-In
             </span>
-          </div>
+          </Link>
           <div className="flex items-center gap-3">
             <Link
               href="/business"
@@ -675,15 +675,27 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t py-8">
-        <div className="mx-auto flex max-w-5xl items-center justify-center gap-2 px-4 text-sm text-muted-foreground">
-          <Image
-            src="/logo-rhex.svg"
-            alt="rhex"
-            width={16}
-            height={16}
-            className="h-4 w-4 opacity-50"
-          />
-          <p>rhex Trade-In Program</p>
+        <div className="mx-auto max-w-5xl px-4">
+          <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Image
+                src="/logo-rhex.svg"
+                alt="rhex"
+                width={16}
+                height={16}
+                className="h-4 w-4 opacity-50"
+              />
+              <p>Reflow Hub Pty Ltd</p>
+            </div>
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <Link href="/terms" className="hover:text-foreground transition-colors">
+                Terms & Conditions
+              </Link>
+              <Link href="/privacy" className="hover:text-foreground transition-colors">
+                Privacy Policy
+              </Link>
+            </div>
+          </div>
         </div>
       </footer>
     </main>
