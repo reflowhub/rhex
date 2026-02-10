@@ -43,10 +43,9 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error) {
     console.error("Admin session creation error:", error);
-    return NextResponse.json(
-      { error: "Failed to create session" },
-      { status: 401 }
-    );
+    const msg =
+      error instanceof Error ? error.message : "Failed to create session";
+    return NextResponse.json({ error: msg }, { status: 401 });
   }
 }
 
