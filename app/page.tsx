@@ -673,6 +673,32 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Social Proof / Awards */}
+      <section className="border-t py-10">
+        <div className="mx-auto max-w-5xl px-4">
+          <p className="mb-6 text-center text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            Recognised by
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-12">
+            {[
+              { src: "/marketing/deloitte-tech-fast-50.png", alt: "Deloitte Technology Fast 50 2020" },
+              { src: "/marketing/ft-high-growth.png", alt: "Financial Times High Growth 2022" },
+              { src: "/marketing/afr-fast-100.png", alt: "AFR Fast 100" },
+              { src: "/marketing/deloitte-fast-500-apac.png", alt: "Deloitte Fast 500 APAC Winner" },
+            ].map((logo) => (
+              <Image
+                key={logo.src}
+                src={logo.src}
+                alt={logo.alt}
+                width={120}
+                height={60}
+                className="h-12 w-auto object-contain opacity-70 grayscale transition-all hover:opacity-100 hover:grayscale-0 sm:h-14"
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* How It Works */}
       <section className="border-t py-16">
         <div className="mx-auto max-w-5xl px-4">
