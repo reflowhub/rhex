@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
+import { requireAdmin } from "@/lib/admin-auth";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -25,6 +26,8 @@ function serializeTimestamp(value: unknown): string | null {
 
 export async function GET(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const { searchParams } = new URL(request.url);
     const statusFilter =
       searchParams.get("status")?.toLowerCase().trim() ?? "";

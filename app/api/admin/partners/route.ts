@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
+import { requireAdmin } from "@/lib/admin-auth";
 
 // ---------------------------------------------------------------------------
 // GET /api/admin/partners — List all partners with optional filters
@@ -11,6 +12,8 @@ import admin from "@/lib/firebase-admin";
 
 export async function GET(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const { searchParams } = new URL(request.url);
     const statusFilter = searchParams.get("status")?.toLowerCase().trim() ?? "";
     const search = searchParams.get("search")?.toLowerCase().trim() ?? "";
@@ -69,6 +72,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const body = await request.json();
     const {
       name,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
+import { requireAdmin } from "@/lib/admin-auth";
 
 // ---------------------------------------------------------------------------
 // CSV Parsing
@@ -146,8 +147,10 @@ function parsePricingCSV(csv: string): {
 // GET /api/admin/pricing — List all price lists (metadata only)
 // ---------------------------------------------------------------------------
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const snapshot = await adminDb.collection("priceLists").get();
 
     const priceLists: Record<string, unknown>[] = snapshot.docs.map((doc) => {
@@ -189,6 +192,8 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const body = await request.json();
     const { name, csv } = body;
 

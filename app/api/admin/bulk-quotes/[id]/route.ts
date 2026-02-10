@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { onBulkQuotePaid } from "@/lib/commission-trigger";
+import { requireAdmin } from "@/lib/admin-auth";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,10 +33,12 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
 // ---------------------------------------------------------------------------
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const { id } = await params;
 
     const quoteDoc = await adminDb.collection("bulkQuotes").doc(id).get();
@@ -128,6 +131,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const { id } = await params;
     const body = await request.json();
     const { status } = body;

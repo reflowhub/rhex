@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
+import { requireAdmin } from "@/lib/admin-auth";
 
 // ---------------------------------------------------------------------------
 // GET /api/admin/partners/[id]/payouts — List payouts for a partner
 // ---------------------------------------------------------------------------
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const { id } = await params;
 
     const payoutsSnapshot = await adminDb
@@ -51,6 +54,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const { id } = await params;
     const body = await request.json();
     const { reference } = body;

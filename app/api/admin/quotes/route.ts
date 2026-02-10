@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
+import { requireAdmin } from "@/lib/admin-auth";
 
 // ---------------------------------------------------------------------------
 // GET /api/admin/quotes — List all quotes with optional filters
@@ -10,6 +11,8 @@ import { adminDb } from "@/lib/firebase-admin";
 
 export async function GET(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const { searchParams } = new URL(request.url);
     const statusFilter = searchParams.get("status")?.toLowerCase().trim() ?? "";
     const search = searchParams.get("search")?.toLowerCase().trim() ?? "";

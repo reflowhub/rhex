@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
+import { requireAdmin } from "@/lib/admin-auth";
 
 // ---------------------------------------------------------------------------
 // GET /api/admin/pricing/[id] — Get a price list with all prices + device info
@@ -10,6 +11,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const { id } = await params;
     const priceListRef = adminDb.collection("priceLists").doc(id);
     const priceListDoc = await priceListRef.get();
@@ -108,6 +111,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const { id } = await params;
     const priceListRef = adminDb.collection("priceLists").doc(id);
     const priceListDoc = await priceListRef.get();

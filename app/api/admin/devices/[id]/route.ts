@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
+import { requireAdmin } from "@/lib/admin-auth";
 
 // GET /api/admin/devices/[id] — Get a single device by document ID
 export async function GET(
@@ -8,6 +9,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const { id } = await params;
     const doc = await adminDb.collection("devices").doc(id).get();
 
@@ -31,6 +34,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const { id } = await params;
     const body = await request.json();
     const { make, model, storage } = body;
@@ -77,6 +82,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const { id } = await params;
     const docRef = adminDb.collection("devices").doc(id);
     const doc = await docRef.get();

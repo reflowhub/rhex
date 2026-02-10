@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { AdminProvider, useAdmin } from "@/lib/admin-context";
 import {
   Smartphone,
   DollarSign,
@@ -15,7 +16,8 @@ import {
   Users,
   Menu,
   X,
-  ChevronLeft,
+  LogOut,
+  Loader2,
 } from "lucide-react";
 
 const sidebarLinks = [
@@ -51,13 +53,24 @@ const sidebarLinks = [
   },
 ];
 
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+// ---------------------------------------------------------------------------
+// Inner layout (needs admin context)
+// ---------------------------------------------------------------------------
+
+function AdminLayoutInner({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
+  const { admin, loading, logout } = useAdmin();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!admin) return null;
 
   return (
     <div className="flex min-h-screen">
@@ -122,13 +135,13 @@ export default function AdminLayout({
             <span className="text-xs text-sidebar-foreground/50">Theme</span>
             <ThemeToggle />
           </div>
-          <Link
-            href="/"
-            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+          <button
+            onClick={logout}
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
           >
-            <ChevronLeft className="h-4 w-4" />
-            Back to site
-          </Link>
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </button>
         </div>
       </aside>
 
@@ -156,5 +169,28 @@ export default function AdminLayout({
         </main>
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Exported layout — wraps in AdminProvider
+// ---------------------------------------------------------------------------
+
+export default function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const pathname = usePathname();
+
+  // Login page renders without the auth-guarded sidebar layout
+  if (pathname === "/admin/login") {
+    return <>{children}</>;
+  }
+
+  return (
+    <AdminProvider>
+      <AdminLayoutInner>{children}</AdminLayoutInner>
+    </AdminProvider>
   );
 }

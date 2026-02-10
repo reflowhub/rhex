@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { saveAlias } from "@/lib/matching";
+import { requireAdmin } from "@/lib/admin-auth";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -25,6 +26,8 @@ function serializeTimestamp(value: unknown): string | null {
 
 export async function GET(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.toLowerCase().trim() ?? "";
 
@@ -105,6 +108,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const body = await request.json();
     const { alias, deviceId } = body;
 
@@ -151,6 +156,8 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const { searchParams } = new URL(request.url);
     const deleteId = searchParams.get("deleteId");
 

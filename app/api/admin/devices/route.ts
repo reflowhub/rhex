@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
+import { requireAdmin } from "@/lib/admin-auth";
 
 // GET /api/admin/devices — List all devices, with optional ?search= fuzzy filter
 export async function GET(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.toLowerCase().trim() ?? "";
 
@@ -56,6 +59,8 @@ export async function GET(request: NextRequest) {
 // POST /api/admin/devices — Create a new device
 export async function POST(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const body = await request.json();
     const { make, model, storage } = body;
 

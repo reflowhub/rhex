@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
+import { requireAdmin } from "@/lib/admin-auth";
 
 // ---------------------------------------------------------------------------
 // PUT /api/admin/bulk-quotes/[id]/devices/[lineId] — Update device inspection
@@ -10,6 +11,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string; lineId: string }> }
 ) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const { id, lineId } = await params;
     const body = await request.json();
     const { actualGrade, actualPriceNZD, inspectionNotes } = body;

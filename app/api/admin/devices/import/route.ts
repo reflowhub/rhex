@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
+import { requireAdmin } from "@/lib/admin-auth";
 
 interface ParsedRow {
   deviceId?: number;
@@ -107,6 +108,8 @@ function parseCSVLine(line: string): string[] {
 // POST /api/admin/devices/import — Bulk import devices from CSV
 export async function POST(request: NextRequest) {
   try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
     const body = await request.json();
     const { csv } = body;
 

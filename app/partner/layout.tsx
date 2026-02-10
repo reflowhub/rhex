@@ -223,6 +223,13 @@ export default function PartnerLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
+  // Login page renders without the auth-guarded sidebar layout
+  if (pathname === "/partner/login") {
+    return <>{children}</>;
+  }
+
   return (
     <PartnerProvider>
       <PartnerLayoutInner>{children}</PartnerLayoutInner>
