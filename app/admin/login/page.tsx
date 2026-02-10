@@ -26,7 +26,8 @@ export default function AdminLoginPage() {
         email,
         password
       );
-      const idToken = await userCredential.user.getIdToken();
+      // Force refresh to ensure custom claims (admin: true) are in the token
+      const idToken = await userCredential.user.getIdToken(true);
 
       const res = await fetch("/api/admin/auth/session", {
         method: "POST",
@@ -36,7 +37,7 @@ export default function AdminLoginPage() {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Failed to create session");
+        throw new Error(data.error ?? "Failed to create session");
       }
 
       router.push("/admin/quotes");
