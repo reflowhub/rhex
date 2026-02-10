@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
+import { onBulkQuotePaid } from "@/lib/commission-trigger";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -147,6 +148,15 @@ export async function PUT(
     }
 
     await adminDb.collection("bulkQuotes").doc(id).update(updateData);
+
+    // Trigger commission if transitioning to "paid"
+    if (status === "paid") {
+      const freshDoc = await adminDb.collection("bulkQuotes").doc(id).get();
+      const freshData = freshDoc.data() as Record<string, unknown>;
+      await onBulkQuotePaid(id, freshData).catch((err) =>
+        console.error("Commission trigger error:", err)
+      );
+    }
 
     // Re-fetch to return updated data
     const updatedDoc = await adminDb.collection("bulkQuotes").doc(id).get();

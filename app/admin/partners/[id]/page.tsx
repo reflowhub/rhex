@@ -14,8 +14,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -28,6 +37,7 @@ import {
   DollarSign,
   Link2,
   Package,
+  CreditCard,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -60,6 +70,15 @@ interface Partner {
   } | null;
   createdAt: string | null;
   updatedAt: string | null;
+}
+
+interface PayoutItem {
+  id: string;
+  amount: number;
+  reference: string | null;
+  paymentMethod: string | null;
+  ledgerEntryCount: number;
+  createdAt: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -101,6 +120,14 @@ export default function PartnerDetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ---- payouts state
+  const [payouts, setPayouts] = useState<PayoutItem[]>([]);
+  const [payoutsLoading, setPayoutsLoading] = useState(false);
+  const [payoutDialogOpen, setPayoutDialogOpen] = useState(false);
+  const [payoutLoading, setPayoutLoading] = useState(false);
+  const [payoutReference, setPayoutReference] = useState("");
+  const [payoutError, setPayoutError] = useState<string | null>(null);
+
   // ---- edit dialog
   const [editOpen, setEditOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
@@ -137,6 +164,49 @@ export default function PartnerDetailPage({
   useEffect(() => {
     fetchPartner();
   }, [fetchPartner]);
+
+  // ---- fetch payouts
+  const fetchPayouts = useCallback(() => {
+    if (!id) return;
+    setPayoutsLoading(true);
+    fetch(`/api/admin/partners/${id}/payouts`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setPayouts(data);
+      })
+      .catch(console.error)
+      .finally(() => setPayoutsLoading(false));
+  }, [id]);
+
+  useEffect(() => {
+    fetchPayouts();
+  }, [fetchPayouts]);
+
+  // ---- create payout
+  const handleCreatePayout = async () => {
+    setPayoutLoading(true);
+    setPayoutError(null);
+    try {
+      const res = await fetch(`/api/admin/partners/${id}/payouts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reference: payoutReference.trim() || null }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        setPayoutError(err.error || "Failed to create payout");
+        return;
+      }
+      setPayoutDialogOpen(false);
+      setPayoutReference("");
+      fetchPartner();
+      fetchPayouts();
+    } catch {
+      setPayoutError("Failed to create payout");
+    } finally {
+      setPayoutLoading(false);
+    }
+  };
 
   // ---- open edit dialog with current values
   const openEdit = () => {
@@ -499,6 +569,130 @@ export default function PartnerDetailPage({
           </div>
         )}
       </div>
+
+      {/* Payouts Section (Mode A) */}
+      {partner.modes.includes("A") && (
+        <div className="mt-6 rounded-lg border border-border bg-card">
+          <div className="flex items-center justify-between border-b px-4 py-3">
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Payouts</span>
+              <Badge variant="secondary" className="text-xs">
+                {payouts.length}
+              </Badge>
+            </div>
+            {partner.commissionSummary &&
+              partner.commissionSummary.totalPending > 0 && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setPayoutReference("");
+                    setPayoutError(null);
+                    setPayoutDialogOpen(true);
+                  }}
+                >
+                  <DollarSign className="mr-1 h-3 w-3" />
+                  Create Payout ({formatCurrency(
+                    partner.commissionSummary.totalPending
+                  )})
+                </Button>
+              )}
+          </div>
+
+          {payoutsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : payouts.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              No payouts yet.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Entries</TableHead>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {payouts.map((payout) => (
+                  <TableRow key={payout.id}>
+                    <TableCell className="font-mono text-xs">
+                      {payout.id.substring(0, 8)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium text-emerald-600">
+                      {formatCurrency(payout.amount)}
+                    </TableCell>
+                    <TableCell>{payout.ledgerEntryCount} entries</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {payout.reference || "\u2014"}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatDate(payout.createdAt)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+      )}
+
+      {/* Create Payout Dialog */}
+      <Dialog open={payoutDialogOpen} onOpenChange={setPayoutDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Payout</DialogTitle>
+            <DialogDescription>
+              This will mark all pending commission entries as paid and create a
+              payout record for{" "}
+              {partner.commissionSummary
+                ? formatCurrency(partner.commissionSummary.totalPending)
+                : "$0.00"}{" "}
+              NZD.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            {payoutError && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                {payoutError}
+              </div>
+            )}
+            <div className="grid gap-2">
+              <Label htmlFor="payout-ref">
+                Payment Reference (optional)
+              </Label>
+              <Input
+                id="payout-ref"
+                placeholder="e.g. bank transfer ref"
+                value={payoutReference}
+                onChange={(e) => setPayoutReference(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPayoutDialogOpen(false)}
+              disabled={payoutLoading}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleCreatePayout} disabled={payoutLoading}>
+              {payoutLoading && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Confirm Payout
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>

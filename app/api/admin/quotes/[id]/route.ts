@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
+import { onQuotePaid } from "@/lib/commission-trigger";
 
 // ---------------------------------------------------------------------------
 // Valid status transitions
@@ -158,6 +159,15 @@ export async function PUT(
     }
 
     await quoteRef.update(updateData);
+
+    // Trigger commission if transitioning to "paid"
+    if (updateData.status === "paid") {
+      const freshDoc = await quoteRef.get();
+      const freshData = freshDoc.data() as Record<string, unknown>;
+      await onQuotePaid(id, freshData).catch((err) =>
+        console.error("Commission trigger error:", err)
+      );
+    }
 
     // Return the updated quote
     const updatedDoc = await quoteRef.get();
