@@ -296,6 +296,12 @@ export default function Home() {
             >
               Business
             </Link>
+            <Link
+              href="/partner/login"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Partners
+            </Link>
             <div className="flex items-center rounded-lg border bg-background p-0.5 text-xs font-medium">
               <button
                 onClick={() => setCurrency("AUD")}
