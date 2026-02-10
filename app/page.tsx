@@ -679,7 +679,7 @@ export default function Home() {
           <p className="mb-6 text-center text-xs font-medium uppercase tracking-widest text-muted-foreground">
             Recognised by
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-12">
+          <div className="flex items-center justify-center gap-10 sm:gap-14">
             {[
               { src: "/marketing/deloitte-tech-fast-50.png", alt: "Deloitte Technology Fast 50 2020" },
               { src: "/marketing/ft-high-growth.png", alt: "Financial Times High Growth 2022" },
@@ -690,9 +690,9 @@ export default function Home() {
                 key={logo.src}
                 src={logo.src}
                 alt={logo.alt}
-                width={120}
-                height={60}
-                className="h-12 w-auto object-contain opacity-70 grayscale transition-all hover:opacity-100 hover:grayscale-0 sm:h-14"
+                width={160}
+                height={48}
+                className="h-10 w-auto shrink-0 object-contain opacity-70 grayscale transition-all hover:opacity-100 hover:grayscale-0 sm:h-12"
               />
             ))}
           </div>
