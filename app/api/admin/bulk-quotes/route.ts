@@ -40,8 +40,31 @@ export async function GET(request: NextRequest) {
 
     const snapshot = await query.get();
 
+    // Batch-fetch partner names
+    const partnerIdSet = new Set<string>();
+    snapshot.docs.forEach((doc) => {
+      const pid = doc.data().partnerId;
+      if (pid && typeof pid === "string") partnerIdSet.add(pid);
+    });
+
+    const partnerMap = new Map<string, string>();
+    const partnerIds = Array.from(partnerIdSet);
+    if (partnerIds.length > 0) {
+      const partnerRefs = partnerIds.map((pid) =>
+        adminDb.collection("partners").doc(pid)
+      );
+      const partnerDocs = await adminDb.getAll(...partnerRefs);
+      partnerDocs.forEach((doc) => {
+        if (doc.exists) {
+          const d = doc.data() as Record<string, unknown>;
+          partnerMap.set(doc.id, (d.name as string) ?? "");
+        }
+      });
+    }
+
     let quotes = snapshot.docs.map((doc) => {
       const data = doc.data();
+      const partnerId = (data.partnerId as string) ?? null;
       return {
         id: doc.id,
         businessName: data.businessName ?? null,
@@ -54,6 +77,9 @@ export async function GET(request: NextRequest) {
         matchedCount: data.matchedCount ?? 0,
         unmatchedCount: data.unmatchedCount ?? 0,
         status: data.status ?? "estimated",
+        partnerId,
+        partnerName: partnerId ? (partnerMap.get(partnerId) ?? null) : null,
+        partnerMode: data.partnerMode ?? null,
         createdAt: serializeTimestamp(data.createdAt),
         acceptedAt: serializeTimestamp(data.acceptedAt),
       };

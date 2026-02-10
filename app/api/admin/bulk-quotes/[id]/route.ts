@@ -70,6 +70,19 @@ export async function GET(
       };
     });
 
+    // Fetch partner info
+    let partnerName: string | null = null;
+    const partnerId = (data.partnerId as string) ?? null;
+    if (partnerId) {
+      const partnerDoc = await adminDb
+        .collection("partners")
+        .doc(partnerId)
+        .get();
+      if (partnerDoc.exists) {
+        partnerName = (partnerDoc.data()?.name as string) ?? null;
+      }
+    }
+
     return NextResponse.json({
       id: quoteDoc.id,
       businessName: data.businessName,
@@ -83,6 +96,9 @@ export async function GET(
       matchedCount: data.matchedCount ?? 0,
       unmatchedCount: data.unmatchedCount ?? 0,
       status: data.status,
+      partnerId,
+      partnerName,
+      partnerMode: data.partnerMode ?? null,
       paymentMethod: data.paymentMethod ?? null,
       payIdPhone: data.payIdPhone ?? null,
       bankBSB: data.bankBSB ?? null,

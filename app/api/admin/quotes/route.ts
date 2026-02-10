@@ -55,9 +55,33 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Build response array with device info joined in
+    // Batch-fetch partner documents
+    const partnerIdSet = new Set<string>();
+    quoteDocs.forEach(({ data }) => {
+      if (data.partnerId && typeof data.partnerId === "string") {
+        partnerIdSet.add(data.partnerId);
+      }
+    });
+
+    const partnerMap = new Map<string, string>();
+    const partnerIds = Array.from(partnerIdSet);
+    if (partnerIds.length > 0) {
+      const partnerRefs = partnerIds.map((pid) =>
+        adminDb.collection("partners").doc(pid)
+      );
+      const partnerDocs = await adminDb.getAll(...partnerRefs);
+      partnerDocs.forEach((doc) => {
+        if (doc.exists) {
+          const d = doc.data() as Record<string, unknown>;
+          partnerMap.set(doc.id, (d.name as string) ?? "");
+        }
+      });
+    }
+
+    // Build response array with device + partner info joined in
     let quotes: Record<string, unknown>[] = quoteDocs.map(({ id, data }) => {
       const device = deviceMap.get(data.deviceId as string);
+      const partnerId = (data.partnerId as string) ?? null;
       return {
         id,
         deviceId: data.deviceId,
@@ -71,6 +95,9 @@ export async function GET(request: NextRequest) {
         customerName: data.customerName ?? null,
         customerEmail: data.customerEmail ?? null,
         customerPhone: data.customerPhone ?? null,
+        partnerId,
+        partnerName: partnerId ? (partnerMap.get(partnerId) ?? null) : null,
+        partnerMode: data.partnerMode ?? null,
         createdAt: serializeTimestamp(data.createdAt),
         expiresAt: serializeTimestamp(data.expiresAt),
         acceptedAt: serializeTimestamp(data.acceptedAt),

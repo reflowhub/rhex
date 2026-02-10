@@ -53,6 +53,19 @@ export async function GET(
       }
     }
 
+    // Fetch partner info if attributed
+    let partnerName: string | null = null;
+    const partnerId = (data.partnerId as string) ?? null;
+    if (partnerId) {
+      const partnerDoc = await adminDb
+        .collection("partners")
+        .doc(partnerId)
+        .get();
+      if (partnerDoc.exists) {
+        partnerName = (partnerDoc.data()?.name as string) ?? null;
+      }
+    }
+
     const quote = {
       id: quoteDoc.id,
       deviceId: data.deviceId,
@@ -71,6 +84,9 @@ export async function GET(
       bankBSB: data.bankBSB ?? null,
       bankAccountNumber: data.bankAccountNumber ?? null,
       bankAccountName: data.bankAccountName ?? null,
+      partnerId,
+      partnerName,
+      partnerMode: data.partnerMode ?? null,
       inspectionGrade: data.inspectionGrade ?? null,
       revisedPriceNZD: data.revisedPriceNZD ?? null,
       createdAt: serializeTimestamp(data.createdAt),

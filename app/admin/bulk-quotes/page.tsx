@@ -30,6 +30,9 @@ interface BulkQuote {
   matchedCount: number;
   unmatchedCount: number;
   status: string;
+  partnerId: string | null;
+  partnerName: string | null;
+  partnerMode: string | null;
   createdAt: string | null;
 }
 
@@ -223,6 +226,7 @@ export default function BulkQuotesPage() {
                 <TableHead>Type</TableHead>
                 <TableHead className="text-right">Devices</TableHead>
                 <TableHead className="text-right">Total Value</TableHead>
+                <TableHead>Partner</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Date</TableHead>
               </TableRow>
@@ -246,6 +250,21 @@ export default function BulkQuotesPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       {formatPrice(q.totalIndicativeNZD)}
+                    </TableCell>
+                    <TableCell>
+                      {q.partnerName ? (
+                        <span
+                          className="text-sm text-primary hover:underline cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/admin/partners/${q.partnerId}`);
+                          }}
+                        >
+                          {q.partnerName}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">\u2014</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge

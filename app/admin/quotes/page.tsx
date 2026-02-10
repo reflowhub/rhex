@@ -32,6 +32,9 @@ interface Quote {
   customerName: string | null;
   customerEmail: string | null;
   customerPhone: string | null;
+  partnerId: string | null;
+  partnerName: string | null;
+  partnerMode: string | null;
   createdAt: string | null;
   expiresAt: string | null;
   acceptedAt: string | null;
@@ -247,6 +250,7 @@ export default function QuotesPage() {
                 <TableHead>Grade</TableHead>
                 <TableHead className="text-right">Price</TableHead>
                 <TableHead>Customer</TableHead>
+                <TableHead>Partner</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Date</TableHead>
               </TableRow>
@@ -275,6 +279,21 @@ export default function QuotesPage() {
                       {formatPrice(quote.quotePriceNZD)}
                     </TableCell>
                     <TableCell>{quote.customerName || "\u2014"}</TableCell>
+                    <TableCell>
+                      {quote.partnerName ? (
+                        <span
+                          className="text-sm text-primary hover:underline cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/admin/partners/${quote.partnerId}`);
+                          }}
+                        >
+                          {quote.partnerName}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">\u2014</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant={badgeProps.variant}

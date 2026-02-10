@@ -74,6 +74,9 @@ interface Quote {
   bankBSB?: string;
   bankAccountNumber?: string;
   bankAccountName?: string;
+  partnerId?: string;
+  partnerName?: string;
+  partnerMode?: string;
   inspectionGrade?: Grade;
   revisedPriceNZD?: number;
 }
@@ -566,6 +569,40 @@ export default function QuoteDetailPage({
           </div>
         )}
       </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* 3b. Partner Attribution Card                                      */}
+      {/* ---------------------------------------------------------------- */}
+      {quote.partnerId && (
+        <div className="mt-6 rounded-lg border border-border bg-card p-6">
+          <h2 className="mb-4 text-lg font-semibold">Partner Attribution</h2>
+          <dl className="grid gap-3 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Partner</dt>
+              <dd>
+                <button
+                  onClick={() =>
+                    router.push(`/admin/partners/${quote.partnerId}`)
+                  }
+                  className="text-primary underline-offset-4 hover:underline font-medium"
+                >
+                  {quote.partnerName || quote.partnerId}
+                </button>
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Mode</dt>
+              <dd className="font-medium">
+                {quote.partnerMode === "A"
+                  ? "Mode A (Referral)"
+                  : quote.partnerMode === "B"
+                  ? "Mode B (Direct)"
+                  : quote.partnerMode || "\u2014"}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      )}
 
       {/* ---------------------------------------------------------------- */}
       {/* 4. Status Workflow / Actions Card                                 */}
