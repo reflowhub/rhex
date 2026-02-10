@@ -25,6 +25,7 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCurrency } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
+import { getReferralCode } from "@/lib/referral";
 import {
   FileUp,
   Upload,
@@ -367,6 +368,7 @@ export default function EstimatePage() {
         body: JSON.stringify({
           csv,
           assumedGrade,
+          referralCode: getReferralCode(),
         }),
       });
 

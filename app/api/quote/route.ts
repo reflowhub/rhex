@@ -7,7 +7,7 @@ import { getTodayFXRate, convertPrice } from "@/lib/fx";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { deviceId, grade, imei, displayCurrency } = body;
+    const { deviceId, grade, imei, displayCurrency, referralCode } = body;
 
     if (!deviceId || !grade) {
       return NextResponse.json(
@@ -74,8 +74,33 @@ export async function POST(request: NextRequest) {
       quotePriceDisplay = convertPrice(Number(quotePriceNZD), "AUD", fxRate, 5);
     }
 
+    // Resolve referral code to partner (Mode A attribution)
+    let partnerId: string | null = null;
+    let partnerMode: string | null = null;
+
+    if (referralCode && typeof referralCode === "string") {
+      const normalizedRef = referralCode.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (normalizedRef.length >= 3) {
+        const partnerSnapshot = await adminDb
+          .collection("partners")
+          .where("code", "==", normalizedRef)
+          .where("status", "==", "active")
+          .limit(1)
+          .get();
+
+        if (!partnerSnapshot.empty) {
+          const partnerDoc = partnerSnapshot.docs[0];
+          const partnerData = partnerDoc.data();
+          if (partnerData.modes?.includes("A")) {
+            partnerId = partnerDoc.id;
+            partnerMode = "A";
+          }
+        }
+      }
+    }
+
     // Create quote document
-    const quoteData = {
+    const quoteData: Record<string, unknown> = {
       deviceId,
       grade: normalizedGrade,
       imei: imei || null,
@@ -87,6 +112,11 @@ export async function POST(request: NextRequest) {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
     };
+
+    if (partnerId) {
+      quoteData.partnerId = partnerId;
+      quoteData.partnerMode = partnerMode;
+    }
 
     const quoteRef = await adminDb.collection("quotes").add(quoteData);
 

@@ -80,7 +80,7 @@ function findColumnIndex(
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { csv, assumedGrade, businessName, contactEmail } = body;
+    const { csv, assumedGrade, businessName, contactEmail, referralCode } = body;
 
     if (!csv || typeof csv !== "string") {
       return NextResponse.json(
@@ -226,8 +226,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Resolve referral code to partner (Mode A attribution)
+    let partnerId: string | null = null;
+    let partnerMode: string | null = null;
+
+    if (referralCode && typeof referralCode === "string") {
+      const normalizedRef = referralCode.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (normalizedRef.length >= 3) {
+        const partnerSnapshot = await adminDb
+          .collection("partners")
+          .where("code", "==", normalizedRef)
+          .where("status", "==", "active")
+          .limit(1)
+          .get();
+
+        if (!partnerSnapshot.empty) {
+          const partnerDoc = partnerSnapshot.docs[0];
+          const partnerData = partnerDoc.data();
+          if (partnerData.modes?.includes("A")) {
+            partnerId = partnerDoc.id;
+            partnerMode = "A";
+          }
+        }
+      }
+    }
+
     // Create bulk quote document
-    const bulkQuoteData = {
+    const bulkQuoteData: Record<string, unknown> = {
       businessName: businessName || null,
       contactName: null,
       contactEmail: contactEmail || null,
@@ -249,6 +274,11 @@ export async function POST(request: NextRequest) {
       receivedAt: null,
       paidAt: null,
     };
+
+    if (partnerId) {
+      bulkQuoteData.partnerId = partnerId;
+      bulkQuoteData.partnerMode = partnerMode;
+    }
 
     const bulkQuoteRef = await adminDb
       .collection("bulkQuotes")

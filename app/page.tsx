@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCurrency } from "@/lib/currency-context";
+import { captureReferral } from "@/lib/referral";
 import { cn } from "@/lib/utils";
 
 interface Device {
@@ -96,6 +97,13 @@ export default function Home() {
   const [requestEmail, setRequestEmail] = useState("");
   const [requestSubmitting, setRequestSubmitting] = useState(false);
   const [requestSubmitted, setRequestSubmitted] = useState(false);
+
+  // Capture referral code from URL (?ref=PARTNERCODE)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    if (ref) captureReferral(ref);
+  }, []);
 
   useEffect(() => {
     async function fetchDevices() {
