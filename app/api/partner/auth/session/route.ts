@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase-admin";
 
-const SESSION_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const SESSION_EXPIRY_MS = 14 * 24 * 60 * 60 * 1000; // 14 days (Firebase max)
 
 // ---------------------------------------------------------------------------
 // POST /api/partner/auth/session — Create session cookie from ID token
