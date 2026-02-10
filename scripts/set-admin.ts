@@ -67,6 +67,9 @@ async function main() {
     const existingUser = await admin.auth().getUserByEmail(email);
     uid = existingUser.uid;
     console.log(`Found existing user: ${uid}`);
+    // Update password to match provided value
+    await admin.auth().updateUser(uid, { password });
+    console.log(`Updated password for ${email}`);
   } catch {
     // User doesn't exist — create them
     const newUser = await admin.auth().createUser({ email, password });
