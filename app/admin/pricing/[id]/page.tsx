@@ -189,12 +189,21 @@ export default function PriceListDetailPage() {
       });
     }
     // Sort by make → model → storage for model family grouping
+    const storageToGB = (s: string): number => {
+      const match = s.match(/^(\d+)\s*(TB|GB|MB)/i);
+      if (!match) return 0;
+      const num = parseInt(match[1], 10);
+      const unit = match[2].toUpperCase();
+      if (unit === "TB") return num * 1024;
+      if (unit === "MB") return num / 1024;
+      return num;
+    };
     return [...result].sort((a, b) => {
       const cmp1 = a.make.localeCompare(b.make);
       if (cmp1 !== 0) return cmp1;
       const cmp2 = a.model.localeCompare(b.model);
       if (cmp2 !== 0) return cmp2;
-      return a.storage.localeCompare(b.storage, undefined, { numeric: true });
+      return storageToGB(a.storage) - storageToGB(b.storage);
     });
   }, [prices, searchTerm]);
 
