@@ -3,14 +3,16 @@ import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getDevices, invalidateDeviceCache } from "@/lib/device-cache";
+import { findDuplicateDevice } from "@/lib/device-uniqueness";
 
-// GET /api/admin/devices — List all devices, with optional ?search= fuzzy filter
+// GET /api/admin/devices — List all devices, with optional ?search= and ?category= filters
 export async function GET(request: NextRequest) {
   try {
     const adminUser = await requireAdmin(request);
     if (adminUser instanceof NextResponse) return adminUser;
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.toLowerCase().trim() ?? "";
+    const category = searchParams.get("category") ?? "";
 
     const allDevices = await getDevices();
 
@@ -21,6 +23,13 @@ export async function GET(request: NextRequest) {
       model: d.model,
       storage: d.storage,
     }));
+
+    // Filter by category
+    if (category) {
+      devices = devices.filter(
+        (device) => (device.category ?? "Phone") === category
+      );
+    }
 
     // In-memory fuzzy search across make, model, storage
     if (search) {
@@ -66,12 +75,23 @@ export async function POST(request: NextRequest) {
     const adminUser = await requireAdmin(request);
     if (adminUser instanceof NextResponse) return adminUser;
     const body = await request.json();
-    const { make, model, storage } = body;
+    const { make, model, storage, category } = body;
 
     if (!make || !model || !storage) {
       return NextResponse.json(
         { error: "make, model, and storage are required" },
         { status: 400 }
+      );
+    }
+
+    // Check for duplicate device
+    const duplicate = await findDuplicateDevice(make, model, storage);
+    if (duplicate) {
+      return NextResponse.json(
+        {
+          error: `A device with this make/model/storage already exists (${duplicate.make} ${duplicate.model} ${duplicate.storage})`,
+        },
+        { status: 409 }
       );
     }
 
@@ -99,6 +119,7 @@ export async function POST(request: NextRequest) {
       model,
       storage,
       modelStorage,
+      category: category || "Phone",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };

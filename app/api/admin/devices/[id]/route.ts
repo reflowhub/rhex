@@ -3,6 +3,8 @@ import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { invalidateDeviceCache } from "@/lib/device-cache";
+import { findDuplicateDevice } from "@/lib/device-uniqueness";
+import { getActivePriceList } from "@/lib/categories";
 
 // GET /api/admin/devices/[id] — Get a single device by document ID
 export async function GET(
@@ -39,7 +41,7 @@ export async function PUT(
     if (adminUser instanceof NextResponse) return adminUser;
     const { id } = await params;
     const body = await request.json();
-    const { make, model, storage } = body;
+    const { make, model, storage, category } = body;
 
     const docRef = adminDb.collection("devices").doc(id);
     const doc = await docRef.get();
@@ -53,6 +55,23 @@ export async function PUT(
     const updatedMake = make ?? existingData.make;
     const updatedModel = model ?? existingData.model;
     const updatedStorage = storage ?? existingData.storage;
+
+    // Check for duplicate device (excluding self)
+    const duplicate = await findDuplicateDevice(
+      updatedMake,
+      updatedModel,
+      updatedStorage,
+      id
+    );
+    if (duplicate) {
+      return NextResponse.json(
+        {
+          error: `A device with this make/model/storage already exists (${duplicate.make} ${duplicate.model} ${duplicate.storage})`,
+        },
+        { status: 409 }
+      );
+    }
+
     const modelStorage = `${updatedModel} ${updatedStorage}`;
 
     const updateData: Record<string, unknown> = {
@@ -63,6 +82,7 @@ export async function PUT(
     if (make !== undefined) updateData.make = make;
     if (model !== undefined) updateData.model = model;
     if (storage !== undefined) updateData.storage = storage;
+    if (category !== undefined) updateData.category = category;
 
     await docRef.update(updateData);
     invalidateDeviceCache();
@@ -94,15 +114,24 @@ export async function DELETE(
       return NextResponse.json({ error: "Device not found" }, { status: 404 });
     }
 
+    // Look up the device's category to find the correct price list
+    const deviceData = doc.data()!;
+    const deviceCategory = (deviceData.category as string) ?? "Phone";
+    const activePriceListId = await getActivePriceList(deviceCategory);
+
     // Delete the device document
     await docRef.delete();
     invalidateDeviceCache();
 
     // Also delete the corresponding price entry if it exists
-    const priceRef = adminDb.doc(`priceLists/FP-2B/prices/${id}`);
-    const priceDoc = await priceRef.get();
-    if (priceDoc.exists) {
-      await priceRef.delete();
+    if (activePriceListId) {
+      const priceRef = adminDb.doc(
+        `priceLists/${activePriceListId}/prices/${id}`
+      );
+      const priceDoc = await priceRef.get();
+      if (priceDoc.exists) {
+        await priceRef.delete();
+      }
     }
 
     return NextResponse.json({ success: true });

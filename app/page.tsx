@@ -37,6 +37,16 @@ interface Device {
   storage: string;
 }
 
+interface CategoryGrade {
+  key: string;
+  label: string;
+}
+
+interface CategoryInfo {
+  name: string;
+  grades: CategoryGrade[];
+}
+
 const FAQ_ITEMS = [
   {
     q: "How does the trade-in process work?",
@@ -75,6 +85,8 @@ const FAQ_ITEMS = [
 export default function Home() {
   const router = useRouter();
   const { currency, setCurrency } = useCurrency();
+  const [categories, setCategories] = useState<CategoryInfo[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState("Phone");
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -105,10 +117,29 @@ export default function Home() {
     if (ref) captureReferral(ref);
   }, []);
 
+  // Fetch categories
   useEffect(() => {
+    fetch("/api/categories")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: CategoryInfo[]) => {
+        setCategories(data);
+        if (data.length > 0 && !data.find((c) => c.name === "Phone")) {
+          setSelectedCategory(data[0].name);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Fetch devices filtered by category
+  useEffect(() => {
+    setLoading(true);
+    setDevices([]);
+    setQuery("");
+    setSelectedDevice(null);
+    setOpen(false);
     async function fetchDevices() {
       try {
-        const res = await fetch("/api/devices");
+        const res = await fetch(`/api/devices?category=${encodeURIComponent(selectedCategory)}`);
         if (res.ok) {
           const data = await res.json();
           setDevices(data);
@@ -120,7 +151,7 @@ export default function Home() {
       }
     }
     fetchDevices();
-  }, []);
+  }, [selectedCategory]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return [];
@@ -342,7 +373,7 @@ export default function Home() {
         <div className="relative mx-auto max-w-5xl px-4 py-16 md:py-24">
         <div className="text-center">
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
-            Trade in your phone{" "}
+            Trade in your device{" "}
             <span className="text-primary">for cash</span>
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
@@ -353,6 +384,26 @@ export default function Home() {
         {/* Search Card */}
         <div className="mx-auto mt-12 max-w-lg">
           <div className="rounded-xl border bg-card p-6 shadow-sm">
+            {/* Category Tabs */}
+            {categories.length > 1 && (
+              <div className="mb-4 flex rounded-lg border bg-background p-1">
+                {categories.map((cat) => (
+                  <button
+                    key={cat.name}
+                    onClick={() => setSelectedCategory(cat.name)}
+                    className={cn(
+                      "flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      selectedCategory === cat.name
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Mode Tabs */}
             <div className="mb-4 flex rounded-lg border bg-background p-1">
               <button

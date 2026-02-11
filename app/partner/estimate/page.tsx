@@ -49,6 +49,16 @@ interface Device {
   storage: string;
 }
 
+interface CategoryGrade {
+  key: string;
+  label: string;
+}
+
+interface CategoryInfo {
+  name: string;
+  grades: CategoryGrade[];
+}
+
 interface ManualLine {
   key: number;
   device: Device;
@@ -143,12 +153,48 @@ export default function PartnerEstimatePage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
+  // Category state
+  const [categories, setCategories] = useState<CategoryInfo[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState("Phone");
+
   // Config
   const [assumedGrade, setAssumedGrade] = useState("C");
 
   // Submission
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Derive grades from selected category
+  const categoryGrades = useMemo(() => {
+    const cat = categories.find((c) => c.name === selectedCategory);
+    return cat?.grades ?? [
+      { key: "A", label: "Excellent" },
+      { key: "B", label: "Good" },
+      { key: "C", label: "Fair" },
+      { key: "D", label: "Screen Issues" },
+      { key: "E", label: "No Power" },
+    ];
+  }, [categories, selectedCategory]);
+
+  // Fetch categories
+  useEffect(() => {
+    fetch("/api/categories")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: CategoryInfo[]) => {
+        setCategories(data);
+        if (data.length > 0 && !data.find((c) => c.name === selectedCategory)) {
+          setSelectedCategory(data[0].name);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Reset grade when category changes
+  useEffect(() => {
+    const midIndex = Math.floor(categoryGrades.length / 2);
+    setAssumedGrade(categoryGrades[midIndex]?.key ?? "C");
+    setDevices([]);
+  }, [selectedCategory]);
 
   // Redirect if not Mode B
   useEffect(() => {
@@ -157,17 +203,17 @@ export default function PartnerEstimatePage() {
     }
   }, [partner, partnerLoading, router]);
 
-  // Fetch devices for manual mode
+  // Fetch devices for manual mode (filtered by category)
   useEffect(() => {
     if (inputMode === "manual" && devices.length === 0) {
       setDevicesLoading(true);
-      fetch("/api/devices")
+      fetch(`/api/devices?category=${encodeURIComponent(selectedCategory)}`)
         .then((res) => (res.ok ? res.json() : []))
         .then((data) => setDevices(data))
         .catch(() => {})
         .finally(() => setDevicesLoading(false));
     }
-  }, [inputMode, devices.length]);
+  }, [inputMode, devices.length, selectedCategory]);
 
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -322,7 +368,7 @@ export default function PartnerEstimatePage() {
       const res = await fetch("/api/partner/estimate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ csv, assumedGrade }),
+        body: JSON.stringify({ csv, assumedGrade, category: selectedCategory }),
       });
 
       if (!res.ok) {
@@ -360,6 +406,26 @@ export default function PartnerEstimatePage() {
       </div>
 
       <div className="mx-auto mt-6 max-w-3xl space-y-6">
+        {/* Category tabs */}
+        {categories.length > 1 && (
+          <div className="flex rounded-lg border bg-background p-1">
+            {categories.map((cat) => (
+              <button
+                key={cat.name}
+                onClick={() => setSelectedCategory(cat.name)}
+                className={cn(
+                  "flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  selectedCategory === cat.name
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Input mode tabs */}
         <div className="flex rounded-lg border bg-background p-1">
           <button
@@ -538,8 +604,8 @@ export default function PartnerEstimatePage() {
                           <Select value={line.grade} onValueChange={(v) => updateGrade(line.key, v)}>
                             <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              {["A", "B", "C", "D", "E"].map((g) => (
-                                <SelectItem key={g} value={g}>Grade {g}</SelectItem>
+                              {categoryGrades.map((g) => (
+                                <SelectItem key={g.key} value={g.key}>Grade {g.key}</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
@@ -574,8 +640,8 @@ export default function PartnerEstimatePage() {
             <Select value={assumedGrade} onValueChange={setAssumedGrade}>
               <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {["A", "B", "C", "D", "E"].map((g) => (
-                  <SelectItem key={g} value={g}>Grade {g}</SelectItem>
+                {categoryGrades.map((g) => (
+                  <SelectItem key={g.key} value={g.key}>Grade {g.key}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

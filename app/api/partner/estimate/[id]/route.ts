@@ -42,6 +42,7 @@ export async function GET(
     return NextResponse.json({
       id: doc.id,
       type: data.type,
+      category: data.category ?? null,
       assumedGrade: data.assumedGrade,
       totalDevices: data.totalDevices,
       totalIndicativeNZD: data.totalIndicativeNZD,

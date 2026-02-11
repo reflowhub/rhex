@@ -11,6 +11,8 @@ export interface LibraryDevice {
   make: string;
   model: string;
   storage: string;
+  active: boolean;
+  category: string;
 }
 
 export interface MatchResult {
@@ -57,7 +59,8 @@ export async function loadDeviceLibrary(): Promise<LibraryDevice[]> {
 export async function matchToLibrary(
   make: string | null,
   model: string | null,
-  storage: string | null
+  storage: string | null,
+  category?: string
 ): Promise<MatchResult> {
   if (!make || !model) {
     return {
@@ -71,7 +74,11 @@ export async function matchToLibrary(
     };
   }
 
-  const devices = await loadDeviceLibrary();
+  const allDevices = await loadDeviceLibrary();
+  let devices = allDevices.filter((d) => d.active);
+  if (category) {
+    devices = devices.filter((d) => d.category === category);
+  }
   const normalizedMake = make.toLowerCase().trim();
   const normalizedModel = model.toLowerCase().trim();
 
@@ -251,7 +258,10 @@ function extractStorage(input: string): {
 // Checks alias table first, then parses and fuzzy matches
 // ---------------------------------------------------------------------------
 
-export async function matchDeviceString(rawInput: string): Promise<MatchResult> {
+export async function matchDeviceString(
+  rawInput: string,
+  category?: string
+): Promise<MatchResult> {
   if (!rawInput || !rawInput.trim()) {
     return {
       deviceId: null,
@@ -307,12 +317,16 @@ export async function matchDeviceString(rawInput: string): Promise<MatchResult> 
 
   // Step 3: Try structured matching if we got a brand
   if (brand && modelText) {
-    const result = await matchToLibrary(brand, modelText, storage);
+    const result = await matchToLibrary(brand, modelText, storage, category);
     return result;
   }
 
   // Step 4: Try matching the full string against the entire device library
-  const devices = await loadDeviceLibrary();
+  const allDevicesForString = await loadDeviceLibrary();
+  let devices = allDevicesForString.filter((d) => d.active);
+  if (category) {
+    devices = devices.filter((d) => d.category === category);
+  }
   const lowerInput = normalized.toLowerCase().replace(/[^\w\s]/g, " ");
 
   // Try exact modelStorage match

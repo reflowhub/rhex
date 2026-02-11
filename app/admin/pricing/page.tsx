@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/dialog";
 import {
   Upload,
-  Trash2,
   Loader2,
   FileUp,
   X,
@@ -34,12 +33,19 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
+interface CategoryInfo {
+  name: string;
+  grades: { key: string; label: string }[];
+  activePriceList: string | null;
+}
+
 interface PriceList {
   id: string;
   name: string;
   effectiveDate: string | null;
   currency: string;
   deviceCount: number;
+  category: string;
   createdAt: string | null;
 }
 
@@ -48,11 +54,7 @@ interface PreviewRow {
   make: string;
   model: string;
   storage: string;
-  a: string;
-  b: string;
-  c: string;
-  d: string;
-  e: string;
+  grades: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,6 +63,10 @@ interface PreviewRow {
 
 export default function PricingPage() {
   const router = useRouter();
+
+  // ---- category state -----------------------------------------------------
+  const [categories, setCategories] = useState<CategoryInfo[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState("Phone");
 
   // ---- data state ---------------------------------------------------------
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
@@ -77,13 +83,38 @@ export default function PricingPage() {
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ---- delete dialog state ------------------------------------------------
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deletingList, setDeletingList] = useState<PriceList | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
   // ---- drag state ---------------------------------------------------------
   const [dragOver, setDragOver] = useState(false);
+
+  // ---- derived state ------------------------------------------------------
+  const currentCategory = categories.find((c) => c.name === selectedCategory);
+  const gradeKeys = currentCategory?.grades.map((g) => g.key) ?? ["A", "B", "C", "D", "E"];
+  const activePriceListId = currentCategory?.activePriceList ?? null;
+
+  // ---- fetch categories ---------------------------------------------------
+  useEffect(() => {
+    fetch("/api/admin/categories")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.categories) {
+          const cats: CategoryInfo[] = Object.entries(data.categories).map(
+            ([name, value]) => {
+              const cat = value as Record<string, unknown>;
+              return {
+                name,
+                grades: (cat.grades as CategoryInfo["grades"]) ?? [],
+                activePriceList: (cat.activePriceList as string) ?? null,
+              };
+            }
+          );
+          cats.sort((a, b) => a.name.localeCompare(b.name));
+          setCategories(cats);
+        }
+      })
+      .catch(() => {
+        setCategories([{ name: "Phone", grades: [], activePriceList: null }]);
+      });
+  }, []);
 
   // ---- fetch price lists --------------------------------------------------
   const fetchPriceLists = useCallback(() => {
@@ -102,7 +133,7 @@ export default function PricingPage() {
     fetchPriceLists();
   }, [fetchPriceLists]);
 
-  // ---- CSV preview parsing ------------------------------------------------
+  // ---- CSV preview parsing (dynamic grades) -------------------------------
   const parsePreview = (text: string) => {
     const lines = text
       .replace(/^\uFEFF/, "")
@@ -121,11 +152,15 @@ export default function PricingPage() {
     const mkIdx = header.indexOf("make");
     const mdIdx = header.indexOf("model");
     const stIdx = header.indexOf("storage");
-    const aIdx = header.indexOf("a");
-    const bIdx = header.indexOf("b");
-    const cIdx = header.indexOf("c");
-    const dIdx = header.indexOf("d");
-    const eIdx = header.indexOf("e");
+
+    // Find grade column indices dynamically
+    const gradeIdxMap: { key: string; idx: number }[] = [];
+    for (const gk of gradeKeys) {
+      const idx = header.indexOf(gk.toLowerCase());
+      if (idx !== -1) {
+        gradeIdxMap.push({ key: gk, idx });
+      }
+    }
 
     const dataLines = lines.slice(1);
     setTotalRows(dataLines.length);
@@ -133,16 +168,16 @@ export default function PricingPage() {
     const preview: PreviewRow[] = [];
     for (let i = 0; i < Math.min(5, dataLines.length); i++) {
       const fields = dataLines[i].split(",").map((f) => f.trim());
+      const grades: Record<string, string> = {};
+      for (const { key, idx } of gradeIdxMap) {
+        grades[key] = fields[idx] ?? "";
+      }
       preview.push({
         deviceId: diIdx !== -1 ? (fields[diIdx] ?? "") : "",
         make: mkIdx !== -1 ? (fields[mkIdx] ?? "") : "",
         model: mdIdx !== -1 ? (fields[mdIdx] ?? "") : "",
         storage: stIdx !== -1 ? (fields[stIdx] ?? "") : "",
-        a: aIdx !== -1 ? (fields[aIdx] ?? "") : "",
-        b: bIdx !== -1 ? (fields[bIdx] ?? "") : "",
-        c: cIdx !== -1 ? (fields[cIdx] ?? "") : "",
-        d: dIdx !== -1 ? (fields[dIdx] ?? "") : "",
-        e: eIdx !== -1 ? (fields[eIdx] ?? "") : "",
+        grades,
       });
     }
     setPreviewRows(preview);
@@ -185,7 +220,11 @@ export default function PricingPage() {
       const res = await fetch("/api/admin/pricing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: uploadName.trim(), csv: csvText }),
+        body: JSON.stringify({
+          name: uploadName.trim(),
+          csv: csvText,
+          category: selectedCategory,
+        }),
       });
 
       const data = await res.json();
@@ -205,6 +244,25 @@ export default function PricingPage() {
       setUploadOpen(false);
       resetUploadForm();
       fetchPriceLists();
+      // Refresh categories (activePriceList may have changed)
+      fetch("/api/admin/categories")
+        .then((res) => res.json())
+        .then((catData) => {
+          if (catData.categories) {
+            const cats: CategoryInfo[] = Object.entries(catData.categories).map(
+              ([name, value]) => {
+                const cat = value as Record<string, unknown>;
+                return {
+                  name,
+                  grades: (cat.grades as CategoryInfo["grades"]) ?? [],
+                  activePriceList: (cat.activePriceList as string) ?? null,
+                };
+              }
+            );
+            cats.sort((a, b) => a.name.localeCompare(b.name));
+            setCategories(cats);
+          }
+        });
     } catch {
       setUploadErrors(["Network error. Please try again."]);
     } finally {
@@ -227,32 +285,6 @@ export default function PricingPage() {
     setUploadOpen(true);
   };
 
-  // ---- delete handler -----------------------------------------------------
-  const openDeleteDialog = (priceList: PriceList, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setDeletingList(priceList);
-    setDeleteOpen(true);
-  };
-
-  const handleDelete = async () => {
-    if (!deletingList) return;
-    setDeleting(true);
-
-    try {
-      const res = await fetch(`/api/admin/pricing/${deletingList.id}`, {
-        method: "DELETE",
-      });
-
-      if (res.ok) {
-        setDeleteOpen(false);
-        setDeletingList(null);
-        fetchPriceLists();
-      }
-    } finally {
-      setDeleting(false);
-    }
-  };
-
   // ---- helpers ------------------------------------------------------------
   const formatDate = (iso: string | null) => {
     if (!iso) return "—";
@@ -263,15 +295,21 @@ export default function PricingPage() {
     });
   };
 
+  // Get the active price list object for the selected category
+  // Fallback: if activePriceList isn't set in categories, find by category field
+  const activePriceList = activePriceListId
+    ? priceLists.find((pl) => pl.id === activePriceListId)
+    : priceLists.find((pl) => pl.category === selectedCategory) ?? null;
+
   // ---- render -------------------------------------------------------------
   return (
     <div>
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Price Lists</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Pricing</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Manage trade-in price lists and grade pricing.
+            Manage trade-in price lists by category.
           </p>
         </div>
         <Button onClick={openUploadDialog}>
@@ -280,58 +318,81 @@ export default function PricingPage() {
         </Button>
       </div>
 
-      {/* Table */}
-      <div className="mt-6 rounded-lg border border-border bg-card">
+      {/* Category Tabs */}
+      {categories.length > 1 && (
+        <div className="mt-6 flex gap-1 border-b border-border">
+          {categories.map((cat) => (
+            <button
+              key={cat.name}
+              onClick={() => setSelectedCategory(cat.name)}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                selectedCategory === cat.name
+                  ? "border-b-2 border-primary text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Category content */}
+      <div className="mt-6">
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             <span className="ml-2 text-sm text-muted-foreground">
-              Loading price lists...
+              Loading...
             </span>
           </div>
-        ) : priceLists.length === 0 ? (
-          <div className="py-20 text-center text-sm text-muted-foreground">
-            No price lists found. Upload your first price list to get started.
+        ) : activePriceList ? (
+          <div
+            className="cursor-pointer rounded-lg border border-border bg-card p-6 transition-colors hover:bg-muted/50"
+            onClick={() =>
+              router.push(`/admin/pricing/${activePriceList.id}`)
+            }
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">{activePriceList.name}</h2>
+                <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                  <span>
+                    Effective: {formatDate(activePriceList.effectiveDate)}
+                  </span>
+                  <Badge variant="secondary">{activePriceList.currency}</Badge>
+                  <span>{activePriceList.deviceCount} devices</span>
+                  <Badge variant="outline">
+                    {gradeKeys.length} grade{gradeKeys.length !== 1 ? "s" : ""} ({gradeKeys.join(", ")})
+                  </Badge>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/admin/pricing/${activePriceList.id}`);
+                }}
+              >
+                View Prices
+              </Button>
+            </div>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Effective Date</TableHead>
-                <TableHead>Currency</TableHead>
-                <TableHead className="text-right">Devices</TableHead>
-                <TableHead className="w-[80px] text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {priceLists.map((pl) => (
-                <TableRow
-                  key={pl.id}
-                  className="cursor-pointer"
-                  onClick={() => router.push(`/admin/pricing/${pl.id}`)}
-                >
-                  <TableCell className="font-medium">{pl.name}</TableCell>
-                  <TableCell>{formatDate(pl.effectiveDate)}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{pl.currency}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right">{pl.deviceCount}</TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => openDeleteDialog(pl, e)}
-                      title="Delete price list"
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                      <span className="sr-only">Delete</span>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="rounded-lg border-2 border-dashed border-border py-16 text-center">
+            <p className="text-sm text-muted-foreground">
+              No price list for {selectedCategory} yet.
+            </p>
+            <Button
+              className="mt-4"
+              variant="outline"
+              onClick={openUploadDialog}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Upload CSV to create price list
+            </Button>
+          </div>
         )}
       </div>
 
@@ -341,10 +402,15 @@ export default function PricingPage() {
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Upload Price List</DialogTitle>
+            <DialogTitle>Upload Price List — {selectedCategory}</DialogTitle>
             <DialogDescription>
               Upload a CSV file with device pricing. Expected columns:
-              DeviceID, Make, Model, Storage, A, B, C, D, E.
+              DeviceID, Make, Model, Storage, {gradeKeys.join(", ")}.
+              {activePriceListId && (
+                <span className="mt-1 block text-yellow-700 dark:text-yellow-400">
+                  This will overwrite the existing {selectedCategory} price list.
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -354,7 +420,7 @@ export default function PricingPage() {
               <Label htmlFor="price-list-name">Price List Name</Label>
               <Input
                 id="price-list-name"
-                placeholder="e.g. FP-2B January 2026"
+                placeholder={`e.g. ${selectedCategory} Prices January 2026`}
                 value={uploadName}
                 onChange={(e) => setUploadName(e.target.value)}
               />
@@ -410,7 +476,7 @@ export default function PricingPage() {
               </div>
             </div>
 
-            {/* Preview table */}
+            {/* Preview table with dynamic grade columns */}
             {previewRows.length > 0 && (
               <div className="grid gap-2">
                 <Label>
@@ -424,11 +490,11 @@ export default function PricingPage() {
                         <TableHead className="text-xs">Make</TableHead>
                         <TableHead className="text-xs">Model</TableHead>
                         <TableHead className="text-xs">Storage</TableHead>
-                        <TableHead className="text-right text-xs">A</TableHead>
-                        <TableHead className="text-right text-xs">B</TableHead>
-                        <TableHead className="text-right text-xs">C</TableHead>
-                        <TableHead className="text-right text-xs">D</TableHead>
-                        <TableHead className="text-right text-xs">E</TableHead>
+                        {gradeKeys.map((g) => (
+                          <TableHead key={g} className="text-right text-xs">
+                            {g}
+                          </TableHead>
+                        ))}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -438,21 +504,11 @@ export default function PricingPage() {
                           <TableCell className="text-xs">{row.make}</TableCell>
                           <TableCell className="text-xs">{row.model}</TableCell>
                           <TableCell className="text-xs">{row.storage}</TableCell>
-                          <TableCell className="text-right text-xs">
-                            {row.a}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {row.b}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {row.c}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {row.d}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {row.e}
-                          </TableCell>
+                          {gradeKeys.map((g) => (
+                            <TableCell key={g} className="text-right text-xs">
+                              {row.grades[g] ?? ""}
+                            </TableCell>
+                          ))}
                         </TableRow>
                       ))}
                     </TableBody>
@@ -499,44 +555,6 @@ export default function PricingPage() {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Upload
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* Delete Confirmation Dialog                                          */}
-      {/* ------------------------------------------------------------------ */}
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Price List</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete{" "}
-              <span className="font-semibold">
-                {deletingList?.name ?? "this price list"}
-              </span>
-              ? This will remove all associated pricing data. This action cannot
-              be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteOpen(false)}
-              disabled={deleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleting}
-            >
-              {deleting && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

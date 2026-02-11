@@ -1,4 +1,5 @@
 import { adminDb } from "@/lib/firebase-admin";
+import { readGrades } from "@/lib/grades";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -11,6 +12,8 @@ export interface CachedDevice {
   model: string;
   storage: string;
   modelStorage?: string;
+  active: boolean;
+  category: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -36,6 +39,8 @@ export async function getDevices(): Promise<CachedDevice[]> {
       model: data.model as string,
       storage: data.storage as string,
       modelStorage: data.modelStorage as string | undefined,
+      active: data.active !== false,
+      category: (data.category as string) ?? "Phone",
     };
   });
   deviceCacheTime = Date.now();
@@ -48,40 +53,36 @@ export function invalidateDeviceCache(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Price cache — 5-minute TTL, invalidated on pricing import
+// Price cache — 5-minute TTL per price list, invalidated on pricing writes
 // ---------------------------------------------------------------------------
 
-let cachedPrices: Map<string, Record<string, number>> | null = null;
-let priceCacheTime = 0;
+const priceCache = new Map<
+  string,
+  { data: Map<string, Record<string, number>>; time: number }
+>();
 const PRICE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-export async function getPrices(): Promise<Map<string, Record<string, number>>> {
-  if (cachedPrices && Date.now() - priceCacheTime < PRICE_CACHE_TTL) {
-    return cachedPrices;
+export async function getPrices(
+  priceListId: string = "FP-2B"
+): Promise<Map<string, Record<string, number>>> {
+  const cached = priceCache.get(priceListId);
+  if (cached && Date.now() - cached.time < PRICE_CACHE_TTL) {
+    return cached.data;
   }
 
-  const validGrades = ["A", "B", "C", "D", "E"];
-  const snapshot = await adminDb.collection("priceLists/FP-2B/prices").get();
+  const snapshot = await adminDb
+    .collection(`priceLists/${priceListId}/prices`)
+    .get();
   const priceMap = new Map<string, Record<string, number>>();
 
   snapshot.docs.forEach((doc) => {
-    const data = doc.data();
-    const grades: Record<string, number> = {};
-    for (const g of validGrades) {
-      const field = `grade${g}`;
-      if (data[field] !== undefined && data[field] !== null) {
-        grades[g] = Number(data[field]);
-      }
-    }
-    priceMap.set(doc.id, grades);
+    priceMap.set(doc.id, readGrades(doc.data()));
   });
 
-  cachedPrices = priceMap;
-  priceCacheTime = Date.now();
-  return cachedPrices;
+  priceCache.set(priceListId, { data: priceMap, time: Date.now() });
+  return priceMap;
 }
 
 export function invalidatePriceCache(): void {
-  cachedPrices = null;
-  priceCacheTime = 0;
+  priceCache.clear();
 }

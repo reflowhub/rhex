@@ -112,7 +112,8 @@ export async function POST(request: NextRequest) {
     const adminUser = await requireAdmin(request);
     if (adminUser instanceof NextResponse) return adminUser;
     const body = await request.json();
-    const { csv } = body;
+    const { csv, category: importCategory } = body;
+    const deviceCategory = importCategory || "Phone";
 
     if (!csv || typeof csv !== "string") {
       return NextResponse.json(
@@ -130,6 +131,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check for duplicate devices against existing DB and within CSV
+    const existingSnapshot = await adminDb.collection("devices").get();
+    const existingKeys = new Set<string>();
+    existingSnapshot.docs.forEach((doc) => {
+      const d = doc.data();
+      const key = `${String(d.make ?? "").toLowerCase().trim()}|${String(d.model ?? "").toLowerCase().trim()}|${String(d.storage ?? "").toLowerCase().trim()}`;
+      existingKeys.add(key);
+    });
+
+    const validRows: ParsedRow[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const key = `${row.make.toLowerCase().trim()}|${row.model.toLowerCase().trim()}|${row.storage.toLowerCase().trim()}`;
+      if (existingKeys.has(key)) {
+        errors.push(`Row ${i + 2}: duplicate device (${row.make} ${row.model} ${row.storage}) already exists`);
+        continue;
+      }
+      // Also check within CSV
+      if (validRows.some((r) => `${r.make.toLowerCase().trim()}|${r.model.toLowerCase().trim()}|${r.storage.toLowerCase().trim()}` === key)) {
+        errors.push(`Row ${i + 2}: duplicate of another row in CSV (${row.make} ${row.model} ${row.storage})`);
+        continue;
+      }
+      validRows.push(row);
+    }
+
+    if (validRows.length === 0) {
+      return NextResponse.json(
+        { imported: 0, errors: errors.length > 0 ? errors : ["No valid rows found in CSV"] },
+        { status: 400 }
+      );
+    }
+
     let imported = 0;
 
     // If no DeviceID column, we need to auto-assign IDs starting from the counter
@@ -140,18 +173,18 @@ export async function POST(request: NextRequest) {
         const counterDoc = await transaction.get(counterRef);
         if (!counterDoc.exists) {
           nextId = 1;
-          transaction.set(counterRef, { nextId: 1 + rows.length });
+          transaction.set(counterRef, { nextId: 1 + validRows.length });
         } else {
           nextId = counterDoc.data()?.nextId ?? 1;
-          transaction.update(counterRef, { nextId: nextId! + rows.length });
+          transaction.update(counterRef, { nextId: nextId! + validRows.length });
         }
       });
     }
 
     // Process in batches of 200 (each row = 1 write)
     const BATCH_SIZE = 200;
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const chunk = rows.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < validRows.length; i += BATCH_SIZE) {
+      const chunk = validRows.slice(i, i + BATCH_SIZE);
       const batch = adminDb.batch();
 
       for (let j = 0; j < chunk.length; j++) {
@@ -166,6 +199,7 @@ export async function POST(request: NextRequest) {
           model: row.model,
           storage: row.storage,
           modelStorage,
+          category: deviceCategory,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });

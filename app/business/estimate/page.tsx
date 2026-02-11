@@ -55,6 +55,16 @@ interface Device {
   storage: string;
 }
 
+interface CategoryGrade {
+  key: string;
+  label: string;
+}
+
+interface CategoryInfo {
+  name: string;
+  grades: CategoryGrade[];
+}
+
 interface ManualLine {
   key: number;
   device: Device;
@@ -151,6 +161,10 @@ export default function EstimatePage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
+  // Category state
+  const [categories, setCategories] = useState<CategoryInfo[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState("Phone");
+
   // Config state
   const [assumedGrade, setAssumedGrade] = useState("C");
 
@@ -158,17 +172,50 @@ export default function EstimatePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch device library for manual mode
+  // Derive grades from selected category
+  const categoryGrades = useMemo(() => {
+    const cat = categories.find((c) => c.name === selectedCategory);
+    return cat?.grades ?? [
+      { key: "A", label: "Excellent" },
+      { key: "B", label: "Good" },
+      { key: "C", label: "Fair" },
+      { key: "D", label: "Screen Issues" },
+      { key: "E", label: "No Power" },
+    ];
+  }, [categories, selectedCategory]);
+
+  // Fetch categories
+  useEffect(() => {
+    fetch("/api/categories")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: CategoryInfo[]) => {
+        setCategories(data);
+        if (data.length > 0 && !data.find((c) => c.name === selectedCategory)) {
+          setSelectedCategory(data[0].name);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Reset grade when category changes (pick middle grade)
+  useEffect(() => {
+    const midIndex = Math.floor(categoryGrades.length / 2);
+    setAssumedGrade(categoryGrades[midIndex]?.key ?? "C");
+    // Reset devices when category changes
+    setDevices([]);
+  }, [selectedCategory]);
+
+  // Fetch device library for manual mode (filtered by category)
   useEffect(() => {
     if (inputMode === "manual" && devices.length === 0) {
       setDevicesLoading(true);
-      fetch("/api/devices")
+      fetch(`/api/devices?category=${encodeURIComponent(selectedCategory)}`)
         .then((res) => (res.ok ? res.json() : []))
         .then((data) => setDevices(data))
         .catch(() => {})
         .finally(() => setDevicesLoading(false));
     }
-  }, [inputMode, devices.length]);
+  }, [inputMode, devices.length, selectedCategory]);
 
   // Filter devices for search
   const filtered = useMemo(() => {
@@ -368,6 +415,7 @@ export default function EstimatePage() {
         body: JSON.stringify({
           csv,
           assumedGrade,
+          category: selectedCategory,
           referralCode: getReferralCode(),
         }),
       });
@@ -467,6 +515,26 @@ export default function EstimatePage() {
           </div>
         </div>
 
+        {/* Category tabs */}
+        {categories.length > 1 && (
+          <div className="mt-6 flex rounded-lg border bg-background p-1">
+            {categories.map((cat) => (
+              <button
+                key={cat.name}
+                onClick={() => setSelectedCategory(cat.name)}
+                className={cn(
+                  "flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  selectedCategory === cat.name
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Grade selector */}
         <div className="mt-6 flex items-center gap-4">
           <label className="text-sm font-medium">Assumed Grade</label>
@@ -475,11 +543,11 @@ export default function EstimatePage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="A">A — Excellent</SelectItem>
-              <SelectItem value="B">B — Good</SelectItem>
-              <SelectItem value="C">C — Fair</SelectItem>
-              <SelectItem value="D">D — Screen Issues</SelectItem>
-              <SelectItem value="E">E — No Power</SelectItem>
+              {categoryGrades.map((g) => (
+                <SelectItem key={g.key} value={g.key}>
+                  {g.key} — {g.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <span className="text-xs text-muted-foreground">
@@ -747,11 +815,9 @@ export default function EstimatePage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="A">A</SelectItem>
-                              <SelectItem value="B">B</SelectItem>
-                              <SelectItem value="C">C</SelectItem>
-                              <SelectItem value="D">D</SelectItem>
-                              <SelectItem value="E">E</SelectItem>
+                              {categoryGrades.map((g) => (
+                                <SelectItem key={g.key} value={g.key}>{g.key}</SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </TableCell>
