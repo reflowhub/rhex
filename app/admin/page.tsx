@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Smartphone, DollarSign, FileText, Settings } from "lucide-react";
+import { Smartphone, DollarSign, FileText, ContactRound, Settings } from "lucide-react";
 
 const dashboardCards = [
   {
@@ -19,6 +19,12 @@ const dashboardCards = [
     description: "Review and manage customer bid requests and batch quote history.",
     href: "/admin/quotes",
     icon: FileText,
+  },
+  {
+    title: "Customers",
+    description: "View customer profiles, quote history, and notes.",
+    href: "/admin/customers",
+    icon: ContactRound,
   },
   {
     title: "Settings",

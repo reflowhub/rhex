@@ -83,6 +83,7 @@ interface BulkQuote {
   matchedCount: number;
   unmatchedCount: number;
   status: BulkQuoteStatus;
+  customerId: string | null;
   paymentMethod: string | null;
   payIdPhone: string | null;
   bankBSB: string | null;
@@ -525,6 +526,19 @@ export default function BulkQuoteDetailPage() {
                 </>
               )}
             </dl>
+
+            {quote.customerId && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                onClick={() =>
+                  router.push(`/admin/customers/${quote.customerId}`)
+                }
+              >
+                View Customer Profile
+              </Button>
+            )}
           </div>
         )}
       </div>

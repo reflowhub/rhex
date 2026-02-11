@@ -90,6 +90,7 @@ export async function GET(
       bankBSB: data.bankBSB ?? null,
       bankAccountNumber: data.bankAccountNumber ?? null,
       bankAccountName: data.bankAccountName ?? null,
+      customerId: data.customerId ?? null,
       partnerId,
       partnerName,
       partnerMode: data.partnerMode ?? null,

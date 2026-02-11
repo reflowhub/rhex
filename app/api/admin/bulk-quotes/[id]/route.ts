@@ -99,6 +99,7 @@ export async function GET(
       matchedCount: data.matchedCount ?? 0,
       unmatchedCount: data.unmatchedCount ?? 0,
       status: data.status,
+      customerId: data.customerId ?? null,
       partnerId,
       partnerName,
       partnerMode: data.partnerMode ?? null,

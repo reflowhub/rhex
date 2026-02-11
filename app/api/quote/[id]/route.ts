@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
+import { findOrCreateCustomer } from "@/lib/customer-link";
 
 // GET /api/quote/[id] — Get a quote by ID, including device info
 export async function GET(
@@ -175,6 +176,27 @@ export async function PUT(
     }
 
     await quoteRef.update(updateData);
+
+    // Auto-create/link customer record
+    try {
+      const customerId = await findOrCreateCustomer({
+        type: "individual",
+        name: customerName,
+        email: customerEmail,
+        phone: customerPhone,
+        shippingAddress,
+        paymentMethod,
+        payIdPhone: paymentMethod === "payid" ? payIdPhone : null,
+        bankBSB: paymentMethod === "bank_transfer" ? bankBSB : null,
+        bankAccountNumber: paymentMethod === "bank_transfer" ? bankAccountNumber : null,
+        bankAccountName: paymentMethod === "bank_transfer" ? bankAccountName : null,
+        quoteId: id,
+        quoteValueNZD: existingData?.quotePriceNZD ?? 0,
+      });
+      await quoteRef.update({ customerId });
+    } catch (err) {
+      console.error("Customer link error (non-blocking):", err);
+    }
 
     // Fetch updated quote
     const updatedDoc = await quoteRef.get();

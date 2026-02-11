@@ -75,6 +75,7 @@ interface Quote {
   bankBSB?: string;
   bankAccountNumber?: string;
   bankAccountName?: string;
+  customerId?: string;
   partnerId?: string;
   partnerName?: string;
   partnerMode?: string;
@@ -557,6 +558,19 @@ export default function QuoteDetailPage() {
                 </>
               )}
             </dl>
+
+            {quote.customerId && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                onClick={() =>
+                  router.push(`/admin/customers/${quote.customerId}`)
+                }
+              >
+                View Customer Profile
+              </Button>
+            )}
           </div>
         )}
       </div>

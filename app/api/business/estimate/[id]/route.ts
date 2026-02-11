@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
+import { findOrCreateCustomer } from "@/lib/customer-link";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -192,6 +193,27 @@ export async function PUT(
     };
 
     await adminDb.collection("bulkQuotes").doc(id).update(updateData);
+
+    // Auto-create/link customer record
+    try {
+      const customerId = await findOrCreateCustomer({
+        type: "business",
+        name: contactName,
+        email: contactEmail,
+        phone: contactPhone,
+        businessName: businessName || quoteData.businessName,
+        paymentMethod,
+        payIdPhone: paymentMethod === "payid" ? payIdPhone : null,
+        bankBSB: paymentMethod === "bank_transfer" ? bankBSB : null,
+        bankAccountNumber: paymentMethod === "bank_transfer" ? bankAccountNumber : null,
+        bankAccountName: paymentMethod === "bank_transfer" ? bankAccountName : null,
+        bulkQuoteId: id,
+        quoteValueNZD: quoteData.totalIndicativeNZD ?? 0,
+      });
+      await adminDb.collection("bulkQuotes").doc(id).update({ customerId });
+    } catch (err) {
+      console.error("Customer link error (non-blocking):", err);
+    }
 
     return NextResponse.json({
       id,

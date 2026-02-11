@@ -14,6 +14,7 @@ import {
   Package,
   Link2,
   Users,
+  ContactRound,
   Settings,
   Menu,
   X,
@@ -51,6 +52,11 @@ const sidebarLinks = [
     href: "/admin/partners",
     label: "Partners",
     icon: Users,
+  },
+  {
+    href: "/admin/customers",
+    label: "Customers",
+    icon: ContactRound,
   },
   {
     href: "/admin/settings",
