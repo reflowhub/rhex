@@ -396,7 +396,7 @@ export default function PartnerSubmitPage() {
 
               <div className="mt-4 text-center">
                 <Badge variant="secondary" className="text-xs">
-                  Partner rate ({100 - (partner.partnerRateDiscount ?? 5)}% of public payout)
+                  Partner rate ({100 - (partner.partnerRateDiscount ?? 10)}% of public payout)
                 </Badge>
               </div>
             </div>

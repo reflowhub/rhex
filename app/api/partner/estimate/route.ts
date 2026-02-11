@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const discount = partner.partnerRateDiscount ?? 5;
+    const discount = partner.partnerRateDiscount ?? 10;
 
     // Parse CSV
     const lines = csv

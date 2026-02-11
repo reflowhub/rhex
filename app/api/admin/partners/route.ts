@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
 
     // Mode B fields
     if (normalizedModes.includes("B")) {
-      partnerData.partnerRateDiscount = partnerRateDiscount ?? 5;
+      partnerData.partnerRateDiscount = partnerRateDiscount ?? 10;
     } else {
       partnerData.partnerRateDiscount = null;
     }

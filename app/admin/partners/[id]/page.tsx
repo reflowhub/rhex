@@ -148,7 +148,7 @@ export default function PartnerDetailPage() {
     commissionModel: "percentage",
     commissionPercent: 5,
     commissionFlat: 5,
-    partnerRateDiscount: 5,
+    partnerRateDiscount: 10,
     payoutFrequency: "monthly",
     contactPerson: "",
     contactPhone: "",
@@ -233,7 +233,7 @@ export default function PartnerDetailPage() {
       commissionModel: partner.commissionModel || "percentage",
       commissionPercent: partner.commissionPercent ?? 5,
       commissionFlat: partner.commissionFlat ?? 5,
-      partnerRateDiscount: partner.partnerRateDiscount ?? 5,
+      partnerRateDiscount: partner.partnerRateDiscount ?? 10,
       payoutFrequency: partner.payoutFrequency || "monthly",
       contactPerson: partner.contactPerson ?? "",
       contactPhone: partner.contactPhone ?? "",
@@ -504,13 +504,13 @@ export default function PartnerDetailPage() {
                 <div className="flex justify-between pl-6">
                   <dt className="text-muted-foreground">Rate Discount</dt>
                   <dd className="font-medium">
-                    {partner.partnerRateDiscount ?? 5}% below public payout
+                    {partner.partnerRateDiscount ?? 10}% below public payout
                   </dd>
                 </div>
                 <div className="flex justify-between pl-6">
                   <dt className="text-muted-foreground">Partner Receives</dt>
                   <dd className="font-medium">
-                    {100 - (partner.partnerRateDiscount ?? 5)}% of public payout
+                    {100 - (partner.partnerRateDiscount ?? 10)}% of public payout
                   </dd>
                 </div>
               </>

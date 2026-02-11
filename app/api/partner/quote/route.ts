@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate partner rate
-    const discount = partner.partnerRateDiscount ?? 5;
+    const discount = partner.partnerRateDiscount ?? 10;
     const partnerPriceNZD = calculatePartnerRate(
       Number(publicPriceNZD),
       discount

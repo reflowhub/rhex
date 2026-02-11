@@ -594,7 +594,7 @@ export default function PartnerEstimatePage() {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Prices shown will be at your partner rate ({100 - (partner.partnerRateDiscount ?? 5)}% of public consumer payout).
+          Prices shown will be at your partner rate ({100 - (partner.partnerRateDiscount ?? 10)}% of public consumer payout).
         </p>
       </div>
     </div>

@@ -98,7 +98,7 @@ const EMPTY_FORM: PartnerFormData = {
   commissionModel: "percentage",
   commissionPercent: 5,
   commissionFlat: 5,
-  partnerRateDiscount: 5,
+  partnerRateDiscount: 10,
   payoutFrequency: "monthly",
   contactPerson: "",
   contactPhone: "",
