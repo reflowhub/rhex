@@ -216,6 +216,38 @@ export async function PUT(
 
     await adminDb.collection("customers").doc(id).update(updateData);
 
+    // Sync denormalized fields back to linked quote documents
+    const customerData = doc.data()!;
+    const quoteFields: Record<string, string> = {
+      name: "customerName",
+      email: "customerEmail",
+      phone: "customerPhone",
+      paymentMethod: "paymentMethod",
+      payIdPhone: "payIdPhone",
+      bankBSB: "bankBSB",
+      bankAccountNumber: "bankAccountNumber",
+      bankAccountName: "bankAccountName",
+      shippingAddress: "shippingAddress",
+    };
+
+    const quoteUpdate: Record<string, unknown> = {};
+    for (const [customerField, quoteField] of Object.entries(quoteFields)) {
+      if (customerField in updateData && updateData[customerField] !== customerData[customerField]) {
+        quoteUpdate[quoteField] = updateData[customerField];
+      }
+    }
+
+    if (Object.keys(quoteUpdate).length > 0) {
+      const quoteIds: string[] = customerData.quoteIds ?? [];
+      if (quoteIds.length > 0) {
+        const batch = adminDb.batch();
+        for (const qid of quoteIds) {
+          batch.update(adminDb.collection("quotes").doc(qid), quoteUpdate);
+        }
+        await batch.commit();
+      }
+    }
+
     return NextResponse.json({ id, ...updateData, updatedAt: null });
   } catch (error) {
     console.error("Error updating customer:", error);
