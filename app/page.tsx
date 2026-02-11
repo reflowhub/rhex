@@ -693,7 +693,7 @@ export default function Home() {
           <p className="mb-6 text-center text-xs font-medium uppercase tracking-widest text-muted-foreground">
             Recognised by
           </p>
-          <div className="flex items-center justify-center gap-10 sm:gap-14">
+          <div className="grid grid-cols-2 items-center justify-items-center gap-8 sm:flex sm:justify-center sm:gap-14">
             {[
               { src: "/marketing/deloitte-tech-fast-50.png", alt: "Deloitte Technology Fast 50 2020" },
               { src: "/marketing/ft-high-growth.png", alt: "Financial Times High Growth 2022" },
