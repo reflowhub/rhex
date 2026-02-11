@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { matchDeviceString, loadDeviceLibrary } from "@/lib/matching";
 import { calculatePartnerRate } from "@/lib/partner-pricing";
+import { getPrices } from "@/lib/device-cache";
 
 // ---------------------------------------------------------------------------
 // CSV parser (handles quoted fields) — same pattern as admin device import
@@ -149,22 +150,8 @@ export async function POST(request: NextRequest) {
     let matchedCount = 0;
     let unmatchedCount = 0;
 
-    // Fetch price list for pricing lookups (all grades for per-row support)
-    const priceSnapshot = await adminDb
-      .collection("priceLists/FP-2B/prices")
-      .get();
-    const priceMap = new Map<string, Record<string, number>>();
-    priceSnapshot.docs.forEach((doc) => {
-      const data = doc.data();
-      const grades: Record<string, number> = {};
-      for (const g of validGrades) {
-        const field = `grade${g}`;
-        if (data[field] !== undefined && data[field] !== null) {
-          grades[g] = Number(data[field]);
-        }
-      }
-      priceMap.set(doc.id, grades);
-    });
+    // Fetch price list for pricing lookups (from cache)
+    const priceMap = await getPrices();
 
     for (let i = 1; i < lines.length; i++) {
       const values = parseCSVLine(lines[i]);

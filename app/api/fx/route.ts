@@ -7,7 +7,12 @@ export async function GET(request: NextRequest) {
     const rates = await getTodayFXRate();
     // Vercel provides x-vercel-ip-country automatically on deployed requests
     const country = request.headers.get("x-vercel-ip-country") || null;
-    return NextResponse.json({ ...rates, country });
+    const response = NextResponse.json({ ...rates, country });
+    response.headers.set(
+      "Cache-Control",
+      "public, s-maxage=3600, stale-while-revalidate=7200"
+    );
+    return response;
   } catch (error) {
     console.error("Error fetching FX rates:", error);
     return NextResponse.json(

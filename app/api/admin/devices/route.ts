@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
+import { getDevices, invalidateDeviceCache } from "@/lib/device-cache";
 
 // GET /api/admin/devices — List all devices, with optional ?search= fuzzy filter
 export async function GET(request: NextRequest) {
@@ -11,11 +12,14 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.toLowerCase().trim() ?? "";
 
-    const snapshot = await adminDb.collection("devices").get();
+    const allDevices = await getDevices();
 
-    let devices: Record<string, unknown>[] = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
+    let devices: Record<string, unknown>[] = allDevices.map((d) => ({
+      id: d.id,
+      deviceId: d.deviceId,
+      make: d.make,
+      model: d.model,
+      storage: d.storage,
     }));
 
     // In-memory fuzzy search across make, model, storage
@@ -100,6 +104,7 @@ export async function POST(request: NextRequest) {
     };
 
     const docRef = await adminDb.collection("devices").add(deviceData);
+    invalidateDeviceCache();
 
     return NextResponse.json(
       { id: docRef.id, ...deviceData },

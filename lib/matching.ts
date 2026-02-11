@@ -1,5 +1,6 @@
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
+import { getDevices, type CachedDevice } from "@/lib/device-cache";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,27 +43,11 @@ const BRAND_ALIASES: Record<string, string[]> = {
 };
 
 // ---------------------------------------------------------------------------
-// Device library cache (in-memory per server lifetime)
+// Device library loader (backed by shared cache in device-cache.ts)
 // ---------------------------------------------------------------------------
 
-let cachedDevices: LibraryDevice[] | null = null;
-let cacheTime = 0;
-const CACHE_TTL = 60_000; // 1 minute
-
 export async function loadDeviceLibrary(): Promise<LibraryDevice[]> {
-  if (cachedDevices && Date.now() - cacheTime < CACHE_TTL) {
-    return cachedDevices;
-  }
-
-  const snapshot = await adminDb.collection("devices").get();
-  cachedDevices = snapshot.docs.map((doc) => ({
-    id: doc.id,
-    make: doc.data().make as string,
-    model: doc.data().model as string,
-    storage: doc.data().storage as string,
-  }));
-  cacheTime = Date.now();
-  return cachedDevices;
+  return getDevices();
 }
 
 // ---------------------------------------------------------------------------

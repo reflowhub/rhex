@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
+import { invalidateDeviceCache, invalidatePriceCache } from "@/lib/device-cache";
 
 // ---------------------------------------------------------------------------
 // CSV Parsing
@@ -289,6 +290,10 @@ export async function POST(request: NextRequest) {
 
       await batch.commit();
     }
+
+    // Invalidate caches since pricing import may also create new devices
+    invalidateDeviceCache();
+    invalidatePriceCache();
 
     return NextResponse.json({
       id: priceListRef.id,

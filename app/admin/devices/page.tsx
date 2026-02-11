@@ -92,7 +92,7 @@ export default function DeviceLibraryPage() {
     setLoading(true);
     fetch("/api/admin/devices?search=" + encodeURIComponent(searchTerm))
       .then((res) => res.json())
-      .then((data: Device[]) => setDevices(data))
+      .then((data) => setDevices(Array.isArray(data) ? data : []))
       .finally(() => setLoading(false));
   }, [searchTerm]);
 

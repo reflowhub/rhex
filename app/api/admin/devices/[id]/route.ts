@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
+import { invalidateDeviceCache } from "@/lib/device-cache";
 
 // GET /api/admin/devices/[id] — Get a single device by document ID
 export async function GET(
@@ -64,6 +65,7 @@ export async function PUT(
     if (storage !== undefined) updateData.storage = storage;
 
     await docRef.update(updateData);
+    invalidateDeviceCache();
 
     const updatedDoc = await docRef.get();
     return NextResponse.json({ id: updatedDoc.id, ...updatedDoc.data() });
@@ -94,6 +96,7 @@ export async function DELETE(
 
     // Delete the device document
     await docRef.delete();
+    invalidateDeviceCache();
 
     // Also delete the corresponding price entry if it exists
     const priceRef = adminDb.doc(`priceLists/FP-2B/prices/${id}`);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
+import { getDevices } from "@/lib/device-cache";
 
 // GET /api/devices — Public endpoint to list devices for consumer quote flow
 // Supports optional ?make= filter and ?id= to fetch a single device
@@ -21,14 +22,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ id: doc.id, ...doc.data() });
     }
 
-    // List all devices
-    const snapshot = await adminDb.collection("devices").get();
+    // List all devices (from cache)
+    const allDevices = await getDevices();
 
-    let devices: Record<string, unknown>[] = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      make: doc.data().make,
-      model: doc.data().model,
-      storage: doc.data().storage,
+    let devices = allDevices.map((d) => ({
+      id: d.id,
+      make: d.make,
+      model: d.model,
+      storage: d.storage,
     }));
 
     // Filter by make if provided
@@ -54,7 +55,12 @@ export async function GET(request: NextRequest) {
       return storageA.localeCompare(storageB);
     });
 
-    return NextResponse.json(devices);
+    const response = NextResponse.json(devices);
+    response.headers.set(
+      "Cache-Control",
+      "public, s-maxage=300, stale-while-revalidate=600"
+    );
+    return response;
   } catch (error) {
     console.error("Error fetching devices:", error);
     return NextResponse.json(

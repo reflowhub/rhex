@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
+import { invalidateDeviceCache } from "@/lib/device-cache";
 
 interface ParsedRow {
   deviceId?: number;
@@ -174,6 +175,7 @@ export async function POST(request: NextRequest) {
       imported += chunk.length;
     }
 
+    invalidateDeviceCache();
     return NextResponse.json({ imported, errors });
   } catch (error) {
     console.error("Error importing devices:", error);
