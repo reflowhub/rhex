@@ -301,10 +301,16 @@ export default function PartnerSettingsPage() {
               )}
 
             {settings.modes.includes("B") && (
-              <div className="flex items-center gap-2 font-medium">
-                <Package className="h-4 w-4 text-muted-foreground" />
-                Mode B — Partner Rate
-              </div>
+              <>
+                <div className="flex items-center gap-2 font-medium">
+                  <Package className="h-4 w-4 text-muted-foreground" />
+                  Mode B — Partner Rate
+                </div>
+                <div className="flex justify-between pl-6">
+                  <dt className="text-muted-foreground">Payout</dt>
+                  <dd className="font-medium">Ad-hoc</dd>
+                </div>
+              </>
             )}
 
             <div className="my-1 h-px bg-border" />
