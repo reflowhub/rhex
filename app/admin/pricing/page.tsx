@@ -296,9 +296,10 @@ export default function PricingPage() {
   };
 
   // Get the active price list object for the selected category
+  // Fallback: if activePriceList isn't set in categories, find by category field
   const activePriceList = activePriceListId
     ? priceLists.find((pl) => pl.id === activePriceListId)
-    : null;
+    : priceLists.find((pl) => pl.category === selectedCategory) ?? null;
 
   // ---- render -------------------------------------------------------------
   return (
