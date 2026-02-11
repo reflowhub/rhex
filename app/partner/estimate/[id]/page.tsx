@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ArrowLeft, Loader2, Check, Package } from "lucide-react";
+import { useFX } from "@/lib/use-fx";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -96,9 +97,9 @@ export default function PartnerEstimateDetailPage({
     }
   };
 
+  const { formatPrice: fxFormatPrice } = useFX();
   const formatPrice = (price: number | null | undefined) => {
-    if (price == null) return "\u2014";
-    return `$${price.toFixed(2)}`;
+    return fxFormatPrice(price, partner?.currency ?? "AUD");
   };
 
   const formatDate = (iso: string | null) => {

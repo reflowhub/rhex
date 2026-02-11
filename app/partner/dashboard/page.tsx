@@ -19,6 +19,7 @@ import {
   TrendingUp,
   Loader2,
 } from "lucide-react";
+import { useFX } from "@/lib/use-fx";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -66,9 +67,9 @@ export default function PartnerDashboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const { formatPrice: fxFormatPrice } = useFX();
   const formatPrice = (price: number | null | undefined) => {
-    if (price == null) return "\u2014";
-    return `$${price.toFixed(2)}`;
+    return fxFormatPrice(price, partner?.currency ?? "AUD");
   };
 
   const formatDate = (iso: string | null) => {

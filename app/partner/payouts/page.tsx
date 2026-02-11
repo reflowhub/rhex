@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Loader2, CreditCard, Clock } from "lucide-react";
+import { useFX } from "@/lib/use-fx";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -48,12 +49,9 @@ export default function PartnerPayoutsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const { formatPrice: fxFormatPrice } = useFX();
   const formatPrice = (amount: number | null | undefined) => {
-    if (amount == null) return "\u2014";
-    return new Intl.NumberFormat("en-NZ", {
-      style: "currency",
-      currency: "NZD",
-    }).format(amount);
+    return fxFormatPrice(amount, partner?.currency ?? "AUD");
   };
 
   const formatDate = (iso: string | null) => {

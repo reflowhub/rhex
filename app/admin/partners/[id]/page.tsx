@@ -38,7 +38,9 @@ import {
   Link2,
   Package,
   CreditCard,
+  User,
 } from "lucide-react";
+import { useFX } from "@/lib/use-fx";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -58,6 +60,12 @@ interface Partner {
   commissionTiers: { minQty: number; rate: number }[] | null;
   payoutFrequency: string | null;
   partnerRateDiscount: number | null;
+  currency: "AUD" | "NZD";
+  contactPerson: string | null;
+  contactPhone: string | null;
+  address: string | null;
+  companyName: string | null;
+  companyRegistrationNumber: string | null;
   paymentMethod: string | null;
   payIdPhone: string | null;
   bankBSB: string | null;
@@ -114,6 +122,7 @@ export default function PartnerDetailPage({
 }) {
   const { id } = React.use(params);
   const router = useRouter();
+  const { formatPrice: fxFormatPrice } = useFX();
 
   // ---- data state
   const [partner, setPartner] = useState<Partner | null>(null);
@@ -137,6 +146,7 @@ export default function PartnerDetailPage({
     code: "",
     contactEmail: "",
     status: "active",
+    currency: "AUD" as "AUD" | "NZD",
     modeA: false,
     modeB: false,
     commissionModel: "percentage",
@@ -144,6 +154,11 @@ export default function PartnerDetailPage({
     commissionFlat: 5,
     partnerRateDiscount: 5,
     payoutFrequency: "monthly",
+    contactPerson: "",
+    contactPhone: "",
+    address: "",
+    companyName: "",
+    companyRegistrationNumber: "",
   });
 
   // ---- fetch partner
@@ -216,6 +231,7 @@ export default function PartnerDetailPage({
       code: partner.code,
       contactEmail: partner.contactEmail,
       status: partner.status,
+      currency: partner.currency ?? "AUD",
       modeA: partner.modes.includes("A"),
       modeB: partner.modes.includes("B"),
       commissionModel: partner.commissionModel || "percentage",
@@ -223,6 +239,11 @@ export default function PartnerDetailPage({
       commissionFlat: partner.commissionFlat ?? 5,
       partnerRateDiscount: partner.partnerRateDiscount ?? 5,
       payoutFrequency: partner.payoutFrequency || "monthly",
+      contactPerson: partner.contactPerson ?? "",
+      contactPhone: partner.contactPhone ?? "",
+      address: partner.address ?? "",
+      companyName: partner.companyName ?? "",
+      companyRegistrationNumber: partner.companyRegistrationNumber ?? "",
     });
     setEditError(null);
     setEditOpen(true);
@@ -253,12 +274,18 @@ export default function PartnerDetailPage({
           code: editForm.code.trim(),
           contactEmail: editForm.contactEmail.trim(),
           status: editForm.status,
+          currency: editForm.currency,
           modes,
           commissionModel: editForm.commissionModel,
           commissionPercent: editForm.commissionPercent,
           commissionFlat: editForm.commissionFlat,
           partnerRateDiscount: editForm.partnerRateDiscount,
           payoutFrequency: editForm.payoutFrequency,
+          contactPerson: editForm.contactPerson.trim() || null,
+          contactPhone: editForm.contactPhone.trim() || null,
+          address: editForm.address.trim() || null,
+          companyName: editForm.companyName.trim() || null,
+          companyRegistrationNumber: editForm.companyRegistrationNumber.trim() || null,
         }),
       });
 
@@ -365,6 +392,10 @@ export default function PartnerDetailPage({
                   {partner.contactEmail}
                 </a>
               </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Currency</dt>
+              <dd className="font-medium">{partner.currency ?? "AUD"}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Mode(s)</dt>
@@ -509,13 +540,13 @@ export default function PartnerDetailPage({
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Pending Payout</dt>
                 <dd className="font-medium text-amber-600">
-                  {formatCurrency(partner.commissionSummary.totalPending)} NZD
+                  {fxFormatPrice(partner.commissionSummary.totalPending, partner.currency ?? "AUD")}
                 </dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Total Paid</dt>
                 <dd className="font-medium text-emerald-600">
-                  {formatCurrency(partner.commissionSummary.totalPaid)} NZD
+                  {fxFormatPrice(partner.commissionSummary.totalPaid, partner.currency ?? "AUD")}
                 </dd>
               </div>
             </dl>
@@ -568,6 +599,49 @@ export default function PartnerDetailPage({
             </dl>
           </div>
         )}
+
+        {/* Contact Details Card */}
+        {(partner.companyName || partner.companyRegistrationNumber || partner.contactPerson || partner.contactPhone || partner.address) && (
+          <div className="rounded-lg border border-border bg-card p-6">
+            <div className="mb-4 flex items-center gap-2">
+              <User className="h-5 w-5 text-muted-foreground" />
+              <h2 className="text-lg font-semibold">Contact Details</h2>
+            </div>
+
+            <dl className="grid gap-3 text-sm">
+              {partner.companyName && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Company</dt>
+                  <dd className="font-medium">{partner.companyName}</dd>
+                </div>
+              )}
+              {partner.companyRegistrationNumber && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Registration No.</dt>
+                  <dd className="font-mono text-xs">{partner.companyRegistrationNumber}</dd>
+                </div>
+              )}
+              {partner.contactPerson && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Contact Person</dt>
+                  <dd>{partner.contactPerson}</dd>
+                </div>
+              )}
+              {partner.contactPhone && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Phone</dt>
+                  <dd>{partner.contactPhone}</dd>
+                </div>
+              )}
+              {partner.address && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Address</dt>
+                  <dd className="text-right max-w-[200px]">{partner.address}</dd>
+                </div>
+              )}
+            </dl>
+          </div>
+        )}
       </div>
 
       {/* Payouts Section (Mode A) */}
@@ -592,8 +666,8 @@ export default function PartnerDetailPage({
                   }}
                 >
                   <DollarSign className="mr-1 h-3 w-3" />
-                  Create Payout ({formatCurrency(
-                    partner.commissionSummary.totalPending
+                  Create Payout ({fxFormatPrice(
+                    partner.commissionSummary.totalPending, partner.currency ?? "AUD"
                   )})
                 </Button>
               )}
@@ -625,7 +699,7 @@ export default function PartnerDetailPage({
                       {payout.id.substring(0, 8)}
                     </TableCell>
                     <TableCell className="text-right font-medium text-emerald-600">
-                      {formatCurrency(payout.amount)}
+                      {fxFormatPrice(payout.amount, partner.currency ?? "AUD")}
                     </TableCell>
                     <TableCell>{payout.ledgerEntryCount} entries</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
@@ -651,9 +725,8 @@ export default function PartnerDetailPage({
               This will mark all pending commission entries as paid and create a
               payout record for{" "}
               {partner.commissionSummary
-                ? formatCurrency(partner.commissionSummary.totalPending)
-                : "$0.00"}{" "}
-              NZD.
+                ? fxFormatPrice(partner.commissionSummary.totalPending, partner.currency ?? "AUD")
+                : "$0.00"}.
             </DialogDescription>
           </DialogHeader>
 
@@ -747,6 +820,24 @@ export default function PartnerDetailPage({
                   }))
                 }
               />
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Display Currency</Label>
+              <Select
+                value={editForm.currency}
+                onValueChange={(val) =>
+                  setEditForm((f) => ({ ...f, currency: val as "AUD" | "NZD" }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="AUD">AUD (Australian Dollar)</SelectItem>
+                  <SelectItem value="NZD">NZD (New Zealand Dollar)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-2">
@@ -893,6 +984,55 @@ export default function PartnerDetailPage({
                 </div>
               </div>
             )}
+
+            <div className="rounded-md border border-border p-4 space-y-3">
+              <p className="text-sm font-medium">Contact Details</p>
+              <div className="grid gap-2">
+                <Label>Company Name</Label>
+                <Input
+                  value={editForm.companyName}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, companyName: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Company Registration Number</Label>
+                <Input
+                  value={editForm.companyRegistrationNumber}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, companyRegistrationNumber: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Contact Person</Label>
+                <Input
+                  value={editForm.contactPerson}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, contactPerson: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Contact Phone</Label>
+                <Input
+                  value={editForm.contactPhone}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, contactPhone: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Address</Label>
+                <Input
+                  value={editForm.address}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, address: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
           </div>
 
           <DialogFooter>

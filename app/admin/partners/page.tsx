@@ -61,6 +61,7 @@ interface PartnerFormData {
   code: string;
   contactEmail: string;
   password: string;
+  currency: "AUD" | "NZD";
   modeA: boolean;
   modeB: boolean;
   status: string;
@@ -69,6 +70,11 @@ interface PartnerFormData {
   commissionFlat: number;
   partnerRateDiscount: number;
   payoutFrequency: string;
+  contactPerson: string;
+  contactPhone: string;
+  address: string;
+  companyName: string;
+  companyRegistrationNumber: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,6 +91,7 @@ const EMPTY_FORM: PartnerFormData = {
   code: "",
   contactEmail: "",
   password: "",
+  currency: "AUD",
   modeA: true,
   modeB: false,
   status: "active",
@@ -93,6 +100,11 @@ const EMPTY_FORM: PartnerFormData = {
   commissionFlat: 5,
   partnerRateDiscount: 5,
   payoutFrequency: "monthly",
+  contactPerson: "",
+  contactPhone: "",
+  address: "",
+  companyName: "",
+  companyRegistrationNumber: "",
 };
 
 // ---------------------------------------------------------------------------
@@ -188,6 +200,7 @@ export default function PartnersPage() {
           code: formData.code.trim(),
           contactEmail: formData.contactEmail.trim(),
           password: formData.password,
+          currency: formData.currency,
           modes,
           status: formData.status,
           commissionModel: formData.commissionModel,
@@ -195,6 +208,11 @@ export default function PartnersPage() {
           commissionFlat: formData.commissionFlat,
           partnerRateDiscount: formData.partnerRateDiscount,
           payoutFrequency: formData.payoutFrequency,
+          contactPerson: formData.contactPerson.trim() || null,
+          contactPhone: formData.contactPhone.trim() || null,
+          address: formData.address.trim() || null,
+          companyName: formData.companyName.trim() || null,
+          companyRegistrationNumber: formData.companyRegistrationNumber.trim() || null,
         }),
       });
 
@@ -390,7 +408,7 @@ export default function PartnersPage() {
 
       {/* Add Partner Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Partner</DialogTitle>
           </DialogHeader>
@@ -461,6 +479,23 @@ export default function PartnersPage() {
                 onChange={(e) => handleFormChange("password", e.target.value)}
                 placeholder="Temporary password for partner login"
               />
+            </div>
+
+            {/* Currency */}
+            <div className="grid gap-2">
+              <Label>Display Currency</Label>
+              <Select
+                value={formData.currency}
+                onValueChange={(val) => handleFormChange("currency", val)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="AUD">AUD (Australian Dollar)</SelectItem>
+                  <SelectItem value="NZD">NZD (New Zealand Dollar)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Mode selection */}
@@ -635,6 +670,46 @@ export default function PartnersPage() {
                 </div>
               </div>
             )}
+
+            {/* Contact Details */}
+            <div className="rounded-md border border-border p-4 space-y-3">
+              <p className="text-sm font-medium">Contact Details (optional)</p>
+              <div className="grid gap-2">
+                <Label>Company Name</Label>
+                <Input
+                  value={formData.companyName}
+                  onChange={(e) => handleFormChange("companyName", e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Company Registration Number</Label>
+                <Input
+                  value={formData.companyRegistrationNumber}
+                  onChange={(e) => handleFormChange("companyRegistrationNumber", e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Contact Person</Label>
+                <Input
+                  value={formData.contactPerson}
+                  onChange={(e) => handleFormChange("contactPerson", e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Contact Phone</Label>
+                <Input
+                  value={formData.contactPhone}
+                  onChange={(e) => handleFormChange("contactPhone", e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Address</Label>
+                <Input
+                  value={formData.address}
+                  onChange={(e) => handleFormChange("address", e.target.value)}
+                />
+              </div>
+            </div>
           </div>
 
           <DialogFooter>

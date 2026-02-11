@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
         commissionTiers: data.commissionTiers ?? null,
         payoutFrequency: data.payoutFrequency ?? "monthly",
         partnerRateDiscount: data.partnerRateDiscount ?? null,
+        currency: data.currency ?? "AUD",
         createdAt: serializeTimestamp(data.createdAt),
         updatedAt: serializeTimestamp(data.updatedAt),
       };
@@ -82,6 +83,7 @@ export async function POST(request: NextRequest) {
       password,
       modes,
       status,
+      currency,
       // Mode A fields
       commissionModel,
       commissionPercent,
@@ -90,6 +92,12 @@ export async function POST(request: NextRequest) {
       payoutFrequency,
       // Mode B fields
       partnerRateDiscount,
+      // Contact fields
+      contactPerson,
+      contactPhone,
+      address,
+      companyName,
+      companyRegistrationNumber,
     } = body;
 
     // Validate required fields
@@ -147,6 +155,12 @@ export async function POST(request: NextRequest) {
       contactEmail: contactEmail.trim(),
       modes: normalizedModes,
       status: status === "active" ? "active" : "inactive",
+      currency: currency === "NZD" ? "NZD" : "AUD",
+      contactPerson: contactPerson?.trim() || null,
+      contactPhone: contactPhone?.trim() || null,
+      address: address?.trim() || null,
+      companyName: companyName?.trim() || null,
+      companyRegistrationNumber: companyRegistrationNumber?.trim() || null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };

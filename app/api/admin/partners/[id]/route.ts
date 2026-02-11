@@ -73,6 +73,14 @@ export async function GET(
       bankBSB: data.bankBSB ?? null,
       bankAccountNumber: data.bankAccountNumber ?? null,
       bankAccountName: data.bankAccountName ?? null,
+      // Currency
+      currency: data.currency ?? "AUD",
+      // Contact
+      contactPerson: data.contactPerson ?? null,
+      contactPhone: data.contactPhone ?? null,
+      address: data.address ?? null,
+      companyName: data.companyName ?? null,
+      companyRegistrationNumber: data.companyRegistrationNumber ?? null,
       // Summary
       commissionSummary,
       // Timestamps
@@ -172,6 +180,18 @@ export async function PUT(
     if (body.bankAccountNumber !== undefined) updateData.bankAccountNumber = body.bankAccountNumber;
     if (body.bankAccountName !== undefined) updateData.bankAccountName = body.bankAccountName;
 
+    // Currency
+    if (body.currency !== undefined) {
+      updateData.currency = body.currency === "NZD" ? "NZD" : "AUD";
+    }
+
+    // Contact fields
+    if (body.contactPerson !== undefined) updateData.contactPerson = body.contactPerson?.trim() || null;
+    if (body.contactPhone !== undefined) updateData.contactPhone = body.contactPhone?.trim() || null;
+    if (body.address !== undefined) updateData.address = body.address?.trim() || null;
+    if (body.companyName !== undefined) updateData.companyName = body.companyName?.trim() || null;
+    if (body.companyRegistrationNumber !== undefined) updateData.companyRegistrationNumber = body.companyRegistrationNumber?.trim() || null;
+
     await partnerRef.update(updateData);
 
     // Return updated partner
@@ -191,6 +211,12 @@ export async function PUT(
       commissionTiers: updatedData.commissionTiers ?? null,
       payoutFrequency: updatedData.payoutFrequency ?? "monthly",
       partnerRateDiscount: updatedData.partnerRateDiscount ?? null,
+      currency: updatedData.currency ?? "AUD",
+      contactPerson: updatedData.contactPerson ?? null,
+      contactPhone: updatedData.contactPhone ?? null,
+      address: updatedData.address ?? null,
+      companyName: updatedData.companyName ?? null,
+      companyRegistrationNumber: updatedData.companyRegistrationNumber ?? null,
       updatedAt: new Date().toISOString(),
     });
   } catch (error) {

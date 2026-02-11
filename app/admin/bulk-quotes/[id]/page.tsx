@@ -40,6 +40,7 @@ import {
   User,
   ClipboardCheck,
 } from "lucide-react";
+import { useFX } from "@/lib/use-fx";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -196,6 +197,7 @@ export default function BulkQuoteDetailPage({
 }) {
   const { id } = React.use(params);
   const router = useRouter();
+  const { formatPrice: fxFormatPrice } = useFX();
 
   const [quote, setQuote] = useState<BulkQuote | null>(null);
   const [loading, setLoading] = useState(true);
@@ -407,7 +409,7 @@ export default function BulkQuoteDetailPage({
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Total Value</dt>
               <dd className="font-medium">
-                {formatCurrency(quote.totalIndicativeNZD)} NZD
+                {fxFormatPrice(quote.totalIndicativeNZD, "AUD")}
               </dd>
             </div>
             <div className="flex justify-between">
@@ -688,9 +690,9 @@ export default function BulkQuoteDetailPage({
                 <TableHead>Confidence</TableHead>
                 <TableHead className="text-right">Qty</TableHead>
                 <TableHead>Grade</TableHead>
-                <TableHead className="text-right">Indicative (NZD)</TableHead>
+                <TableHead className="text-right">Indicative (AUD)</TableHead>
                 <TableHead>Actual Grade</TableHead>
-                <TableHead className="text-right">Actual (NZD)</TableHead>
+                <TableHead className="text-right">Actual (AUD)</TableHead>
                 {quote.status === "received" && <TableHead className="w-24" />}
               </TableRow>
             </TableHeader>
@@ -734,7 +736,7 @@ export default function BulkQuoteDetailPage({
                   <TableCell>{line.assumedGrade}</TableCell>
                   <TableCell className="text-right">
                     {line.indicativePriceNZD > 0
-                      ? formatCurrency(line.indicativePriceNZD)
+                      ? fxFormatPrice(line.indicativePriceNZD, "AUD")
                       : "\u2014"}
                   </TableCell>
                   <TableCell>
@@ -746,12 +748,12 @@ export default function BulkQuoteDetailPage({
                         )}
                       </Badge>
                     ) : (
-                      <span className="text-muted-foreground">\u2014</span>
+                      <span className="text-muted-foreground">{"\u2014"}</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
                     {line.actualPriceNZD !== null
-                      ? formatCurrency(line.actualPriceNZD)
+                      ? fxFormatPrice(line.actualPriceNZD, "AUD")
                       : "\u2014"}
                   </TableCell>
                   {quote.status === "received" && (
@@ -790,12 +792,11 @@ export default function BulkQuoteDetailPage({
                 </p>
                 <p className="mt-1 text-muted-foreground">
                   Assumed: Grade {inspectLine.assumedGrade} &mdash;{" "}
-                  {formatCurrency(
+                  {fxFormatPrice(
                     inspectLine.quantity > 0
                       ? inspectLine.indicativePriceNZD / inspectLine.quantity
-                      : 0
-                  )}{" "}
-                  NZD/unit
+                      : 0, "AUD"
+                  )}/unit
                 </p>
               </div>
             )}

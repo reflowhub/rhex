@@ -32,6 +32,7 @@ import {
   User,
   ClipboardCheck,
 } from "lucide-react";
+import { useFX } from "@/lib/use-fx";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -200,6 +201,7 @@ export default function QuoteDetailPage({
 }) {
   const { id } = React.use(params);
   const router = useRouter();
+  const { formatPrice: fxFormatPrice } = useFX();
 
   // ---- data state ---------------------------------------------------------
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -406,7 +408,7 @@ export default function QuoteDetailPage({
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Quote Price</dt>
               <dd className="font-medium">
-                {formatCurrency(quote.quotePriceNZD)} NZD
+                {fxFormatPrice(quote.quotePriceNZD, "AUD")}
               </dd>
             </div>
 
@@ -447,7 +449,7 @@ export default function QuoteDetailPage({
                     <div className="flex justify-between">
                       <dt className="text-muted-foreground">Revised Price</dt>
                       <dd className="font-medium">
-                        {formatCurrency(quote.revisedPriceNZD)} NZD
+                        {fxFormatPrice(quote.revisedPriceNZD, "AUD")}
                         {quote.revisedPriceNZD !== quote.quotePriceNZD && (
                           <span
                             className={cn(
@@ -460,10 +462,10 @@ export default function QuoteDetailPage({
                             ({quote.revisedPriceNZD < quote.quotePriceNZD
                               ? "-"
                               : "+"}
-                            {formatCurrency(
+                            {fxFormatPrice(
                               Math.abs(
                                 quote.revisedPriceNZD - quote.quotePriceNZD
-                              )
+                              ), "AUD"
                             )}
                             )
                           </span>
@@ -763,7 +765,7 @@ export default function QuoteDetailPage({
               </p>
               <p className="mt-1 text-muted-foreground">
                 Original: Grade {quote.grade} &mdash;{" "}
-                {formatCurrency(quote.quotePriceNZD)} NZD
+                {fxFormatPrice(quote.quotePriceNZD, "AUD")}
               </p>
             </div>
 

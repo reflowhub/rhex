@@ -13,6 +13,7 @@ export interface PartnerSession {
   modes: string[];
   status: string;
   authUid: string;
+  currency: "AUD" | "NZD";
   // Mode A
   commissionModel: string | null;
   commissionPercent: number | null;
@@ -62,6 +63,7 @@ export async function verifyPartnerSession(
       modes: data.modes ?? [],
       status: data.status,
       authUid: data.authUid,
+      currency: (data.currency as "AUD" | "NZD") ?? "AUD",
       commissionModel: data.commissionModel ?? null,
       commissionPercent: data.commissionPercent ?? null,
       commissionFlat: data.commissionFlat ?? null,

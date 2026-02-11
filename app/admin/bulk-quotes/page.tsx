@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Loader2, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { useFX } from "@/lib/use-fx";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -147,12 +148,9 @@ export default function BulkQuotesPage() {
     });
   };
 
+  const { formatPrice: fxFormatPrice } = useFX();
   const formatPrice = (amount: number | null | undefined) => {
-    if (amount == null) return "\u2014";
-    return new Intl.NumberFormat("en-NZ", {
-      style: "currency",
-      currency: "NZD",
-    }).format(amount);
+    return fxFormatPrice(amount, "AUD");
   };
 
   return (
@@ -263,7 +261,7 @@ export default function BulkQuotesPage() {
                           {q.partnerName}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground">\u2014</span>
+                        <span className="text-muted-foreground">{"\u2014"}</span>
                       )}
                     </TableCell>
                     <TableCell>

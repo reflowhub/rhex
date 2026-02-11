@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   XCircle,
 } from "lucide-react";
+import { useFX } from "@/lib/use-fx";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -126,6 +127,7 @@ export default function PartnerQuoteDetailPage({
   const { id } = use(params);
   const router = useRouter();
   const { partner, loading: partnerLoading } = usePartner();
+  const { formatPrice: fxFormatPrice } = useFX();
 
   const [quote, setQuote] = useState<QuoteDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -244,7 +246,7 @@ export default function PartnerQuoteDetailPage({
                 {isModeB ? "Partner Rate" : "Quote Price"}
               </dt>
               <dd className="text-lg font-bold">
-                {formatCurrency(quote.quotePriceNZD)} NZD
+                {fxFormatPrice(quote.quotePriceNZD, partner?.currency ?? "AUD")}
               </dd>
             </div>
 
@@ -252,7 +254,7 @@ export default function PartnerQuoteDetailPage({
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Public Price</dt>
                 <dd className="text-muted-foreground">
-                  {formatCurrency(quote.publicPriceNZD)} NZD
+                  {fxFormatPrice(quote.publicPriceNZD, partner?.currency ?? "AUD")}
                 </dd>
               </div>
             )}
@@ -276,7 +278,7 @@ export default function PartnerQuoteDetailPage({
                   <div className="flex justify-between">
                     <dt className="text-muted-foreground">Revised Price</dt>
                     <dd className="font-medium">
-                      {formatCurrency(quote.revisedPriceNZD)} NZD
+                      {fxFormatPrice(quote.revisedPriceNZD, partner?.currency ?? "AUD")}
                     </dd>
                   </div>
                 )}

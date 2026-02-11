@@ -15,6 +15,7 @@ interface PartnerData {
   modes: string[];
   status: string;
   authUid: string;
+  currency: "AUD" | "NZD";
   commissionModel: string | null;
   commissionPercent: number | null;
   commissionFlat: number | null;

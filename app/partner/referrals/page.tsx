@@ -6,6 +6,7 @@ import { usePartner } from "@/lib/partner-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link2, Copy, Check, Loader2 } from "lucide-react";
+import { useFX } from "@/lib/use-fx";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -73,7 +74,8 @@ export default function PartnerReferralsPage() {
     }
   };
 
-  const formatPrice = (price: number) => `$${price.toFixed(2)}`;
+  const { formatPrice: fxFormatPrice } = useFX();
+  const formatPrice = (price: number) => fxFormatPrice(price, partner?.currency ?? "AUD");
 
   return (
     <div>
