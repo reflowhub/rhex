@@ -72,6 +72,7 @@ interface BulkQuote {
   contactEmail: string | null;
   contactPhone: string | null;
   type: string;
+  category: string | null;
   assumedGrade: string;
   totalDevices: number;
   totalIndicativeNZD: number;
@@ -188,11 +189,13 @@ export default function EstimateResultPage({
     fetchQuote();
   }, [id]);
 
-  // Fetch devices for resolve dialog
+  // Fetch devices for resolve dialog (filtered by estimate category)
   useEffect(() => {
+    if (!quote) return;
+    const cat = quote.category || "Phone";
     async function fetchDevices() {
       try {
-        const res = await fetch("/api/devices");
+        const res = await fetch(`/api/devices?category=${encodeURIComponent(cat)}`);
         if (res.ok) {
           const data = await res.json();
           setAllDevices(data);
@@ -202,7 +205,7 @@ export default function EstimateResultPage({
       }
     }
     fetchDevices();
-  }, []);
+  }, [quote]);
 
   // Filtered devices for resolve dialog
   const filteredDevices = useMemo(() => {

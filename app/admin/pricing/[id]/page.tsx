@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +43,7 @@ interface PriceListMeta {
   effectiveDate: string | null;
   currency: string;
   deviceCount: number;
+  category: string;
   createdAt: string | null;
 }
 
@@ -54,7 +55,10 @@ interface PriceEntry {
   grades: Record<string, number>;
 }
 
-const GRADE_KEYS = ["A", "B", "C", "D", "E"];
+interface CategoryGradeInfo {
+  key: string;
+  label: string;
+}
 
 const PAGE_SIZE = 25;
 
@@ -71,6 +75,9 @@ export default function PriceListDetailPage() {
   const [priceList, setPriceList] = useState<PriceListMeta | null>(null);
   const [prices, setPrices] = useState<PriceEntry[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // ---- category grade keys (dynamic) -------------------------------------
+  const [gradeKeys, setGradeKeys] = useState<string[]>(["A", "B", "C", "D", "E"]);
 
   // ---- search state -------------------------------------------------------
   const [searchInput, setSearchInput] = useState("");
@@ -133,6 +140,22 @@ export default function PriceListDetailPage() {
       .then((data) => {
         setPriceList(data.priceList);
         setPrices(data.prices ?? []);
+
+        // Load grade keys from category
+        const category = data.priceList?.category ?? "Phone";
+        fetch("/api/admin/categories")
+          .then((r) => r.json())
+          .then((catData) => {
+            if (catData.categories && catData.categories[category]) {
+              const grades = catData.categories[category].grades as CategoryGradeInfo[];
+              if (grades && grades.length > 0) {
+                setGradeKeys(grades.map((g) => g.key));
+              }
+            }
+          })
+          .catch(() => {
+            // Keep default grade keys
+          });
       })
       .catch(() => {
         setPriceList(null);
@@ -191,11 +214,11 @@ export default function PriceListDetailPage() {
     const entry = prices.find((p) => p.deviceId === deviceId);
     if (!entry) return false;
 
-    const gradeIdx = GRADE_KEYS.indexOf(grade);
+    const gradeIdx = gradeKeys.indexOf(grade);
     if (gradeIdx <= 0) return false;
 
     const currentValue = getDisplayValue(deviceId, grade, entry.grades[grade] ?? 0);
-    const higherGrade = GRADE_KEYS[gradeIdx - 1];
+    const higherGrade = gradeKeys[gradeIdx - 1];
     const higherValue = getDisplayValue(deviceId, higherGrade, entry.grades[higherGrade] ?? 0);
 
     return currentValue > higherValue;
@@ -305,7 +328,7 @@ export default function PriceListDetailPage() {
     setAddError("");
 
     try {
-      // Create device
+      // Create device with the price list's category
       const deviceRes = await fetch("/api/admin/devices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -313,6 +336,7 @@ export default function PriceListDetailPage() {
           make: addMake.trim(),
           model: addModel.trim(),
           storage: addStorage.trim(),
+          category: priceList?.category ?? "Phone",
         }),
       });
 
@@ -324,9 +348,9 @@ export default function PriceListDetailPage() {
 
       const device = await deviceRes.json();
 
-      // Create price entry with $0 grades
+      // Create price entry with $0 grades for all grade keys
       const zeroGrades: Record<string, number> = {};
-      GRADE_KEYS.forEach((g) => (zeroGrades[g] = 0));
+      gradeKeys.forEach((g) => (zeroGrades[g] = 0));
 
       await fetch(`/api/admin/pricing/${id}/prices/${device.id}`, {
         method: "PATCH",
@@ -348,13 +372,13 @@ export default function PriceListDetailPage() {
 
   // ---- export CSV ---------------------------------------------------------
   const handleExportCsv = () => {
-    const header = ["Device ID", "Make", "Model", "Storage", ...GRADE_KEYS.map((g) => `Grade ${g}`)];
+    const header = ["Device ID", "Make", "Model", "Storage", ...gradeKeys.map((g) => `Grade ${g}`)];
     const rows = filteredPrices.map((p) => [
       p.deviceId,
       escapeCsvField(p.make),
       escapeCsvField(p.model),
       escapeCsvField(p.storage),
-      ...GRADE_KEYS.map((g) => String(p.grades[g] ?? 0)),
+      ...gradeKeys.map((g) => String(p.grades[g] ?? 0)),
     ]);
     const csv = [header.join(","), ...rows.map((r) => r.join(","))].join("\n");
     const name = priceList?.name ?? "prices";
@@ -440,6 +464,10 @@ export default function PriceListDetailPage() {
     return `$${value.toLocaleString("en-NZ")}`;
   };
 
+  // Compute the label for the first grade (used in "set ratios" description)
+  const firstGradeLabel = gradeKeys[0] ?? "A";
+  const otherGradeLabels = gradeKeys.slice(1).join("/");
+
   // ---- render: loading ----------------------------------------------------
   if (loading) {
     return (
@@ -463,7 +491,7 @@ export default function PriceListDetailPage() {
           onClick={() => router.push("/admin/pricing")}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Price Lists
+          Back to Pricing
         </Button>
       </div>
     );
@@ -480,7 +508,7 @@ export default function PriceListDetailPage() {
         onClick={() => router.push("/admin/pricing")}
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
-        Back to Price Lists
+        Back to Pricing
       </Button>
 
       {/* Header with metadata */}
@@ -493,6 +521,7 @@ export default function PriceListDetailPage() {
             <span>Effective: {formatDate(priceList.effectiveDate)}</span>
             <Badge variant="secondary">{priceList.currency}</Badge>
             <span>{priceList.deviceCount} devices</span>
+            <Badge variant="outline">{priceList.category}</Badge>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -599,7 +628,7 @@ export default function PriceListDetailPage() {
                   <TableHead>Make</TableHead>
                   <TableHead>Model</TableHead>
                   <TableHead>Storage</TableHead>
-                  {GRADE_KEYS.map((g) => (
+                  {gradeKeys.map((g) => (
                     <TableHead key={g} className="text-right">
                       Grade {g}
                     </TableHead>
@@ -623,7 +652,7 @@ export default function PriceListDetailPage() {
                     <TableCell className="font-medium">{price.make}</TableCell>
                     <TableCell>{price.model}</TableCell>
                     <TableCell>{price.storage}</TableCell>
-                    {GRADE_KEYS.map((g) => {
+                    {gradeKeys.map((g) => {
                       const originalValue = price.grades[g] ?? 0;
                       const displayValue = getDisplayValue(
                         price.deviceId,
@@ -767,7 +796,7 @@ export default function PriceListDetailPage() {
               >
                 <option value="adjust_percent">Adjust by percentage</option>
                 <option value="adjust_dollar">Adjust by dollar amount</option>
-                <option value="set_ratios">Set grade ratios from Grade A</option>
+                <option value="set_ratios">Set grade ratios from Grade {firstGradeLabel}</option>
               </select>
             </div>
             {bulkOperation !== "set_ratios" && (
@@ -789,9 +818,9 @@ export default function PriceListDetailPage() {
             )}
             {bulkOperation === "set_ratios" && (
               <p className="text-sm text-muted-foreground">
-                This will keep Grade A unchanged and set B/C/D/E based on the
+                This will keep Grade {firstGradeLabel} unchanged and set {otherGradeLabels} based on the
                 grade ratios configured in Settings. Each grade price is
-                calculated as a percentage of Grade A.
+                calculated as a percentage of Grade {firstGradeLabel}.
               </p>
             )}
           </div>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
+import { getCategoryGrades } from "@/lib/categories";
 
 // ---------------------------------------------------------------------------
 // PATCH /api/admin/pricing/[id]/prices/[deviceId] — Update grades for a device
@@ -25,8 +26,24 @@ export async function PATCH(
       );
     }
 
-    // Validate grade values
-    const validGradeKeys = ["A", "B", "C", "D", "E"];
+    // Verify price list exists
+    const priceListDoc = await adminDb.doc(`priceLists/${id}`).get();
+    if (!priceListDoc.exists) {
+      return NextResponse.json(
+        { error: "Price list not found" },
+        { status: 404 }
+      );
+    }
+
+    // Validate grade keys dynamically from category
+    const priceListData = priceListDoc.data()!;
+    const category = (priceListData.category as string) ?? "Phone";
+    const categoryGrades = await getCategoryGrades(category);
+    const validGradeKeys =
+      categoryGrades.length > 0
+        ? categoryGrades.map((g) => g.key)
+        : ["A", "B", "C", "D", "E"];
+
     const sanitized: Record<string, number> = {};
     for (const [key, val] of Object.entries(grades)) {
       if (!validGradeKeys.includes(key)) {
@@ -43,15 +60,6 @@ export async function PATCH(
         );
       }
       sanitized[key] = num;
-    }
-
-    // Verify price list exists
-    const priceListDoc = await adminDb.doc(`priceLists/${id}`).get();
-    if (!priceListDoc.exists) {
-      return NextResponse.json(
-        { error: "Price list not found" },
-        { status: 404 }
-      );
     }
 
     // Read existing price doc (or create if missing)

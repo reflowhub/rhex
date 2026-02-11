@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,12 +45,19 @@ interface Device {
   model: string;
   storage: string;
   active?: boolean;
+  category?: string;
 }
 
 interface DeviceFormData {
   make: string;
   model: string;
   storage: string;
+}
+
+interface CategoryInfo {
+  name: string;
+  grades: { key: string; label: string }[];
+  activePriceList: string | null;
 }
 
 const EMPTY_FORM: DeviceFormData = { make: "", model: "", storage: "" };
@@ -62,6 +69,10 @@ const PAGE_SIZE = 25;
 // ---------------------------------------------------------------------------
 
 export default function DeviceLibraryPage() {
+  // ---- category state -----------------------------------------------------
+  const [categories, setCategories] = useState<CategoryInfo[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState("Phone");
+
   // ---- data state ---------------------------------------------------------
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,6 +94,34 @@ export default function DeviceLibraryPage() {
   const [formData, setFormData] = useState<DeviceFormData>(EMPTY_FORM);
   const [activeDevice, setActiveDevice] = useState<Device | null>(null);
 
+  // ---- fetch categories on mount ------------------------------------------
+  useEffect(() => {
+    fetch("/api/admin/categories")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.categories) {
+          const cats: CategoryInfo[] = Object.entries(data.categories).map(
+            ([name, value]) => {
+              const cat = value as Record<string, unknown>;
+              return {
+                name,
+                grades: (cat.grades as CategoryInfo["grades"]) ?? [],
+                activePriceList: (cat.activePriceList as string) ?? null,
+              };
+            }
+          );
+          cats.sort((a, b) => a.name.localeCompare(b.name));
+          setCategories(cats);
+        }
+      })
+      .catch(() => {
+        // Fallback — at least show Phone tab
+        setCategories([
+          { name: "Phone", grades: [], activePriceList: null },
+        ]);
+      });
+  }, []);
+
   // ---- debounced search ---------------------------------------------------
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -95,15 +134,26 @@ export default function DeviceLibraryPage() {
   // ---- fetch devices ------------------------------------------------------
   const fetchDevices = useCallback(() => {
     setLoading(true);
-    fetch("/api/admin/devices?search=" + encodeURIComponent(searchTerm))
+    const params = new URLSearchParams();
+    if (searchTerm) params.set("search", searchTerm);
+    params.set("category", selectedCategory);
+    fetch(`/api/admin/devices?${params.toString()}`)
       .then((res) => res.json())
       .then((data: Device[]) => setDevices(data))
       .finally(() => setLoading(false));
-  }, [searchTerm]);
+  }, [searchTerm, selectedCategory]);
 
   useEffect(() => {
     fetchDevices();
   }, [fetchDevices]);
+
+  // ---- category tab change ------------------------------------------------
+  const handleCategoryChange = (cat: string) => {
+    setSelectedCategory(cat);
+    setSearchInput("");
+    setSearchTerm("");
+    setCurrentPage(1);
+  };
 
   // ---- pagination helpers -------------------------------------------------
   const totalPages = Math.max(1, Math.ceil(devices.length / PAGE_SIZE));
@@ -137,7 +187,7 @@ export default function DeviceLibraryPage() {
       const res = await fetch("/api/admin/devices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, category: selectedCategory }),
       });
       if (res.ok) {
         setAddOpen(false);
@@ -246,7 +296,7 @@ export default function DeviceLibraryPage() {
         `${d.id},${escapeCsvField(d.make)},${escapeCsvField(d.model)},${escapeCsvField(d.storage)},${d.active !== false}`
     );
     const csv = [header, ...rows].join("\n");
-    downloadCsv(csv, "devices.csv");
+    downloadCsv(csv, `devices-${selectedCategory.toLowerCase()}.csv`);
   };
 
   // ---- render -------------------------------------------------------------
@@ -266,7 +316,7 @@ export default function DeviceLibraryPage() {
             Export
           </Button>
           <Button variant="outline" asChild>
-            <Link href="/admin/devices/import">
+            <Link href={`/admin/devices/import?category=${encodeURIComponent(selectedCategory)}`}>
               <Upload className="mr-2 h-4 w-4" />
               Import
             </Link>
@@ -277,6 +327,25 @@ export default function DeviceLibraryPage() {
           </Button>
         </div>
       </div>
+
+      {/* Category Tabs */}
+      {categories.length > 1 && (
+        <div className="mt-6 flex gap-1 border-b border-border">
+          {categories.map((cat) => (
+            <button
+              key={cat.name}
+              onClick={() => handleCategoryChange(cat.name)}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                selectedCategory === cat.name
+                  ? "border-b-2 border-primary text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Search bar */}
       <div className="relative mt-6 max-w-md">
@@ -302,7 +371,7 @@ export default function DeviceLibraryPage() {
           <div className="py-20 text-center text-sm text-muted-foreground">
             {searchTerm
               ? "No devices match your search."
-              : "No devices found. Add your first device to get started."}
+              : `No ${selectedCategory.toLowerCase()} devices found. Add your first device to get started.`}
           </div>
         ) : (
           <>
@@ -415,9 +484,9 @@ export default function DeviceLibraryPage() {
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Device</DialogTitle>
+            <DialogTitle>Add {selectedCategory} Device</DialogTitle>
             <DialogDescription>
-              Add a new device to the trade-in library.
+              Add a new {selectedCategory.toLowerCase()} device to the trade-in library.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">

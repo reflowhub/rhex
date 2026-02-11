@@ -5,6 +5,7 @@ import { requirePartner } from "@/lib/partner-auth";
 import { PartnerSession } from "@/lib/partner-auth";
 import { calculatePartnerRate } from "@/lib/partner-pricing";
 import { readGrades } from "@/lib/grades";
+import { getActivePriceList, getCategoryGrades } from "@/lib/categories";
 
 // ---------------------------------------------------------------------------
 // POST /api/partner/quote — Create a single quote at partner rate (Mode B)
@@ -33,14 +34,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const validGrades = ["A", "B", "C", "D", "E"];
     const normalizedGrade = grade.toUpperCase();
-    if (!validGrades.includes(normalizedGrade)) {
-      return NextResponse.json(
-        { error: "grade must be A, B, C, D, or E" },
-        { status: 400 }
-      );
-    }
 
     // Lookup device
     const deviceDoc = await adminDb.collection("devices").doc(deviceId).get();
@@ -59,9 +53,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Lookup price
+    // Validate grade against category's grade set
+    const category = (deviceData.category as string) ?? "Phone";
+    const categoryGrades = await getCategoryGrades(category);
+    const validGradeKeys =
+      categoryGrades.length > 0
+        ? categoryGrades.map((g) => g.key)
+        : ["A", "B", "C", "D", "E"];
+
+    if (!validGradeKeys.includes(normalizedGrade)) {
+      return NextResponse.json(
+        { error: `Invalid grade "${normalizedGrade}" for ${category}` },
+        { status: 400 }
+      );
+    }
+
+    // Lookup price from active price list for this category
+    const priceListId = await getActivePriceList(category);
+    if (!priceListId) {
+      return NextResponse.json(
+        { error: "No pricing available for this device category" },
+        { status: 404 }
+      );
+    }
+
     const priceDoc = await adminDb
-      .doc(`priceLists/FP-2B/prices/${deviceId}`)
+      .doc(`priceLists/${priceListId}/prices/${deviceId}`)
       .get();
 
     if (!priceDoc.exists) {

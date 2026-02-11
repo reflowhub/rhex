@@ -67,6 +67,7 @@ export async function GET(
       contactEmail: quoteData.contactEmail,
       contactPhone: quoteData.contactPhone,
       type: quoteData.type,
+      category: quoteData.category ?? null,
       assumedGrade: quoteData.assumedGrade,
       totalDevices: quoteData.totalDevices,
       totalIndicativeNZD: quoteData.totalIndicativeNZD,

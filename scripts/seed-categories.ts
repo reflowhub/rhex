@@ -62,6 +62,24 @@ async function seedCategories() {
         { key: "D", label: "Screen Issues" },
         { key: "E", label: "No Power" },
       ],
+      activePriceList: "FP-2B",
+    },
+    Watch: {
+      grades: [
+        { key: "A", label: "Excellent" },
+        { key: "B", label: "Good" },
+      ],
+      activePriceList: null,
+    },
+    Tablet: {
+      grades: [
+        { key: "A", label: "Excellent" },
+        { key: "B", label: "Good" },
+        { key: "C", label: "Fair" },
+        { key: "D", label: "Screen Issues" },
+        { key: "E", label: "No Power" },
+      ],
+      activePriceList: null,
     },
   });
   console.log("settings/categories document written successfully");

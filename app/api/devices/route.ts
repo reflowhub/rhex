@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const make = searchParams.get("make")?.trim() ?? "";
     const id = searchParams.get("id")?.trim() ?? "";
+    const category = searchParams.get("category")?.trim() ?? "";
 
     // If requesting a single device by ID
     if (id) {
@@ -29,7 +30,17 @@ export async function GET(request: NextRequest) {
       make: doc.data().make,
       model: doc.data().model,
       storage: doc.data().storage,
+      category: doc.data().category ?? "Phone",
     }));
+
+    // Filter by category if provided
+    if (category) {
+      devices = devices.filter(
+        (device) =>
+          String(device.category ?? "Phone").toLowerCase() ===
+          category.toLowerCase()
+      );
+    }
 
     // Filter by make if provided
     if (make) {

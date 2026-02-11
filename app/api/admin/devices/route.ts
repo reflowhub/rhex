@@ -4,13 +4,14 @@ import admin from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { findDuplicateDevice } from "@/lib/device-uniqueness";
 
-// GET /api/admin/devices — List all devices, with optional ?search= fuzzy filter
+// GET /api/admin/devices — List all devices, with optional ?search= and ?category= filters
 export async function GET(request: NextRequest) {
   try {
     const adminUser = await requireAdmin(request);
     if (adminUser instanceof NextResponse) return adminUser;
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.toLowerCase().trim() ?? "";
+    const category = searchParams.get("category") ?? "";
 
     const snapshot = await adminDb.collection("devices").get();
 
@@ -18,6 +19,13 @@ export async function GET(request: NextRequest) {
       id: doc.id,
       ...doc.data(),
     }));
+
+    // Filter by category
+    if (category) {
+      devices = devices.filter(
+        (device) => (device.category ?? "Phone") === category
+      );
+    }
 
     // In-memory fuzzy search across make, model, storage
     if (search) {
@@ -63,7 +71,7 @@ export async function POST(request: NextRequest) {
     const adminUser = await requireAdmin(request);
     if (adminUser instanceof NextResponse) return adminUser;
     const body = await request.json();
-    const { make, model, storage } = body;
+    const { make, model, storage, category } = body;
 
     if (!make || !model || !storage) {
       return NextResponse.json(
@@ -107,7 +115,7 @@ export async function POST(request: NextRequest) {
       model,
       storage,
       modelStorage,
-      category: "Phone",
+      category: category || "Phone",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };

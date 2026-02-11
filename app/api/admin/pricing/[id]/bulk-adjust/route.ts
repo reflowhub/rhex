@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { loadPricingSettings, roundPrice } from "@/lib/pricing-settings";
 import { readGrades } from "@/lib/grades";
+import { getCategoryGrades } from "@/lib/categories";
 
 // ---------------------------------------------------------------------------
 // POST /api/admin/pricing/[id]/bulk-adjust — Bulk adjust prices
@@ -52,8 +53,18 @@ export async function POST(
       );
     }
 
-    const settings = await loadPricingSettings();
+    // Determine category from the price list doc
+    const priceListData = priceListDoc.data()!;
+    const category = (priceListData.category as string) ?? "Phone";
+
+    const settings = await loadPricingSettings(category);
     const { rounding, gradeRatios } = settings;
+
+    // Get dynamic grade keys from category
+    const categoryGrades = await getCategoryGrades(category);
+    const gradeKeys = categoryGrades.length > 0
+      ? categoryGrades.map((g) => g.key)
+      : ["A", "B", "C", "D", "E"];
 
     // Read current prices for all specified devices
     const priceRefs = deviceIds.map((did) =>
@@ -61,7 +72,6 @@ export async function POST(
     );
     const priceDocs = await adminDb.getAll(...priceRefs);
 
-    const GRADE_KEYS = ["A", "B", "C", "D", "E"];
     const updates: { ref: FirebaseFirestore.DocumentReference; grades: Record<string, number> }[] = [];
 
     for (let i = 0; i < priceDocs.length; i++) {
@@ -73,22 +83,24 @@ export async function POST(
       const newGrades: Record<string, number> = {};
 
       if (operation === "adjust_percent") {
-        for (const g of GRADE_KEYS) {
+        for (const g of gradeKeys) {
           const current = currentGrades[g] ?? 0;
           newGrades[g] = roundPrice(current * (1 + value! / 100), rounding);
         }
       } else if (operation === "adjust_dollar") {
-        for (const g of GRADE_KEYS) {
+        for (const g of gradeKeys) {
           const current = currentGrades[g] ?? 0;
           newGrades[g] = roundPrice(current + value!, rounding);
         }
       } else if (operation === "set_ratios") {
-        const gradeA = currentGrades["A"] ?? 0;
-        newGrades["A"] = gradeA; // Grade A unchanged
-        newGrades["B"] = roundPrice(gradeA * (gradeRatios.B / 100), rounding);
-        newGrades["C"] = roundPrice(gradeA * (gradeRatios.C / 100), rounding);
-        newGrades["D"] = roundPrice(gradeA * (gradeRatios.D / 100), rounding);
-        newGrades["E"] = roundPrice(gradeA * (gradeRatios.E / 100), rounding);
+        const firstGrade = gradeKeys[0];
+        const gradeAValue = currentGrades[firstGrade] ?? 0;
+        newGrades[firstGrade] = gradeAValue; // First grade unchanged
+        for (let gi = 1; gi < gradeKeys.length; gi++) {
+          const g = gradeKeys[gi];
+          const ratio = gradeRatios[g] ?? 0;
+          newGrades[g] = roundPrice(gradeAValue * (ratio / 100), rounding);
+        }
       }
 
       updates.push({

@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -94,6 +95,8 @@ function parseCSV(text: string): { headers: string[]; rows: ParsedRow[] } {
 // ---------------------------------------------------------------------------
 
 export default function ImportDevicesPage() {
+  const searchParams = useSearchParams();
+  const category = searchParams.get("category") || "Phone";
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ---- file state ---------------------------------------------------------
@@ -191,7 +194,7 @@ export default function ImportDevicesPage() {
       const res = await fetch("/api/admin/devices/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ csv: csvContent }),
+        body: JSON.stringify({ csv: csvContent, category }),
       });
       const data: ImportResult = await res.json();
       setResult(data);
@@ -216,7 +219,7 @@ export default function ImportDevicesPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Import Devices</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Upload a CSV file to bulk-import devices into the library.
+            Upload a CSV file to bulk-import {category.toLowerCase()} devices into the library.
           </p>
         </div>
       </div>

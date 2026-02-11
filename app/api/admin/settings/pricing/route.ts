@@ -1,24 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
-import { DEFAULT_PRICING_SETTINGS } from "@/lib/pricing-settings";
+import { loadPricingSettings } from "@/lib/pricing-settings";
 
-// GET /api/admin/settings/pricing — Fetch pricing settings
+// GET /api/admin/settings/pricing?category=Phone — Fetch pricing settings
 export async function GET(request: NextRequest) {
   try {
     const adminUser = await requireAdmin(request);
     if (adminUser instanceof NextResponse) return adminUser;
 
-    const doc = await adminDb.doc("settings/pricing").get();
-    if (!doc.exists) {
-      return NextResponse.json(DEFAULT_PRICING_SETTINGS);
-    }
+    const { searchParams } = new URL(request.url);
+    const category = searchParams.get("category") ?? "Phone";
 
-    const data = doc.data()!;
-    return NextResponse.json({
-      gradeRatios: data.gradeRatios ?? DEFAULT_PRICING_SETTINGS.gradeRatios,
-      rounding: data.rounding === 10 ? 10 : 5,
-    });
+    const settings = await loadPricingSettings(category);
+    return NextResponse.json(settings);
   } catch (error) {
     console.error("Error fetching pricing settings:", error);
     return NextResponse.json(
@@ -28,14 +23,15 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// PUT /api/admin/settings/pricing — Update pricing settings
+// PUT /api/admin/settings/pricing — Update pricing settings for a category
 export async function PUT(request: NextRequest) {
   try {
     const adminUser = await requireAdmin(request);
     if (adminUser instanceof NextResponse) return adminUser;
 
     const body = await request.json();
-    const { gradeRatios, rounding } = body;
+    const { category, gradeRatios, rounding } = body;
+    const cat = category ?? "Phone";
 
     // Validate gradeRatios
     if (!gradeRatios || typeof gradeRatios !== "object") {
@@ -45,14 +41,16 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    for (const key of ["B", "C", "D", "E"]) {
-      const val = gradeRatios[key];
+    // Validate each ratio value
+    const sanitizedRatios: Record<string, number> = {};
+    for (const [key, val] of Object.entries(gradeRatios)) {
       if (typeof val !== "number" || val < 0 || val > 100) {
         return NextResponse.json(
           { error: `gradeRatios.${key} must be a number between 0 and 100` },
           { status: 400 }
         );
       }
+      sanitizedRatios[key] = val;
     }
 
     // Validate rounding
@@ -64,16 +62,14 @@ export async function PUT(request: NextRequest) {
     }
 
     const settings = {
-      gradeRatios: {
-        B: gradeRatios.B,
-        C: gradeRatios.C,
-        D: gradeRatios.D,
-        E: gradeRatios.E,
-      },
+      gradeRatios: sanitizedRatios,
       rounding,
     };
 
-    await adminDb.doc("settings/pricing").set(settings, { merge: true });
+    // Write under category key (new format)
+    await adminDb
+      .doc("settings/pricing")
+      .set({ [cat]: settings }, { merge: true });
 
     return NextResponse.json(settings);
   } catch (error) {

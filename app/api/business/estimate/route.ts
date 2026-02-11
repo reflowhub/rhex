@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { matchDeviceString, loadDeviceLibrary } from "@/lib/matching";
 import { readGrades } from "@/lib/grades";
+import { getActivePriceList, getCategoryGrades } from "@/lib/categories";
 
 // ---------------------------------------------------------------------------
 // CSV parser (handles quoted fields) — same pattern as admin device import
@@ -81,7 +82,7 @@ function findColumnIndex(
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { csv, assumedGrade, businessName, contactEmail, referralCode } = body;
+    const { csv, assumedGrade, businessName, contactEmail, referralCode, category: bodyCategory } = body;
 
     if (!csv || typeof csv !== "string") {
       return NextResponse.json(
@@ -90,12 +91,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate grade
-    const validGrades = ["A", "B", "C", "D", "E"];
-    const grade = (assumedGrade || "C").toUpperCase();
+    // Determine category and load valid grades
+    const category = (bodyCategory as string) || "Phone";
+    const categoryGrades = await getCategoryGrades(category);
+    const validGrades =
+      categoryGrades.length > 0
+        ? categoryGrades.map((g) => g.key)
+        : ["A", "B", "C", "D", "E"];
+
+    const grade = (assumedGrade || validGrades[Math.floor(validGrades.length / 2)] || "C").toUpperCase();
     if (!validGrades.includes(grade)) {
       return NextResponse.json(
-        { error: "assumedGrade must be A, B, C, D, or E" },
+        { error: `Invalid grade "${grade}" for ${category}` },
         { status: 400 }
       );
     }
@@ -127,6 +134,15 @@ export async function POST(request: NextRequest) {
     // Pre-load device library for matching
     await loadDeviceLibrary();
 
+    // Lookup active price list for this category
+    const priceListId = await getActivePriceList(category);
+    if (!priceListId) {
+      return NextResponse.json(
+        { error: `No pricing available for category "${category}"` },
+        { status: 404 }
+      );
+    }
+
     // Process each row
     interface DeviceLine {
       rawInput: string;
@@ -145,7 +161,7 @@ export async function POST(request: NextRequest) {
 
     // Fetch price list for pricing lookups (all grades for per-row support)
     const priceSnapshot = await adminDb
-      .collection("priceLists/FP-2B/prices")
+      .collection(`priceLists/${priceListId}/prices`)
       .get();
     const priceMap = new Map<string, Record<string, number>>();
     priceSnapshot.docs.forEach((doc) => {
@@ -251,6 +267,7 @@ export async function POST(request: NextRequest) {
       contactEmail: contactEmail || null,
       contactPhone: null,
       type: "manifest",
+      category,
       assumedGrade: grade,
       totalDevices: deviceLines.reduce((sum, d) => sum + d.quantity, 0),
       totalIndicativeNZD,

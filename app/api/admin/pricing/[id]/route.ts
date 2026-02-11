@@ -33,6 +33,7 @@ export async function GET(
         priceListData.effectiveDate?.toDate?.()?.toISOString() ?? null,
       currency: priceListData.currency,
       deviceCount: priceListData.deviceCount,
+      category: priceListData.category ?? "Phone",
       createdAt: priceListData.createdAt?.toDate?.()?.toISOString() ?? null,
     };
 

@@ -11,6 +11,7 @@ export interface LibraryDevice {
   model: string;
   storage: string;
   active: boolean;
+  category: string;
 }
 
 export interface MatchResult {
@@ -62,6 +63,7 @@ export async function loadDeviceLibrary(): Promise<LibraryDevice[]> {
     model: doc.data().model as string,
     storage: doc.data().storage as string,
     active: doc.data().active !== false,
+    category: (doc.data().category as string) ?? "Phone",
   }));
   cacheTime = Date.now();
   return cachedDevices;
@@ -74,7 +76,8 @@ export async function loadDeviceLibrary(): Promise<LibraryDevice[]> {
 export async function matchToLibrary(
   make: string | null,
   model: string | null,
-  storage: string | null
+  storage: string | null,
+  category?: string
 ): Promise<MatchResult> {
   if (!make || !model) {
     return {
@@ -89,7 +92,10 @@ export async function matchToLibrary(
   }
 
   const allDevices = await loadDeviceLibrary();
-  const devices = allDevices.filter((d) => d.active);
+  let devices = allDevices.filter((d) => d.active);
+  if (category) {
+    devices = devices.filter((d) => d.category === category);
+  }
   const normalizedMake = make.toLowerCase().trim();
   const normalizedModel = model.toLowerCase().trim();
 
@@ -269,7 +275,10 @@ function extractStorage(input: string): {
 // Checks alias table first, then parses and fuzzy matches
 // ---------------------------------------------------------------------------
 
-export async function matchDeviceString(rawInput: string): Promise<MatchResult> {
+export async function matchDeviceString(
+  rawInput: string,
+  category?: string
+): Promise<MatchResult> {
   if (!rawInput || !rawInput.trim()) {
     return {
       deviceId: null,
@@ -325,13 +334,16 @@ export async function matchDeviceString(rawInput: string): Promise<MatchResult> 
 
   // Step 3: Try structured matching if we got a brand
   if (brand && modelText) {
-    const result = await matchToLibrary(brand, modelText, storage);
+    const result = await matchToLibrary(brand, modelText, storage, category);
     return result;
   }
 
   // Step 4: Try matching the full string against the entire device library
   const allDevicesForString = await loadDeviceLibrary();
-  const devices = allDevicesForString.filter((d) => d.active);
+  let devices = allDevicesForString.filter((d) => d.active);
+  if (category) {
+    devices = devices.filter((d) => d.category === category);
+  }
   const lowerInput = normalized.toLowerCase().replace(/[^\w\s]/g, " ");
 
   // Try exact modelStorage match

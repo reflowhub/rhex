@@ -111,7 +111,8 @@ export async function POST(request: NextRequest) {
     const adminUser = await requireAdmin(request);
     if (adminUser instanceof NextResponse) return adminUser;
     const body = await request.json();
-    const { csv } = body;
+    const { csv, category: importCategory } = body;
+    const deviceCategory = importCategory || "Phone";
 
     if (!csv || typeof csv !== "string") {
       return NextResponse.json(
@@ -197,7 +198,7 @@ export async function POST(request: NextRequest) {
           model: row.model,
           storage: row.storage,
           modelStorage,
-          category: "Phone",
+          category: deviceCategory,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
