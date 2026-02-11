@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { matchDeviceString, loadDeviceLibrary } from "@/lib/matching";
+import { calculatePartnerRate } from "@/lib/partner-pricing";
 
 // ---------------------------------------------------------------------------
 // CSV parser (handles quoted fields) — same pattern as admin device import
@@ -137,8 +138,14 @@ export async function POST(request: NextRequest) {
       indicativePriceNZD: number;
     }
 
+    // Fetch global business estimate discount setting
+    const settingsDoc = await adminDb.doc("settings/trade-in").get();
+    const businessEstimateDiscount =
+      settingsDoc.data()?.businessEstimateDiscount ?? 0;
+
     const deviceLines: DeviceLine[] = [];
     let totalIndicativeNZD = 0;
+    let totalPublicNZD = 0;
     let matchedCount = 0;
     let unmatchedCount = 0;
 
@@ -195,11 +202,16 @@ export async function POST(request: NextRequest) {
       const match = await matchDeviceString(rawInput);
 
       let indicativePriceNZD = 0;
+      let publicPriceNZD = 0;
       if (match.deviceId) {
         const devicePrices = priceMap.get(match.deviceId);
         const price = devicePrices?.[rowGrade];
         if (price !== undefined) {
-          indicativePriceNZD = price * quantity;
+          publicPriceNZD = price * quantity;
+          indicativePriceNZD =
+            businessEstimateDiscount > 0
+              ? calculatePartnerRate(price, businessEstimateDiscount) * quantity
+              : publicPriceNZD;
         }
         matchedCount++;
       } else {
@@ -207,6 +219,7 @@ export async function POST(request: NextRequest) {
       }
 
       totalIndicativeNZD += indicativePriceNZD;
+      totalPublicNZD += publicPriceNZD;
 
       deviceLines.push({
         rawInput,
@@ -261,6 +274,8 @@ export async function POST(request: NextRequest) {
       assumedGrade: grade,
       totalDevices: deviceLines.reduce((sum, d) => sum + d.quantity, 0),
       totalIndicativeNZD,
+      totalPublicNZD,
+      businessEstimateDiscount,
       matchedCount,
       unmatchedCount,
       status: "estimated",
