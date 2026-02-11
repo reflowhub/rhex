@@ -4,26 +4,31 @@
 
 ### Device Management (`/admin/devices`)
 
-- Add/edit/delete individual devices (make, model, storage)
-- Bulk CSV import via `/admin/devices/import`
-- **No uniqueness check** — duplicate make/model/storage combinations can be created
+- Add/edit/delete individual devices (make, model, storage, category)
+- Bulk CSV import via `/admin/devices/import` (category-aware)
+- Uniqueness check on make + model + storage (enforced on create, edit, and import)
 - Auto-incremented numeric `deviceId` via Firestore counter transaction
+- Per-device active toggle — inactive devices hidden from trade-in quotes
+- Category tabs filter devices by Phone, Watch, Tablet
+- CSV export (per category)
 
 ### Pricing (`/admin/pricing`)
 
-- CSV upload creates a new price list with 5 grade prices (A-E) per device
-- Active price list is **hardcoded to `priceLists/FP-2B`** — all quote APIs read from this
-- No inline editing of individual prices
-- No way to "activate" a newly uploaded price list — it creates a new doc with a random ID
-- 584 devices currently priced
+- Category tabs — each category has its own active price list stored in `settings/categories`
+- CSV upload creates/overwrites the active price list for a category
+- Inline click-to-edit on individual price cells
+- Bulk adjust: adjust by %, adjust by $, set grade ratios from Grade A
+- Change preview with unsaved changes banner, yellow highlight, grade inversion warnings
+- Grade columns rendered dynamically from category definition (e.g., Watch shows A/B only)
+- Add Device dialog from pricing page (creates device + $0 price entry)
+- CSV export
 
-### Gaps
+### Categories (`/admin/settings`)
 
-1. No device uniqueness enforcement (make + model + storage)
-2. No way to update individual prices without re-uploading entire CSV
-3. No cascading/bulk price adjustments across model families
-4. No way to disable a device from trade-in without deleting it
-5. New price list uploads don't automatically become the active list
+- Three categories: Phone (A-E), Watch (A/B), Tablet (A-E)
+- Per-category pricing settings (grade ratios + rounding)
+- `settings/categories` document stores grade definitions + `activePriceList` per category
+- `settings/pricing` document stores per-category grade ratios and rounding
 
 ---
 
@@ -226,34 +231,55 @@ active: boolean          # default true, false hides from trade-in
 category: string         # "Phone" (default), "Watch", "Tablet", "Console"
 ```
 
-### `settings/categories` — New document
+### `settings/categories` — Category definitions
 
-Defines available product categories and their grade structures. Added early so all pricing features build against a flexible grade system from the start.
+Defines available product categories, their grade structures, and active price list references.
 
 ```text
-categories:
-  Phone:
-    grades:
-      - { key: "A", label: "Excellent" }
-      - { key: "B", label: "Good" }
-      - { key: "C", label: "Fair" }
-      - { key: "D", label: "Screen Issues" }
-      - { key: "E", label: "No Power" }
-  Watch:                        # future — added when category launches
-    grades:
-      - { key: "A", label: "Excellent" }
-      - { key: "B", label: "Good" }
+Phone:
+  grades:
+    - { key: "A", label: "Excellent" }
+    - { key: "B", label: "Good" }
+    - { key: "C", label: "Fair" }
+    - { key: "D", label: "Screen Issues" }
+    - { key: "E", label: "No Power" }
+  activePriceList: "FP-2B"
+Watch:
+  grades:
+    - { key: "A", label: "Excellent" }
+    - { key: "B", label: "Good" }
+  activePriceList: null
+Tablet:
+  grades:
+    - { key: "A", label: "Excellent" }
+    - { key: "B", label: "Good" }
+    - { key: "C", label: "Fair" }
+    - { key: "D", label: "Screen Issues" }
+    - { key: "E", label: "No Power" }
+  activePriceList: null
 ```
 
-### `settings/pricing` — New document
+### `settings/pricing` — Per-category pricing settings
 
 ```text
-gradeRatios:
-  B: 70                  # percentage of Grade A
-  C: 40
-  D: 20
-  E: 10
-rounding: 5              # round to nearest $5 (or 10)
+Phone:
+  gradeRatios:
+    B: 70                  # percentage of Grade A
+    C: 40
+    D: 20
+    E: 10
+  rounding: 5              # round to nearest $5 (or 10)
+Watch:
+  gradeRatios:
+    B: 70
+  rounding: 5
+Tablet:
+  gradeRatios:
+    B: 70
+    C: 40
+    D: 20
+    E: 10
+  rounding: 5
 ```
 
 ### Price list prices — Flexible grade storage
@@ -302,25 +328,21 @@ Built for phones but category-aware by design.
 6. ✅ **Bulk price adjustment** — checkbox row selection, Bulk Adjust dialog with 3 operations (adjust by %, adjust by $, set grade ratios from A), `POST /api/admin/pricing/[id]/bulk-adjust` API using settings for rounding + ratios
 7. ✅ **Pricing settings** — `settings/pricing` Firestore doc, `lib/pricing-settings.ts` loader + `roundPrice()` helper, `/admin/settings` page with grade ratio inputs + rounding select, sidebar link added
 
-### Phase 2: Multi-Category Expansion
+### Phase 2: Multi-Category Expansion ✅
 
-Add new categories incrementally once Phase 1 is stable.
+Phone, Watch (2 grades: A, B), and Tablet (5 grades: A-E). Each category has its own grade structure, price list, and pricing settings.
 
-1. **Category management UI** — admin can add/edit categories and define their grade sets
-2. **Separate pricing pages per category** — category tabs/selector, each with its own price list
-3. **Separate device library pages per category** — `/admin/devices/phones`, `/admin/devices/watches`, etc.
-4. **Per-category pricing settings** — ratios and rounding scoped to each category's grade set
-5. **Consumer-facing category support** — browsing and quoting filtered by category
+1. ✅ **Category data model** — `lib/categories.ts` with `loadCategories()`, `getActivePriceList()`, `getCategoryGrades()` (60s TTL cache). Each category in `settings/categories` stores grades array + `activePriceList` reference.
+2. ✅ **Per-category pricing settings** — `settings/pricing` is category-keyed (`{ Phone: { gradeRatios, rounding }, Watch: {...} }`). `loadPricingSettings(category?)` with backward compat for old format.
+3. ✅ **Category management UI** — admin settings page with category cards showing grades as badges + active price list. Per-category pricing settings with dynamic grade ratio inputs.
+4. ✅ **Device library category tabs** — category tabs on `/admin/devices`, devices filtered by selected category. Category selector on device create, passed to API.
+5. ✅ **Pricing page category tabs** — category tabs on `/admin/pricing`, each with its own active price list. Dynamic grade columns from category definition. CSV upload, inline editing, bulk adjust all category-aware.
+6. ✅ **Quote APIs** — all quote endpoints (`/api/quote`, `/api/partner/quote`, `/api/business/estimate`, `/api/partner/estimate`) use `getActivePriceList(category)` instead of hardcoded FP-2B. Grade validation against category's grade set.
+7. ✅ **Consumer & partner pages** — category tabs on homepage, business estimate, and partner estimate pages. Device search filtered by category. Dynamic grade selectors from category definition.
+8. ✅ **Public categories API** — `GET /api/categories` returns category names + grades (no auth required). Used by consumer pages.
 
 ### Future Considerations
 
 - **Model family grouping on pricing page** — currently the pricing page is a flat list where the admin searches and manually selects rows for bulk adjust. Grouping would reduce friction for routine price updates across storage variants. Two approaches:
   - **Auto-derived (no data change)**: group rows by existing `make + model` fields at render time. Collapsible sections with "select all" per family. Simple, no backfill needed, but grouping logic is purely UI-based
   - **Explicit `modelFamily` field**: add a `modelFamily` field to each device (e.g., "iPhone 15 Pro"). More flexible — allows custom grouping that doesn't match the model name exactly. Requires backfilling 584 existing devices (could be auto-derived from `model` field initially, then manually adjusted)
-- **Product categories** — additional device categories planned beyond phones: Smart Watches, Tablets, Gaming Consoles
-  - `category` field on devices (e.g., "Phone", "Tablet", "Watch", "Console")
-  - **Separate price list pages per category** — each category gets its own price list (e.g., `priceLists/FP-2B-phones`, `priceLists/FP-2B-watches`). Admin pricing nav shows category tabs or a category selector, each leading to its own pricing page with full inline editing, bulk adjust, etc.
-  - **Per-category grade classifications** — each category defines its own set of grades (labels, count, and descriptions). E.g., phones use 5 grades (A-E: Excellent, Good, Fair, Screen Issues, No Power) while watches might only use 2 grades (Excellent, Good). The grading questionnaire, price list columns, and quote APIs would all adapt to the category's grade set
-  - Pricing settings (ratios, rounding) per-category — ratios only apply to grades that exist for that category
-  - **Separate device library pages per category** — each category gets its own device management page (e.g., `/admin/devices/phones`, `/admin/devices/watches`). Same CRUD, search, toggle, and import functionality but scoped to that category
-  - Consumer-facing pages would filter by category for browsing/quoting
