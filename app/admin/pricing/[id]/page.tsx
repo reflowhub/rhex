@@ -60,7 +60,7 @@ interface CategoryGradeInfo {
   label: string;
 }
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 0] as const; // 0 = All
 
 // ---------------------------------------------------------------------------
 // Component
@@ -85,6 +85,7 @@ export default function PriceListDetailPage() {
 
   // ---- pagination state ---------------------------------------------------
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(25);
 
   // ---- inline editing state -----------------------------------------------
   const [changes, setChanges] = useState<Map<string, Record<string, number>>>(
@@ -176,22 +177,35 @@ export default function PriceListDetailPage() {
     }
   }, [editingCell]);
 
-  // ---- filtered + paginated data ------------------------------------------
+  // ---- filtered, sorted + paginated data ----------------------------------
   const filteredPrices = useMemo(() => {
-    if (!searchTerm) return prices;
-    const words = searchTerm.toLowerCase().split(/\s+/).filter(Boolean);
-    return prices.filter((p) => {
-      const combined =
-        `${p.deviceId} ${p.make} ${p.model} ${p.storage}`.toLowerCase();
-      return words.every((word) => combined.includes(word));
+    let result = prices;
+    if (searchTerm) {
+      const words = searchTerm.toLowerCase().split(/\s+/).filter(Boolean);
+      result = result.filter((p) => {
+        const combined =
+          `${p.deviceId} ${p.make} ${p.model} ${p.storage}`.toLowerCase();
+        return words.every((word) => combined.includes(word));
+      });
+    }
+    // Sort by make → model → storage for model family grouping
+    return [...result].sort((a, b) => {
+      const cmp1 = a.make.localeCompare(b.make);
+      if (cmp1 !== 0) return cmp1;
+      const cmp2 = a.model.localeCompare(b.model);
+      if (cmp2 !== 0) return cmp2;
+      return a.storage.localeCompare(b.storage, undefined, { numeric: true });
     });
   }, [prices, searchTerm]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredPrices.length / PAGE_SIZE));
-  const paginatedPrices = filteredPrices.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
-  );
+  const effectivePageSize = pageSize === 0 ? filteredPrices.length : pageSize;
+  const totalPages = Math.max(1, Math.ceil(filteredPrices.length / (effectivePageSize || 1)));
+  const paginatedPrices = pageSize === 0
+    ? filteredPrices
+    : filteredPrices.slice(
+        (currentPage - 1) * pageSize,
+        currentPage * pageSize
+      );
 
   // ---- change tracking helpers --------------------------------------------
   const totalChanges = useMemo(() => {
@@ -718,19 +732,21 @@ export default function PriceListDetailPage() {
             </Table>
 
             {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between border-t border-border px-4 py-3">
+            <div className="flex items-center justify-between border-t border-border px-4 py-3">
+              <div className="flex items-center gap-4">
                 <p className="text-sm text-muted-foreground">
                   Showing{" "}
                   <span className="font-medium">
-                    {(currentPage - 1) * PAGE_SIZE + 1}
+                    {pageSize === 0 ? 1 : (currentPage - 1) * pageSize + 1}
                   </span>
                   {" - "}
                   <span className="font-medium">
-                    {Math.min(
-                      currentPage * PAGE_SIZE,
-                      filteredPrices.length
-                    )}
+                    {pageSize === 0
+                      ? filteredPrices.length
+                      : Math.min(
+                          currentPage * pageSize,
+                          filteredPrices.length
+                        )}
                   </span>{" "}
                   of{" "}
                   <span className="font-medium">
@@ -738,6 +754,25 @@ export default function PriceListDetailPage() {
                   </span>{" "}
                   devices
                 </p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-muted-foreground">Show</span>
+                  <select
+                    className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    {PAGE_SIZE_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt === 0 ? "All" : opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {totalPages > 1 && (
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
@@ -767,8 +802,8 @@ export default function PriceListDetailPage() {
                     <ChevronRight className="ml-1 h-4 w-4" />
                   </Button>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </>
         )}
       </div>
