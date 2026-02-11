@@ -30,7 +30,7 @@ export function useFX(): UseFXReturn {
     (amountNZD: number, currency: "AUD" | "NZD") => {
       if (currency === "NZD") return amountNZD;
       const converted = amountNZD * fxRate;
-      return Math.round(converted * 100) / 100;
+      return Math.floor(converted / 5) * 5;
     },
     [fxRate]
   );

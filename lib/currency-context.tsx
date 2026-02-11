@@ -68,7 +68,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     (priceNZD: number) => {
       if (currency === "NZD") return priceNZD;
       const converted = priceNZD * fxRate;
-      return Math.round(converted / 5) * 5;
+      return Math.floor(converted / 5) * 5;
     },
     [currency, fxRate]
   );

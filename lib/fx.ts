@@ -82,5 +82,5 @@ export function convertPrice(
   if (currency === "NZD") return priceNZD;
   const converted = priceNZD * fxRate;
   if (roundTo <= 0) return Math.round(converted * 100) / 100;
-  return Math.round(converted / roundTo) * roundTo;
+  return Math.floor(converted / roundTo) * roundTo;
 }
