@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -115,12 +115,8 @@ function formatCurrency(value: number): string {
 // Component
 // ---------------------------------------------------------------------------
 
-export default function PartnerDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = React.use(params);
+export default function PartnerDetailPage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { formatPrice: fxFormatPrice } = useFX();
 

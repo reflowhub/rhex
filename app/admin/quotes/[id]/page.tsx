@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -150,13 +150,6 @@ function formatDate(iso: string | undefined | null): string {
   });
 }
 
-function formatCurrency(value: number): string {
-  return `$${value.toLocaleString("en-NZ", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
 /** Returns the next logical status for a forward transition, or null if no action. */
 function getNextStatus(current: QuoteStatus): QuoteStatus | null {
   const idx = STATUSES.indexOf(current);
@@ -194,12 +187,8 @@ function getActionVariant(
 // Component
 // ---------------------------------------------------------------------------
 
-export default function QuoteDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = React.use(params);
+export default function QuoteDetailPage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { formatPrice: fxFormatPrice } = useFX();
 

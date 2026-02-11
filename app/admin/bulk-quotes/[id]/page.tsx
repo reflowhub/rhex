@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -190,12 +190,8 @@ function getActionLabel(current: BulkQuoteStatus): string | null {
 // Component
 // ---------------------------------------------------------------------------
 
-export default function BulkQuoteDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = React.use(params);
+export default function BulkQuoteDetailPage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { formatPrice: fxFormatPrice } = useFX();
 
