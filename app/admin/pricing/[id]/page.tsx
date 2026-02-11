@@ -39,12 +39,16 @@ interface PriceEntry {
   make: string;
   model: string;
   storage: string;
+  grades: Record<string, number>;
+  // Legacy fields (populated by API for backward compat)
   gradeA: number;
   gradeB: number;
   gradeC: number;
   gradeD: number;
   gradeE: number;
 }
+
+const GRADE_KEYS = ["A", "B", "C", "D", "E"];
 
 const PAGE_SIZE = 25;
 
@@ -218,11 +222,11 @@ export default function PriceListDetailPage() {
                   <TableHead>Make</TableHead>
                   <TableHead>Model</TableHead>
                   <TableHead>Storage</TableHead>
-                  <TableHead className="text-right">Grade A</TableHead>
-                  <TableHead className="text-right">Grade B</TableHead>
-                  <TableHead className="text-right">Grade C</TableHead>
-                  <TableHead className="text-right">Grade D</TableHead>
-                  <TableHead className="text-right">Grade E</TableHead>
+                  {GRADE_KEYS.map((g) => (
+                    <TableHead key={g} className="text-right">
+                      Grade {g}
+                    </TableHead>
+                  ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -234,21 +238,11 @@ export default function PriceListDetailPage() {
                     <TableCell className="font-medium">{price.make}</TableCell>
                     <TableCell>{price.model}</TableCell>
                     <TableCell>{price.storage}</TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(price.gradeA)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(price.gradeB)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(price.gradeC)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(price.gradeD)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(price.gradeE)}
-                    </TableCell>
+                    {GRADE_KEYS.map((g) => (
+                      <TableCell key={g} className="text-right">
+                        {formatCurrency(price.grades?.[g] ?? 0)}
+                      </TableCell>
+                    ))}
                   </TableRow>
                 ))}
               </TableBody>

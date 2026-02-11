@@ -4,6 +4,7 @@ import admin from "@/lib/firebase-admin";
 import { requirePartner } from "@/lib/partner-auth";
 import { PartnerSession } from "@/lib/partner-auth";
 import { calculatePartnerRate } from "@/lib/partner-pricing";
+import { readGrades } from "@/lib/grades";
 
 // ---------------------------------------------------------------------------
 // POST /api/partner/quote — Create a single quote at partner rate (Mode B)
@@ -62,9 +63,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const priceData = priceDoc.data();
-    const gradeField = `grade${normalizedGrade}`;
-    const publicPriceNZD = priceData?.[gradeField];
+    const priceData = priceDoc.data()!;
+    const grades = readGrades(priceData);
+    const publicPriceNZD = grades[normalizedGrade];
 
     if (publicPriceNZD === undefined || publicPriceNZD === null) {
       return NextResponse.json(

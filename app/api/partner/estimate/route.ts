@@ -5,6 +5,7 @@ import { requirePartner } from "@/lib/partner-auth";
 import { PartnerSession } from "@/lib/partner-auth";
 import { matchDeviceString, loadDeviceLibrary } from "@/lib/matching";
 import { calculatePartnerRate } from "@/lib/partner-pricing";
+import { readGrades } from "@/lib/grades";
 
 // ---------------------------------------------------------------------------
 // CSV parser
@@ -147,15 +148,7 @@ export async function POST(request: NextRequest) {
       .get();
     const priceMap = new Map<string, Record<string, number>>();
     priceSnapshot.docs.forEach((doc) => {
-      const data = doc.data();
-      const grades: Record<string, number> = {};
-      for (const g of validGrades) {
-        const field = `grade${g}`;
-        if (data[field] !== undefined && data[field] !== null) {
-          grades[g] = Number(data[field]);
-        }
-      }
-      priceMap.set(doc.id, grades);
+      priceMap.set(doc.id, readGrades(doc.data()));
     });
 
     for (let i = 1; i < lines.length; i++) {

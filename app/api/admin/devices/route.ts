@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
       model,
       storage,
       modelStorage,
+      category: "Phone",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };

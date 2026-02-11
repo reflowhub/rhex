@@ -120,6 +120,7 @@ async function seed() {
         model: row.model,
         storage: row.storage,
         modelStorage: `${row.model} ${row.storage}`,
+        category: "Phone",
         createdAt: now,
         updatedAt: now,
       });
@@ -131,11 +132,13 @@ async function seed() {
         .collection("prices")
         .doc(row.deviceId);
       batch.set(priceRef, {
-        gradeA: row.gradeA,
-        gradeB: row.gradeB,
-        gradeC: row.gradeC,
-        gradeD: row.gradeD,
-        gradeE: row.gradeE,
+        grades: {
+          A: row.gradeA,
+          B: row.gradeB,
+          C: row.gradeC,
+          D: row.gradeD,
+          E: row.gradeE,
+        },
       });
     }
 
@@ -161,6 +164,20 @@ async function seed() {
     nextId: maxId + 1,
   });
   console.log(`Device counter set to ${maxId + 1}`);
+
+  // Seed category definitions
+  await db.collection("settings").doc("categories").set({
+    Phone: {
+      grades: [
+        { key: "A", label: "Excellent" },
+        { key: "B", label: "Good" },
+        { key: "C", label: "Fair" },
+        { key: "D", label: "Screen Issues" },
+        { key: "E", label: "No Power" },
+      ],
+    },
+  });
+  console.log("Category definitions written to settings/categories");
 
   console.log("\nSeed complete!");
   console.log(`  ${rows.length} devices`);

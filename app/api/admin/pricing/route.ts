@@ -267,6 +267,7 @@ export async function POST(request: NextRequest) {
             model: row.model,
             storage: row.storage,
             modelStorage,
+            category: "Phone",
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
@@ -279,11 +280,13 @@ export async function POST(request: NextRequest) {
           .collection("prices")
           .doc(deviceDocId);
         batch.set(priceRef, {
-          gradeA: row.gradeA,
-          gradeB: row.gradeB,
-          gradeC: row.gradeC,
-          gradeD: row.gradeD,
-          gradeE: row.gradeE,
+          grades: {
+            A: row.gradeA,
+            B: row.gradeB,
+            C: row.gradeC,
+            D: row.gradeD,
+            E: row.gradeE,
+          },
         });
       }
 

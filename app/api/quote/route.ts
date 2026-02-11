@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { getTodayFXRate, convertPrice } from "@/lib/fx";
+import { readGrades } from "@/lib/grades";
 
 // POST /api/quote — Create a new quote
 export async function POST(request: NextRequest) {
@@ -48,9 +49,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const priceData = priceDoc.data();
-    const gradeField = `grade${normalizedGrade}` as string;
-    const quotePriceNZD = priceData?.[gradeField];
+    const priceData = priceDoc.data()!;
+    const grades = readGrades(priceData);
+    const quotePriceNZD = grades[normalizedGrade];
 
     if (quotePriceNZD === undefined || quotePriceNZD === null) {
       return NextResponse.json(

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
+import { readGrades } from "@/lib/grades";
 
 // ---------------------------------------------------------------------------
 // GET /api/admin/pricing/[id] — Get a price list with all prices + device info
@@ -64,16 +65,19 @@ export async function GET(
     const prices: Record<string, unknown>[] = pricesSnapshot.docs.map((doc) => {
       const priceData = doc.data();
       const device = deviceMap.get(doc.id);
+      const grades = readGrades(priceData);
       return {
         deviceId: doc.id,
         make: device?.make ?? "",
         model: device?.model ?? "",
         storage: device?.storage ?? "",
-        gradeA: priceData.gradeA,
-        gradeB: priceData.gradeB,
-        gradeC: priceData.gradeC,
-        gradeD: priceData.gradeD,
-        gradeE: priceData.gradeE,
+        grades,
+        // Legacy fields for backward compat with current UI
+        gradeA: grades.A ?? 0,
+        gradeB: grades.B ?? 0,
+        gradeC: grades.C ?? 0,
+        gradeD: grades.D ?? 0,
+        gradeE: grades.E ?? 0,
       };
     });
 

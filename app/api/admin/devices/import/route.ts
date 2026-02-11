@@ -165,6 +165,7 @@ export async function POST(request: NextRequest) {
           model: row.model,
           storage: row.storage,
           modelStorage,
+          category: "Phone",
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
