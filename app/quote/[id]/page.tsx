@@ -93,6 +93,7 @@ export default function QuoteResultPage({
   const [bankBSB, setBankBSB] = useState("");
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [bankAccountName, setBankAccountName] = useState("");
+  const [shippingAddress, setShippingAddress] = useState("");
 
   // Fetch quote
   useEffect(() => {
@@ -128,6 +129,7 @@ export default function QuoteResultPage({
       customerName,
       customerEmail,
       customerPhone,
+      shippingAddress,
       paymentMethod,
     };
 
@@ -421,7 +423,7 @@ export default function QuoteResultPage({
               </div>
 
               <div>
-                <Label htmlFor="phone">Phone Number</Label>
+                <Label htmlFor="phone">Mobile Number</Label>
                 <Input
                   id="phone"
                   type="tel"
@@ -431,6 +433,21 @@ export default function QuoteResultPage({
                   required
                   className="mt-1"
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="address">Shipping Address</Label>
+                <Input
+                  id="address"
+                  value={shippingAddress}
+                  onChange={(e) => setShippingAddress(e.target.value)}
+                  placeholder="123 Main St, Sydney NSW 2000"
+                  required
+                  className="mt-1"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  We'll send a prepaid satchel to this address.
+                </p>
               </div>
 
               <div>
@@ -453,8 +470,23 @@ export default function QuoteResultPage({
 
               {/* PayID Fields */}
               {paymentMethod === "payid" && (
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="payid-phone">PayID Mobile Number</Label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={payIdPhone === customerPhone && customerPhone !== ""}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPayIdPhone(customerPhone);
+                        } else {
+                          setPayIdPhone("");
+                        }
+                      }}
+                      className="rounded border-input"
+                    />
+                    Same as mobile number above
+                  </label>
                   <Input
                     id="payid-phone"
                     type="tel"
@@ -462,7 +494,6 @@ export default function QuoteResultPage({
                     onChange={(e) => setPayIdPhone(e.target.value)}
                     placeholder="04XX XXX XXX"
                     required
-                    className="mt-1"
                   />
                 </div>
               )}

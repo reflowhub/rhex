@@ -78,6 +78,7 @@ export async function PUT(
       customerName,
       customerEmail,
       customerPhone,
+      shippingAddress,
       paymentMethod,
       payIdPhone,
       bankBSB,
@@ -86,11 +87,11 @@ export async function PUT(
     } = body;
 
     // Validate required fields
-    if (!customerName || !customerEmail || !customerPhone || !paymentMethod) {
+    if (!customerName || !customerEmail || !customerPhone || !shippingAddress || !paymentMethod) {
       return NextResponse.json(
         {
           error:
-            "customerName, customerEmail, customerPhone, and paymentMethod are required",
+            "customerName, customerEmail, customerPhone, shippingAddress, and paymentMethod are required",
         },
         { status: 400 }
       );
@@ -161,6 +162,7 @@ export async function PUT(
       customerName,
       customerEmail,
       customerPhone,
+      shippingAddress,
       paymentMethod,
     };
 
