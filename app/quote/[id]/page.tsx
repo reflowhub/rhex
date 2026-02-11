@@ -43,6 +43,7 @@ interface QuoteData {
   customerEmail?: string;
   customerPhone?: string;
   paymentMethod?: string;
+  imei?: string;
   device?: {
     id: string;
     make: string;
@@ -94,6 +95,7 @@ export default function QuoteResultPage({
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [bankAccountName, setBankAccountName] = useState("");
   const [shippingAddress, setShippingAddress] = useState("");
+  const [imeiInput, setImeiInput] = useState("");
 
   // Fetch quote
   useEffect(() => {
@@ -139,6 +141,10 @@ export default function QuoteResultPage({
       body.bankBSB = bankBSB;
       body.bankAccountNumber = bankAccountNumber;
       body.bankAccountName = bankAccountName;
+    }
+
+    if (imeiInput && /^\d{15}$/.test(imeiInput) && !quote?.imei) {
+      body.imei = imeiInput;
     }
 
     try {
@@ -316,6 +322,11 @@ export default function QuoteResultPage({
                 <p className="text-sm text-muted-foreground">
                   {quote.device.storage}
                 </p>
+                {quote.imei && (
+                  <p className="text-xs font-mono text-muted-foreground mt-0.5">
+                    IMEI: {quote.imei}
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -434,6 +445,26 @@ export default function QuoteResultPage({
                   className="mt-1"
                 />
               </div>
+
+              {!quote.imei && (
+                <div>
+                  <Label htmlFor="imei">IMEI (optional)</Label>
+                  <Input
+                    id="imei"
+                    value={imeiInput}
+                    onChange={(e) => setImeiInput(e.target.value.replace(/\D/g, "").slice(0, 15))}
+                    placeholder="Enter 15-digit IMEI"
+                    className="mt-1"
+                    maxLength={15}
+                    inputMode="numeric"
+                  />
+                  {imeiInput && imeiInput.length !== 15 && (
+                    <p className="mt-1 text-xs text-amber-600">
+                      IMEI must be 15 digits
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div>
                 <Label htmlFor="address">Shipping Address</Label>

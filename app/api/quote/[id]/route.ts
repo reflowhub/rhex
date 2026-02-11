@@ -85,6 +85,7 @@ export async function PUT(
       bankBSB,
       bankAccountNumber,
       bankAccountName,
+      imei,
     } = body;
 
     // Validate required fields
@@ -173,6 +174,11 @@ export async function PUT(
       updateData.bankBSB = bankBSB;
       updateData.bankAccountNumber = bankAccountNumber;
       updateData.bankAccountName = bankAccountName;
+    }
+
+    // Accept IMEI if provided and quote doesn't already have one
+    if (imei && typeof imei === "string" && /^\d{15}$/.test(imei) && !existingData?.imei) {
+      updateData.imei = imei;
     }
 
     await quoteRef.update(updateData);

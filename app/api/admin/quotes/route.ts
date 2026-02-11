@@ -104,6 +104,7 @@ export async function GET(request: NextRequest) {
         createdAt: serializeTimestamp(data.createdAt),
         expiresAt: serializeTimestamp(data.expiresAt),
         acceptedAt: serializeTimestamp(data.acceptedAt),
+        imei: data.imei ?? null,
         inspectionGrade: data.inspectionGrade ?? null,
         revisedPriceNZD: data.revisedPriceNZD ?? null,
       };

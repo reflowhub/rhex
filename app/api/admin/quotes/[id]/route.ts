@@ -94,6 +94,7 @@ export async function GET(
       partnerId,
       partnerName,
       partnerMode: data.partnerMode ?? null,
+      imei: data.imei ?? null,
       inspectionGrade: data.inspectionGrade ?? null,
       revisedPriceNZD: data.revisedPriceNZD ?? null,
       createdAt: serializeTimestamp(data.createdAt),

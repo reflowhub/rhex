@@ -75,6 +75,7 @@ interface Quote {
   bankBSB?: string;
   bankAccountNumber?: string;
   bankAccountName?: string;
+  imei?: string;
   customerId?: string;
   partnerId?: string;
   partnerName?: string;
@@ -390,6 +391,12 @@ export default function QuoteDetailPage() {
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Storage</dt>
               <dd className="font-medium">{quote.device.storage}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">IMEI</dt>
+              <dd className="font-mono text-xs">
+                {quote.imei || <span className="text-muted-foreground font-sans text-sm">Not provided</span>}
+              </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Original Grade</dt>

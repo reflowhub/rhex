@@ -33,6 +33,7 @@ interface Quote {
   customerName: string | null;
   customerEmail: string | null;
   customerPhone: string | null;
+  imei: string | null;
   partnerId: string | null;
   partnerName: string | null;
   partnerMode: string | null;
@@ -247,6 +248,7 @@ export default function QuotesPage() {
                 <TableHead>Quote ID</TableHead>
                 <TableHead>Device</TableHead>
                 <TableHead>Grade</TableHead>
+                <TableHead>IMEI</TableHead>
                 <TableHead className="text-right">Price</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Partner</TableHead>
@@ -273,6 +275,9 @@ export default function QuotesPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{quote.grade}</Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {quote.imei || "\u2014"}
                     </TableCell>
                     <TableCell className="text-right">
                       {formatPrice(quote.quotePriceNZD)}

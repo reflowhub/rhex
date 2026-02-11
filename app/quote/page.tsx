@@ -15,6 +15,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/lib/currency-context";
@@ -98,6 +100,7 @@ function QuotePageContent() {
   const [determinedGrade, setDeterminedGrade] = useState<string | null>(null);
   const [creatingQuote, setCreatingQuote] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [imeiInput, setImeiInput] = useState(imei || "");
 
   // Fetch device info
   useEffect(() => {
@@ -137,7 +140,7 @@ function QuotePageContent() {
         const res = await fetch("/api/quote", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ deviceId, grade, imei, displayCurrency: currency, referralCode: getReferralCode() }),
+          body: JSON.stringify({ deviceId, grade, imei: imeiInput || null, displayCurrency: currency, referralCode: getReferralCode() }),
         });
 
         if (res.ok) {
@@ -293,6 +296,25 @@ function QuotePageContent() {
                   {device.storage}
                 </p>
               </div>
+            </div>
+            <div className="mt-3 border-t pt-3">
+              <Label htmlFor="imei" className="text-sm text-muted-foreground">
+                IMEI (optional)
+              </Label>
+              <Input
+                id="imei"
+                value={imeiInput}
+                onChange={(e) => setImeiInput(e.target.value.replace(/\D/g, "").slice(0, 15))}
+                placeholder="Enter 15-digit IMEI"
+                className="mt-1"
+                maxLength={15}
+                inputMode="numeric"
+              />
+              {imeiInput && imeiInput.length !== 15 && (
+                <p className="mt-1 text-xs text-amber-600">
+                  IMEI must be 15 digits
+                </p>
+              )}
             </div>
           </div>
         )}
