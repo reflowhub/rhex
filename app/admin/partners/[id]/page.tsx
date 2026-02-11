@@ -398,7 +398,7 @@ export default function PartnerDetailPage() {
               <dd className="flex gap-1">
                 {partner.modes.map((m) => (
                   <Badge key={m} variant="outline" className="text-xs">
-                    {m === "A" ? "Referral" : "Hands-On"}
+                    {m === "A" ? "Referral" : "Dealer"}
                   </Badge>
                 ))}
               </dd>
@@ -859,7 +859,7 @@ export default function PartnerDetailPage() {
                     }
                     className="h-4 w-4 rounded border-border"
                   />
-                  Mode B (Hands-On)
+                  Mode B (Dealer)
                 </label>
               </div>
             </div>

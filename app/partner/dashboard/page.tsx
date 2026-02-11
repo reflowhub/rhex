@@ -181,7 +181,7 @@ export default function PartnerDashboardPage() {
                             {item.partnerMode === "A"
                               ? "Referral"
                               : item.partnerMode === "B"
-                                ? "Hands-On"
+                                ? "Dealer"
                                 : "\u2014"}
                           </Badge>
                         </TableCell>

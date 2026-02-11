@@ -342,7 +342,7 @@ export default function PartnersPage() {
                     <div className="flex gap-1">
                       {partner.modes.map((mode) => (
                         <Badge key={mode} variant="outline" className="text-xs">
-                          {mode === "A" ? "Referral" : "Hands-On"}
+                          {mode === "A" ? "Referral" : "Dealer"}
                         </Badge>
                       ))}
                     </div>
@@ -527,7 +527,7 @@ export default function PartnersPage() {
                   />
                   <span>
                     Mode B{" "}
-                    <span className="text-muted-foreground">(Hands-On)</span>
+                    <span className="text-muted-foreground">(Dealer)</span>
                   </span>
                 </label>
               </div>
