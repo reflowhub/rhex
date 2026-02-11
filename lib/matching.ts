@@ -10,6 +10,7 @@ export interface LibraryDevice {
   make: string;
   model: string;
   storage: string;
+  active: boolean;
 }
 
 export interface MatchResult {
@@ -60,6 +61,7 @@ export async function loadDeviceLibrary(): Promise<LibraryDevice[]> {
     make: doc.data().make as string,
     model: doc.data().model as string,
     storage: doc.data().storage as string,
+    active: doc.data().active !== false,
   }));
   cacheTime = Date.now();
   return cachedDevices;
@@ -86,7 +88,8 @@ export async function matchToLibrary(
     };
   }
 
-  const devices = await loadDeviceLibrary();
+  const allDevices = await loadDeviceLibrary();
+  const devices = allDevices.filter((d) => d.active);
   const normalizedMake = make.toLowerCase().trim();
   const normalizedModel = model.toLowerCase().trim();
 
@@ -327,7 +330,8 @@ export async function matchDeviceString(rawInput: string): Promise<MatchResult> 
   }
 
   // Step 4: Try matching the full string against the entire device library
-  const devices = await loadDeviceLibrary();
+  const allDevicesForString = await loadDeviceLibrary();
+  const devices = allDevicesForString.filter((d) => d.active);
   const lowerInput = normalized.toLowerCase().replace(/[^\w\s]/g, " ");
 
   // Try exact modelStorage match

@@ -14,6 +14,7 @@ import {
   Package,
   Link2,
   Users,
+  Settings,
   Menu,
   X,
   LogOut,
@@ -50,6 +51,11 @@ const sidebarLinks = [
     href: "/admin/partners",
     label: "Partners",
     icon: Users,
+  },
+  {
+    href: "/admin/settings",
+    label: "Settings",
+    icon: Settings,
   },
 ];
 

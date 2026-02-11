@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
+import { findDuplicateDevice } from "@/lib/device-uniqueness";
 
 // GET /api/admin/devices/[id] — Get a single device by document ID
 export async function GET(
@@ -52,6 +53,23 @@ export async function PUT(
     const updatedMake = make ?? existingData.make;
     const updatedModel = model ?? existingData.model;
     const updatedStorage = storage ?? existingData.storage;
+
+    // Check for duplicate device (excluding self)
+    const duplicate = await findDuplicateDevice(
+      updatedMake,
+      updatedModel,
+      updatedStorage,
+      id
+    );
+    if (duplicate) {
+      return NextResponse.json(
+        {
+          error: `A device with this make/model/storage already exists (${duplicate.make} ${duplicate.model} ${duplicate.storage})`,
+        },
+        { status: 409 }
+      );
+    }
+
     const modelStorage = `${updatedModel} ${updatedStorage}`;
 
     const updateData: Record<string, unknown> = {

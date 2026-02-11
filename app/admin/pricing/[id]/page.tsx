@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,12 +14,24 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
   ArrowLeft,
   Search,
   Loader2,
   ChevronLeft,
   ChevronRight,
+  Download,
+  Plus,
+  AlertTriangle,
 } from "lucide-react";
+import { escapeCsvField, downloadCsv } from "@/lib/csv-export";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,12 +52,6 @@ interface PriceEntry {
   model: string;
   storage: string;
   grades: Record<string, number>;
-  // Legacy fields (populated by API for backward compat)
-  gradeA: number;
-  gradeB: number;
-  gradeC: number;
-  gradeD: number;
-  gradeE: number;
 }
 
 const GRADE_KEYS = ["A", "B", "C", "D", "E"];
@@ -72,6 +78,39 @@ export default function PriceListDetailPage() {
 
   // ---- pagination state ---------------------------------------------------
   const [currentPage, setCurrentPage] = useState(1);
+
+  // ---- inline editing state -----------------------------------------------
+  const [changes, setChanges] = useState<Map<string, Record<string, number>>>(
+    new Map()
+  );
+  const [editingCell, setEditingCell] = useState<{
+    deviceId: string;
+    grade: string;
+  } | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  // ---- row selection state -------------------------------------------------
+  const [selectedDevices, setSelectedDevices] = useState<Set<string>>(
+    new Set()
+  );
+
+  // ---- bulk adjust dialog state -------------------------------------------
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [bulkOperation, setBulkOperation] = useState<
+    "adjust_percent" | "adjust_dollar" | "set_ratios"
+  >("adjust_percent");
+  const [bulkValue, setBulkValue] = useState("");
+  const [bulkSaving, setBulkSaving] = useState(false);
+
+  // ---- add device dialog state --------------------------------------------
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [addMake, setAddMake] = useState("");
+  const [addModel, setAddModel] = useState("");
+  const [addStorage, setAddStorage] = useState("");
+  const [addError, setAddError] = useState("");
+  const [addSaving, setAddSaving] = useState(false);
 
   // ---- debounced search ---------------------------------------------------
   useEffect(() => {
@@ -106,6 +145,14 @@ export default function PriceListDetailPage() {
     fetchData();
   }, [fetchData]);
 
+  // ---- focus edit input when cell opens -----------------------------------
+  useEffect(() => {
+    if (editingCell && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingCell]);
+
   // ---- filtered + paginated data ------------------------------------------
   const filteredPrices = useMemo(() => {
     if (!searchTerm) return prices;
@@ -122,6 +169,262 @@ export default function PriceListDetailPage() {
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE
   );
+
+  // ---- change tracking helpers --------------------------------------------
+  const totalChanges = useMemo(() => {
+    let count = 0;
+    changes.forEach((gradeChanges) => {
+      count += Object.keys(gradeChanges).length;
+    });
+    return count;
+  }, [changes]);
+
+  const getDisplayValue = (deviceId: string, grade: string, original: number) => {
+    return changes.get(deviceId)?.[grade] ?? original;
+  };
+
+  const isChanged = (deviceId: string, grade: string) => {
+    return changes.get(deviceId)?.[grade] !== undefined;
+  };
+
+  const hasGradeInversion = (deviceId: string, grade: string) => {
+    const entry = prices.find((p) => p.deviceId === deviceId);
+    if (!entry) return false;
+
+    const gradeIdx = GRADE_KEYS.indexOf(grade);
+    if (gradeIdx <= 0) return false;
+
+    const currentValue = getDisplayValue(deviceId, grade, entry.grades[grade] ?? 0);
+    const higherGrade = GRADE_KEYS[gradeIdx - 1];
+    const higherValue = getDisplayValue(deviceId, higherGrade, entry.grades[higherGrade] ?? 0);
+
+    return currentValue > higherValue;
+  };
+
+  // ---- inline editing handlers --------------------------------------------
+  const startEdit = (deviceId: string, grade: string, currentValue: number) => {
+    setEditingCell({ deviceId, grade });
+    setEditValue(String(currentValue));
+  };
+
+  const commitEdit = () => {
+    if (!editingCell) return;
+    const { deviceId, grade } = editingCell;
+    const numValue = Number(editValue);
+
+    if (!isNaN(numValue) && numValue >= 0) {
+      const entry = prices.find((p) => p.deviceId === deviceId);
+      const originalValue = entry?.grades[grade] ?? 0;
+
+      if (numValue !== originalValue) {
+        setChanges((prev) => {
+          const next = new Map(prev);
+          const existing = next.get(deviceId) ?? {};
+          next.set(deviceId, { ...existing, [grade]: numValue });
+          return next;
+        });
+      } else {
+        // If value is same as original, remove the change
+        setChanges((prev) => {
+          const next = new Map(prev);
+          const existing = next.get(deviceId);
+          if (existing) {
+            const { [grade]: _, ...rest } = existing;
+            if (Object.keys(rest).length === 0) {
+              next.delete(deviceId);
+            } else {
+              next.set(deviceId, rest);
+            }
+          }
+          return next;
+        });
+      }
+    }
+    setEditingCell(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingCell(null);
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitEdit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelEdit();
+    }
+  };
+
+  // ---- save all changes ---------------------------------------------------
+  const saveAllChanges = async () => {
+    if (totalChanges === 0) return;
+    setSaving(true);
+
+    try {
+      const entries = Array.from(changes.entries());
+      for (const [deviceId, gradeChanges] of entries) {
+        const res = await fetch(
+          `/api/admin/pricing/${id}/prices/${deviceId}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ grades: gradeChanges }),
+          }
+        );
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Failed to save ${deviceId}`);
+        }
+      }
+
+      setChanges(new Map());
+      fetchData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to save changes");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ---- discard all changes ------------------------------------------------
+  const discardAllChanges = () => {
+    setChanges(new Map());
+    setEditingCell(null);
+  };
+
+  // ---- add device handler -------------------------------------------------
+  const handleAddDevice = async () => {
+    if (!addMake.trim() || !addModel.trim() || !addStorage.trim()) {
+      setAddError("All fields are required");
+      return;
+    }
+
+    setAddSaving(true);
+    setAddError("");
+
+    try {
+      // Create device
+      const deviceRes = await fetch("/api/admin/devices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          make: addMake.trim(),
+          model: addModel.trim(),
+          storage: addStorage.trim(),
+        }),
+      });
+
+      if (!deviceRes.ok) {
+        const data = await deviceRes.json().catch(() => ({}));
+        setAddError(data.error || "Failed to create device");
+        return;
+      }
+
+      const device = await deviceRes.json();
+
+      // Create price entry with $0 grades
+      const zeroGrades: Record<string, number> = {};
+      GRADE_KEYS.forEach((g) => (zeroGrades[g] = 0));
+
+      await fetch(`/api/admin/pricing/${id}/prices/${device.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ grades: zeroGrades }),
+      });
+
+      setAddDialogOpen(false);
+      setAddMake("");
+      setAddModel("");
+      setAddStorage("");
+      fetchData();
+    } catch {
+      setAddError("Failed to create device");
+    } finally {
+      setAddSaving(false);
+    }
+  };
+
+  // ---- export CSV ---------------------------------------------------------
+  const handleExportCsv = () => {
+    const header = ["Device ID", "Make", "Model", "Storage", ...GRADE_KEYS.map((g) => `Grade ${g}`)];
+    const rows = filteredPrices.map((p) => [
+      p.deviceId,
+      escapeCsvField(p.make),
+      escapeCsvField(p.model),
+      escapeCsvField(p.storage),
+      ...GRADE_KEYS.map((g) => String(p.grades[g] ?? 0)),
+    ]);
+    const csv = [header.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const name = priceList?.name ?? "prices";
+    downloadCsv(csv, `${name.replace(/\s+/g, "-").toLowerCase()}-export.csv`);
+  };
+
+  // ---- row selection handlers ----------------------------------------------
+  const allFilteredSelected =
+    filteredPrices.length > 0 &&
+    filteredPrices.every((p) => selectedDevices.has(p.deviceId));
+
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelectedDevices(new Set());
+    } else {
+      setSelectedDevices(new Set(filteredPrices.map((p) => p.deviceId)));
+    }
+  };
+
+  const toggleSelectDevice = (deviceId: string) => {
+    setSelectedDevices((prev) => {
+      const next = new Set(prev);
+      if (next.has(deviceId)) {
+        next.delete(deviceId);
+      } else {
+        next.add(deviceId);
+      }
+      return next;
+    });
+  };
+
+  // ---- bulk adjust handler ------------------------------------------------
+  const handleBulkAdjust = async () => {
+    if (selectedDevices.size === 0) return;
+
+    if (
+      (bulkOperation === "adjust_percent" || bulkOperation === "adjust_dollar") &&
+      (bulkValue === "" || isNaN(Number(bulkValue)))
+    ) {
+      return;
+    }
+
+    setBulkSaving(true);
+    try {
+      const res = await fetch(`/api/admin/pricing/${id}/bulk-adjust`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operation: bulkOperation,
+          value: bulkOperation !== "set_ratios" ? Number(bulkValue) : undefined,
+          deviceIds: Array.from(selectedDevices),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Bulk adjust failed");
+      }
+
+      setBulkDialogOpen(false);
+      setSelectedDevices(new Set());
+      setBulkValue("");
+      setChanges(new Map());
+      fetchData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Bulk adjust failed");
+    } finally {
+      setBulkSaving(false);
+    }
+  };
 
   // ---- helpers ------------------------------------------------------------
   const formatDate = (iso: string | null) => {
@@ -192,7 +495,73 @@ export default function PriceListDetailPage() {
             <span>{priceList.deviceCount} devices</span>
           </div>
         </div>
+        <div className="flex items-center gap-2">
+          {selectedDevices.size > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setBulkDialogOpen(true);
+                setBulkOperation("adjust_percent");
+                setBulkValue("");
+              }}
+            >
+              Bulk Adjust ({selectedDevices.size})
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportCsv}
+            disabled={filteredPrices.length === 0}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export CSV
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              setAddDialogOpen(true);
+              setAddError("");
+              setAddMake("");
+              setAddModel("");
+              setAddStorage("");
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Device
+          </Button>
+        </div>
       </div>
+
+      {/* Unsaved changes banner */}
+      {totalChanges > 0 && (
+        <div className="mt-4 flex items-center justify-between rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 dark:border-yellow-700 dark:bg-yellow-900/20">
+          <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+            {totalChanges} unsaved price{totalChanges !== 1 ? "s" : ""} changed
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={discardAllChanges}
+              disabled={saving}
+            >
+              Discard All
+            </Button>
+            <Button size="sm" onClick={saveAllChanges} disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save All"
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Search bar */}
       <div className="relative mt-6 max-w-md">
@@ -218,6 +587,14 @@ export default function PriceListDetailPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[40px]">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                  </TableHead>
                   <TableHead className="w-[120px]">Device ID</TableHead>
                   <TableHead>Make</TableHead>
                   <TableHead>Model</TableHead>
@@ -232,17 +609,80 @@ export default function PriceListDetailPage() {
               <TableBody>
                 {paginatedPrices.map((price) => (
                   <TableRow key={price.deviceId}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        checked={selectedDevices.has(price.deviceId)}
+                        onChange={() => toggleSelectDevice(price.deviceId)}
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                    </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {price.deviceId}
                     </TableCell>
                     <TableCell className="font-medium">{price.make}</TableCell>
                     <TableCell>{price.model}</TableCell>
                     <TableCell>{price.storage}</TableCell>
-                    {GRADE_KEYS.map((g) => (
-                      <TableCell key={g} className="text-right">
-                        {formatCurrency(price.grades?.[g] ?? 0)}
-                      </TableCell>
-                    ))}
+                    {GRADE_KEYS.map((g) => {
+                      const originalValue = price.grades[g] ?? 0;
+                      const displayValue = getDisplayValue(
+                        price.deviceId,
+                        g,
+                        originalValue
+                      );
+                      const changed = isChanged(price.deviceId, g);
+                      const inverted = hasGradeInversion(price.deviceId, g);
+                      const isEditing =
+                        editingCell?.deviceId === price.deviceId &&
+                        editingCell?.grade === g;
+
+                      return (
+                        <TableCell
+                          key={g}
+                          className={`text-right ${
+                            inverted
+                              ? "bg-orange-100 dark:bg-orange-900/30"
+                              : changed
+                              ? "bg-yellow-100 dark:bg-yellow-900/30"
+                              : ""
+                          }`}
+                          title={
+                            inverted
+                              ? `Warning: Grade ${g} ($${displayValue}) is higher than the grade above`
+                              : changed
+                              ? `$${originalValue} → $${displayValue}`
+                              : undefined
+                          }
+                        >
+                          {isEditing ? (
+                            <Input
+                              ref={editInputRef}
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={commitEdit}
+                              onKeyDown={handleEditKeyDown}
+                              className="h-7 w-20 text-right ml-auto"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              className="inline-flex w-full items-center justify-end rounded px-1 py-0.5 hover:bg-muted/50 transition-colors cursor-pointer"
+                              onClick={() =>
+                                startEdit(price.deviceId, g, displayValue)
+                              }
+                            >
+                              {inverted && (
+                                <AlertTriangle className="mr-1 h-3 w-3 text-orange-600 dark:text-orange-400" />
+                              )}
+                              {formatCurrency(displayValue)}
+                            </button>
+                          )}
+                        </TableCell>
+                      );
+                    })}
                   </TableRow>
                 ))}
               </TableBody>
@@ -303,6 +743,146 @@ export default function PriceListDetailPage() {
           </>
         )}
       </div>
+
+      {/* Bulk Adjust Dialog */}
+      <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Bulk Adjust Prices ({selectedDevices.size} device
+              {selectedDevices.size !== 1 ? "s" : ""})
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Operation</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={bulkOperation}
+                onChange={(e) =>
+                  setBulkOperation(
+                    e.target.value as "adjust_percent" | "adjust_dollar" | "set_ratios"
+                  )
+                }
+              >
+                <option value="adjust_percent">Adjust by percentage</option>
+                <option value="adjust_dollar">Adjust by dollar amount</option>
+                <option value="set_ratios">Set grade ratios from Grade A</option>
+              </select>
+            </div>
+            {bulkOperation !== "set_ratios" && (
+              <div className="grid gap-2">
+                <Label>
+                  {bulkOperation === "adjust_percent"
+                    ? "Percentage (e.g. 10 for +10%, -5 for -5%)"
+                    : "Dollar amount (e.g. 20 for +$20, -10 for -$10)"}
+                </Label>
+                <Input
+                  type="number"
+                  value={bulkValue}
+                  onChange={(e) => setBulkValue(e.target.value)}
+                  placeholder={
+                    bulkOperation === "adjust_percent" ? "e.g. 10" : "e.g. 20"
+                  }
+                />
+              </div>
+            )}
+            {bulkOperation === "set_ratios" && (
+              <p className="text-sm text-muted-foreground">
+                This will keep Grade A unchanged and set B/C/D/E based on the
+                grade ratios configured in Settings. Each grade price is
+                calculated as a percentage of Grade A.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBulkDialogOpen(false)}
+              disabled={bulkSaving}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkAdjust}
+              disabled={
+                bulkSaving ||
+                (bulkOperation !== "set_ratios" &&
+                  (bulkValue === "" || isNaN(Number(bulkValue))))
+              }
+            >
+              {bulkSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Applying...
+                </>
+              ) : (
+                "Apply"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Device Dialog */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Device to Price List</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            {addError && (
+              <p className="text-sm text-destructive">{addError}</p>
+            )}
+            <div className="grid gap-2">
+              <Label htmlFor="add-make">Make</Label>
+              <Input
+                id="add-make"
+                value={addMake}
+                onChange={(e) => setAddMake(e.target.value)}
+                placeholder="e.g. Apple"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="add-model">Model</Label>
+              <Input
+                id="add-model"
+                value={addModel}
+                onChange={(e) => setAddModel(e.target.value)}
+                placeholder="e.g. iPhone 15 Pro"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="add-storage">Storage</Label>
+              <Input
+                id="add-storage"
+                value={addStorage}
+                onChange={(e) => setAddStorage(e.target.value)}
+                placeholder="e.g. 256GB"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setAddDialogOpen(false)}
+              disabled={addSaving}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleAddDevice} disabled={addSaving}>
+              {addSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

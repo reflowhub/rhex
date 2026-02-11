@@ -51,6 +51,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const deviceData = deviceDoc.data()!;
+    if (deviceData.active === false) {
+      return NextResponse.json(
+        { error: "This device is not currently available for trade-in" },
+        { status: 404 }
+      );
+    }
+
     // Lookup price
     const priceDoc = await adminDb
       .doc(`priceLists/FP-2B/prices/${deviceId}`)

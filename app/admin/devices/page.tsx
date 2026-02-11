@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -27,10 +28,12 @@ import {
   Pencil,
   Trash2,
   Upload,
+  Download,
   ChevronLeft,
   ChevronRight,
   Loader2,
 } from "lucide-react";
+import { escapeCsvField, downloadCsv } from "@/lib/csv-export";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,6 +44,7 @@ interface Device {
   make: string;
   model: string;
   storage: string;
+  active?: boolean;
 }
 
 interface DeviceFormData {
@@ -74,6 +78,7 @@ export default function DeviceLibraryPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<DeviceFormData>(EMPTY_FORM);
   const [activeDevice, setActiveDevice] = useState<Device | null>(null);
@@ -120,12 +125,14 @@ export default function DeviceLibraryPage() {
   // ---- add device ---------------------------------------------------------
   const openAddDialog = () => {
     setFormData(EMPTY_FORM);
+    setFormError(null);
     setAddOpen(true);
   };
 
   const handleAdd = async () => {
     if (!isFormValid) return;
     setSubmitting(true);
+    setFormError(null);
     try {
       const res = await fetch("/api/admin/devices", {
         method: "POST",
@@ -135,6 +142,9 @@ export default function DeviceLibraryPage() {
       if (res.ok) {
         setAddOpen(false);
         fetchDevices();
+      } else {
+        const data = await res.json();
+        setFormError(data.error || "Failed to create device");
       }
     } finally {
       setSubmitting(false);
@@ -149,12 +159,14 @@ export default function DeviceLibraryPage() {
       model: device.model,
       storage: device.storage,
     });
+    setFormError(null);
     setEditOpen(true);
   };
 
   const handleEdit = async () => {
     if (!isFormValid || !activeDevice) return;
     setSubmitting(true);
+    setFormError(null);
     try {
       const res = await fetch(`/api/admin/devices/${activeDevice.id}`, {
         method: "PUT",
@@ -165,6 +177,9 @@ export default function DeviceLibraryPage() {
         setEditOpen(false);
         setActiveDevice(null);
         fetchDevices();
+      } else {
+        const data = await res.json();
+        setFormError(data.error || "Failed to update device");
       }
     } finally {
       setSubmitting(false);
@@ -194,6 +209,46 @@ export default function DeviceLibraryPage() {
     }
   };
 
+  // ---- toggle active ------------------------------------------------------
+  const handleToggleActive = async (device: Device) => {
+    const newActive = device.active === false;
+    // Optimistic update
+    setDevices((prev) =>
+      prev.map((d) => (d.id === device.id ? { ...d, active: newActive } : d))
+    );
+    try {
+      const res = await fetch(`/api/admin/devices/${device.id}/toggle`, {
+        method: "PATCH",
+      });
+      if (!res.ok) {
+        // Rollback on failure
+        setDevices((prev) =>
+          prev.map((d) =>
+            d.id === device.id ? { ...d, active: device.active } : d
+          )
+        );
+      }
+    } catch {
+      // Rollback on failure
+      setDevices((prev) =>
+        prev.map((d) =>
+          d.id === device.id ? { ...d, active: device.active } : d
+        )
+      );
+    }
+  };
+
+  // ---- export CSV ---------------------------------------------------------
+  const handleExport = () => {
+    const header = "DeviceID,Make,Model,Storage,Active";
+    const rows = devices.map(
+      (d) =>
+        `${d.id},${escapeCsvField(d.make)},${escapeCsvField(d.model)},${escapeCsvField(d.storage)},${d.active !== false}`
+    );
+    const csv = [header, ...rows].join("\n");
+    downloadCsv(csv, "devices.csv");
+  };
+
   // ---- render -------------------------------------------------------------
   return (
     <div>
@@ -206,6 +261,10 @@ export default function DeviceLibraryPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExport} disabled={devices.length === 0}>
+            <Download className="mr-2 h-4 w-4" />
+            Export
+          </Button>
           <Button variant="outline" asChild>
             <Link href="/admin/devices/import">
               <Upload className="mr-2 h-4 w-4" />
@@ -254,6 +313,7 @@ export default function DeviceLibraryPage() {
                   <TableHead>Make</TableHead>
                   <TableHead>Model</TableHead>
                   <TableHead>Storage</TableHead>
+                  <TableHead className="w-[80px] text-center">Active</TableHead>
                   <TableHead className="w-[120px] text-right">
                     Actions
                   </TableHead>
@@ -268,6 +328,12 @@ export default function DeviceLibraryPage() {
                     <TableCell className="font-medium">{device.make}</TableCell>
                     <TableCell>{device.model}</TableCell>
                     <TableCell>{device.storage}</TableCell>
+                    <TableCell className="text-center">
+                      <Switch
+                        checked={device.active !== false}
+                        onCheckedChange={() => handleToggleActive(device)}
+                      />
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Button
@@ -355,6 +421,11 @@ export default function DeviceLibraryPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            {formError && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                {formError}
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="add-make">Make</Label>
               <Input
@@ -414,6 +485,11 @@ export default function DeviceLibraryPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            {formError && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                {formError}
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="edit-make">Make</Label>
               <Input

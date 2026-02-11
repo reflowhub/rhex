@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
+import { findDuplicateDevice } from "@/lib/device-uniqueness";
 
 // GET /api/admin/devices — List all devices, with optional ?search= fuzzy filter
 export async function GET(request: NextRequest) {
@@ -68,6 +69,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "make, model, and storage are required" },
         { status: 400 }
+      );
+    }
+
+    // Check for duplicate device
+    const duplicate = await findDuplicateDevice(make, model, storage);
+    if (duplicate) {
+      return NextResponse.json(
+        {
+          error: `A device with this make/model/storage already exists (${duplicate.make} ${duplicate.model} ${duplicate.storage})`,
+        },
+        { status: 409 }
       );
     }
 

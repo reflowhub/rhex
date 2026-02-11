@@ -280,27 +280,27 @@ Lookup device -> if !active -> return "Device not eligible for trade-in"
 
 ## Implementation Order
 
-### Phase 0: Category Foundation
+### Phase 0: Category Foundation ✅
 
 Lay the data model groundwork before building pricing features, so they're category-aware from the start and don't require rework later.
 
-0a. **Add `category` field to devices** — default all existing devices to `"Phone"`. Add to device creation (single + CSV import). Small data change, no UI impact yet.
+0a. ✅ **Add `category` field to devices** — default all existing devices to `"Phone"`. Add to device creation (single + CSV import). Small data change, no UI impact yet.
 
-0b. **Create `settings/categories` document** — define Phone grade structure (A-E with labels). This becomes the source of truth for which grades exist per category.
+0b. ✅ **Create `settings/categories` document** — define Phone grade structure (A-E with labels). This becomes the source of truth for which grades exist per category.
 
-0c. **Migrate price storage to `grades` map** — new price writes use `{ grades: { A: 750, B: 525, ... } }` instead of `{ gradeA: 750, ... }`. Read path supports both formats during transition. Pricing page renders columns dynamically from category grade definitions.
+0c. ✅ **Migrate price storage to `grades` map** — new price writes use `{ grades: { A: 750, B: 525, ... } }` instead of `{ gradeA: 750, ... }`. Read path supports both formats during transition. Pricing page renders columns dynamically from category grade definitions.
 
-### Phase 1: Core Pricing Features
+### Phase 1: Core Pricing Features ✅
 
 Built for phones but category-aware by design.
 
-1. **Device uniqueness check** — small, immediate quality-of-life fix
-2. **Device active toggle** — `active` field + toggle UI + quote API guard
-3. **Export CSV** — download current price list and device library as CSV (backup before changes + general utility)
-4. **Inline price editing** — click-to-edit cells + PATCH API + add device from pricing page. Grade columns rendered from category definition.
-5. **Change preview** — unsaved changes markers, discard/save all, grade inversion warnings
-6. **Bulk price adjustment** — select rows + adjust dialog + bulk API
-7. **Pricing settings** — admin-configurable grade ratios + rounding in `settings/pricing`
+1. ✅ **Device uniqueness check** — `lib/device-uniqueness.ts` shared check. Enforced on create, edit, and CSV import. Returns 409 on duplicate.
+2. ✅ **Device active toggle** — `active` field + Switch UI in device library + `PATCH /api/admin/devices/[id]/toggle` + quote API guard (public, partner, and matching APIs all filter inactive devices)
+3. ✅ **Export CSV** — `lib/csv-export.ts` shared helpers. Export buttons on both device library and pricing pages. Client-side CSV generation.
+4. ✅ **Inline price editing** — click-to-edit cells + `PATCH /api/admin/pricing/[id]/prices/[deviceId]` + Add Device dialog from pricing page (creates device + $0 price entry)
+5. ✅ **Change preview** — unsaved changes tracked in client state, yellow highlight for changed cells, orange highlight + warning icon for grade inversions, "N unsaved prices changed" banner with Discard All / Save All
+6. ✅ **Bulk price adjustment** — checkbox row selection, Bulk Adjust dialog with 3 operations (adjust by %, adjust by $, set grade ratios from A), `POST /api/admin/pricing/[id]/bulk-adjust` API using settings for rounding + ratios
+7. ✅ **Pricing settings** — `settings/pricing` Firestore doc, `lib/pricing-settings.ts` loader + `roundPrice()` helper, `/admin/settings` page with grade ratio inputs + rounding select, sidebar link added
 
 ### Phase 2: Multi-Category Expansion
 
