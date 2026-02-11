@@ -20,7 +20,6 @@ export async function GET(request: NextRequest) {
       const ledgerSnapshot = await adminDb
         .collection("commissionLedger")
         .where("partnerId", "==", partner.id)
-        .orderBy("createdAt", "desc")
         .get();
 
       ledgerSnapshot.docs.forEach((doc) => {
@@ -46,41 +45,39 @@ export async function GET(request: NextRequest) {
       const paidQuotes = await adminDb
         .collection("quotes")
         .where("partnerId", "==", partner.id)
-        .where("partnerMode", "==", "B")
-        .where("status", "==", "paid")
-        .orderBy("createdAt", "desc")
         .get();
 
       paidQuotes.docs.forEach((doc) => {
         const data = doc.data();
-        items.push({
-          id: doc.id,
-          type: "settlement",
-          quotePriceNZD: data.quotePriceNZD ?? 0,
-          grade: data.grade ?? null,
-          deviceId: data.deviceId ?? null,
-          createdAt: serializeTimestamp(data.createdAt),
-        });
+        if (data.partnerMode === "B" && data.status === "paid") {
+          items.push({
+            id: doc.id,
+            type: "settlement",
+            quotePriceNZD: data.quotePriceNZD ?? 0,
+            grade: data.grade ?? null,
+            deviceId: data.deviceId ?? null,
+            createdAt: serializeTimestamp(data.createdAt),
+          });
+        }
       });
 
       // Mode B: paid bulk quotes
       const paidBulk = await adminDb
         .collection("bulkQuotes")
         .where("partnerId", "==", partner.id)
-        .where("partnerMode", "==", "B")
-        .where("status", "==", "paid")
-        .orderBy("createdAt", "desc")
         .get();
 
       paidBulk.docs.forEach((doc) => {
         const data = doc.data();
-        items.push({
-          id: doc.id,
-          type: "bulkSettlement",
-          totalIndicativeNZD: data.totalIndicativeNZD ?? 0,
-          totalDevices: data.totalDevices ?? 0,
-          createdAt: serializeTimestamp(data.createdAt),
-        });
+        if (data.partnerMode === "B" && data.status === "paid") {
+          items.push({
+            id: doc.id,
+            type: "bulkSettlement",
+            totalIndicativeNZD: data.totalIndicativeNZD ?? 0,
+            totalDevices: data.totalDevices ?? 0,
+            createdAt: serializeTimestamp(data.createdAt),
+          });
+        }
       });
     }
 

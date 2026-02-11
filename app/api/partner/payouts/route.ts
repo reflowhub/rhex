@@ -16,7 +16,6 @@ export async function GET(request: NextRequest) {
     const payoutsSnapshot = await adminDb
       .collection("payouts")
       .where("partnerId", "==", partner.id)
-      .orderBy("createdAt", "desc")
       .get();
 
     const payouts = payoutsSnapshot.docs.map((doc) => {
@@ -31,16 +30,25 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    // Sort by date descending
+    payouts.sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
+
     // Also compute pending balance from commission ledger
     let pendingBalance = 0;
     const ledgerSnapshot = await adminDb
       .collection("commissionLedger")
       .where("partnerId", "==", partner.id)
-      .where("status", "==", "pending")
       .get();
 
     ledgerSnapshot.docs.forEach((doc) => {
-      pendingBalance += doc.data().commissionAmount ?? 0;
+      const data = doc.data();
+      if (data.status === "pending") {
+        pendingBalance += data.commissionAmount ?? 0;
+      }
     });
 
     return NextResponse.json({

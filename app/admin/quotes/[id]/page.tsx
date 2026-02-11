@@ -239,8 +239,8 @@ export default function QuoteDetailPage() {
       body: JSON.stringify(body),
     });
     if (res.ok) {
-      const updated: Quote = await res.json();
-      setQuote(updated);
+      const updated = await res.json();
+      setQuote((prev) => (prev ? { ...prev, ...updated } : prev));
       return true;
     }
     return false;

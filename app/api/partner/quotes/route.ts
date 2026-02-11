@@ -26,16 +26,10 @@ export async function GET(request: NextRequest) {
 
     // Fetch single quotes
     if (typeFilter !== "bulkquote") {
-      let quoteQuery: FirebaseFirestore.Query = adminDb
+      const quoteSnapshot = await adminDb
         .collection("quotes")
-        .where("partnerId", "==", partner.id);
-
-      if (statusFilter) {
-        quoteQuery = quoteQuery.where("status", "==", statusFilter);
-      }
-
-      quoteQuery = quoteQuery.orderBy("createdAt", "desc");
-      const quoteSnapshot = await quoteQuery.get();
+        .where("partnerId", "==", partner.id)
+        .get();
 
       // Batch-fetch device info
       const deviceIdSet = new Set<string>();
@@ -43,6 +37,7 @@ export async function GET(request: NextRequest) {
 
       quoteSnapshot.docs.forEach((doc) => {
         const data = doc.data() as Record<string, unknown>;
+        if (statusFilter && data.status !== statusFilter) return;
         quoteDocs.push({ id: doc.id, data });
         if (data.deviceId && typeof data.deviceId === "string") {
           deviceIdSet.add(data.deviceId);
@@ -86,19 +81,14 @@ export async function GET(request: NextRequest) {
 
     // Fetch bulk quotes
     if (typeFilter !== "quote") {
-      let bulkQuery: FirebaseFirestore.Query = adminDb
+      const bulkSnapshot = await adminDb
         .collection("bulkQuotes")
-        .where("partnerId", "==", partner.id);
-
-      if (statusFilter) {
-        bulkQuery = bulkQuery.where("status", "==", statusFilter);
-      }
-
-      bulkQuery = bulkQuery.orderBy("createdAt", "desc");
-      const bulkSnapshot = await bulkQuery.get();
+        .where("partnerId", "==", partner.id)
+        .get();
 
       bulkSnapshot.docs.forEach((doc) => {
         const data = doc.data();
+        if (statusFilter && data.status !== statusFilter) return;
         items.push({
           id: doc.id,
           type: "bulkQuote",

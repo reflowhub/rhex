@@ -72,9 +72,12 @@ export async function GET(
     const quote = {
       id: quoteDoc.id,
       deviceId: data.deviceId,
-      deviceMake: device?.make ?? "",
-      deviceModel: device?.model ?? "",
-      deviceStorage: device?.storage ?? "",
+      device: {
+        id: data.deviceId ?? "",
+        make: (device?.make as string) ?? "",
+        model: (device?.model as string) ?? "",
+        storage: (device?.storage as string) ?? "",
+      },
       grade: data.grade,
       quotePriceNZD: data.quotePriceNZD,
       displayCurrency: data.displayCurrency,
