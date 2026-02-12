@@ -18,6 +18,7 @@ import {
   Settings,
   History,
   BarChart3,
+  Box,
   Menu,
   X,
   LogOut,
@@ -44,6 +45,11 @@ const sidebarLinks = [
     href: "/admin/bulk-quotes",
     label: "Bulk Quotes",
     icon: Package,
+  },
+  {
+    href: "/admin/inventory",
+    label: "Inventory",
+    icon: Box,
   },
   {
     href: "/admin/aliases",
