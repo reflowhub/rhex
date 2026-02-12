@@ -672,12 +672,7 @@ export default function PriceListDetailPage() {
                       />
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
-                      {price.numericId != null && (
-                        <div>{price.numericId}</div>
-                      )}
-                      <div className="truncate max-w-[120px]" title={price.deviceId}>
-                        {price.deviceId}
-                      </div>
+                      {price.numericId ?? price.deviceId}
                     </TableCell>
                     <TableCell className="font-medium">{price.make}</TableCell>
                     <TableCell>{price.model}</TableCell>
