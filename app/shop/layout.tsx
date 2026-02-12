@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { ShoppingBag } from "lucide-react";
 import { useCurrency } from "@/lib/currency-context";
 import { CartProvider, useCart } from "@/lib/cart-context";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -45,7 +46,7 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
               alt="rhex"
               width={28}
               height={28}
-              className="h-7 w-7"
+              className="h-7 w-7 dark:invert"
             />
           </Link>
 
@@ -94,6 +95,8 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
               </button>
             </div>
 
+            <ThemeToggle />
+
             {/* Cart icon */}
             <Link
               href="/shop/cart"
@@ -122,7 +125,7 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
               alt="rhex"
               width={20}
               height={20}
-              className="h-5 w-5 opacity-40"
+              className="h-5 w-5 opacity-40 dark:invert"
             />
             <span className="text-xs text-muted-foreground">
               Reflow Hub Pty Ltd
@@ -144,6 +147,25 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </footer>
+
+      {/* Floating WhatsApp button */}
+      <a
+        href="https://wa.me/61426908433"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Chat on WhatsApp"
+        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-110"
+        style={{ backgroundColor: "#25D366" }}
+      >
+        <svg
+          viewBox="0 0 32 32"
+          fill="white"
+          className="h-7 w-7"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path d="M16.004 2.003A13.934 13.934 0 0 0 2.05 15.998a13.86 13.86 0 0 0 1.888 7.003L2 30l7.2-1.895A13.94 13.94 0 0 0 16.004 30 13.998 13.998 0 0 0 16.004 2.003Zm0 25.57a11.53 11.53 0 0 1-5.903-1.618l-.424-.252-4.39 1.154 1.174-4.293-.276-.44a11.56 11.56 0 1 1 9.819 5.45Zm6.336-8.652c-.348-.174-2.058-1.016-2.377-1.132-.319-.116-.551-.174-.783.174-.232.348-.899 1.132-1.102 1.364-.203.232-.406.261-.754.087-.348-.174-1.469-.541-2.798-1.725-1.034-.921-1.732-2.059-1.935-2.407-.203-.348-.022-.536.152-.71.157-.156.348-.406.522-.609.174-.203.232-.348.348-.58.116-.232.058-.435-.029-.609-.087-.174-.783-1.886-1.073-2.583-.283-.678-.57-.586-.783-.597l-.667-.012a1.279 1.279 0 0 0-.928.435c-.319.348-1.218 1.19-1.218 2.902s1.247 3.367 1.421 3.599c.174.232 2.454 3.748 5.946 5.254.831.359 1.479.573 1.985.734.834.265 1.593.228 2.193.138.669-.1 2.058-.841 2.348-1.654.29-.812.29-1.509.203-1.654-.087-.145-.319-.232-.667-.406Z" />
+        </svg>
+      </a>
     </div>
   );
 }
