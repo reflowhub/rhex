@@ -55,25 +55,25 @@ body {
   }
 
   .shop-theme {
-    --background: 30 10% 95%;
-    --foreground: 0 0% 10%;
-    --card: 30 8% 91%;
-    --card-foreground: 0 0% 10%;
+    --background: 0 0% 96%;
+    --foreground: 0 0% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 10%;
-    --primary: 0 0% 17%;
+    --popover-foreground: 0 0% 9%;
+    --primary: 0 0% 15%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 30 8% 91%;
-    --secondary-foreground: 20 4% 40%;
-    --muted: 30 8% 91%;
-    --muted-foreground: 20 3% 59%;
-    --accent: 30 8% 91%;
-    --accent-foreground: 0 0% 10%;
-    --destructive: 8 57% 42%;
+    --secondary: 0 0% 94%;
+    --secondary-foreground: 0 0% 35%;
+    --muted: 0 0% 94%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 94%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 60% 42%;
     --destructive-foreground: 0 0% 98%;
-    --border: 30 6% 83%;
-    --input: 30 6% 83%;
-    --ring: 0 0% 17%;
+    --border: 0 0% 89%;
+    --input: 0 0% 89%;
+    --ring: 0 0% 15%;
   }
 
   .dark {
