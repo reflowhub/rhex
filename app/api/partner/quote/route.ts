@@ -6,6 +6,7 @@ import { PartnerSession } from "@/lib/partner-auth";
 import { calculatePartnerRate } from "@/lib/partner-pricing";
 import { readGrades } from "@/lib/grades";
 import { getActivePriceList, getCategoryGrades } from "@/lib/categories";
+import { parsePlatform } from "@/lib/parse-platform";
 
 // ---------------------------------------------------------------------------
 // POST /api/partner/quote — Create a single quote at partner rate (Mode B)
@@ -110,6 +111,13 @@ export async function POST(request: NextRequest) {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
+    // Capture client metadata from request headers
+    const userAgent = request.headers.get("user-agent") ?? null;
+    const geoCountry = request.headers.get("x-vercel-ip-country") ?? null;
+    const geoCity = request.headers.get("x-vercel-ip-city") ?? null;
+    const geoRegion = request.headers.get("x-vercel-ip-region") ?? null;
+    const platform = userAgent ? parsePlatform(userAgent) : null;
+
     const quoteData = {
       deviceId,
       grade: normalizedGrade,
@@ -123,6 +131,11 @@ export async function POST(request: NextRequest) {
       partnerRateDiscount: discount,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+      userAgent,
+      platform,
+      geoCountry,
+      geoCity,
+      geoRegion,
     };
 
     const quoteRef = await adminDb.collection("quotes").add(quoteData);

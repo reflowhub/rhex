@@ -4,6 +4,7 @@ import admin from "@/lib/firebase-admin";
 import { getTodayFXRate, convertPrice } from "@/lib/fx";
 import { readGrades } from "@/lib/grades";
 import { getActivePriceList, getCategoryGrades } from "@/lib/categories";
+import { parsePlatform } from "@/lib/parse-platform";
 
 // POST /api/quote — Create a new quote
 export async function POST(request: NextRequest) {
@@ -123,6 +124,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Capture client metadata from request headers
+    const userAgent = request.headers.get("user-agent") ?? null;
+    const geoCountry = request.headers.get("x-vercel-ip-country") ?? null;
+    const geoCity = request.headers.get("x-vercel-ip-city") ?? null;
+    const geoRegion = request.headers.get("x-vercel-ip-region") ?? null;
+    const platform = userAgent ? parsePlatform(userAgent) : null;
+
     // Create quote document
     const quoteData: Record<string, unknown> = {
       deviceId,
@@ -135,6 +143,11 @@ export async function POST(request: NextRequest) {
       status: "quoted",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+      userAgent,
+      platform,
+      geoCountry,
+      geoCity,
+      geoRegion,
     };
 
     if (partnerId) {

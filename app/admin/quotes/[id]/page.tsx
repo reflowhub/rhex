@@ -82,6 +82,10 @@ interface Quote {
   partnerMode?: string;
   inspectionGrade?: Grade;
   revisedPriceNZD?: number;
+  platform?: string;
+  geoCountry?: string;
+  geoCity?: string;
+  geoRegion?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -424,6 +428,29 @@ export default function QuoteDetailPage() {
                 <dt className="text-muted-foreground">Accepted</dt>
                 <dd>{formatDate(quote.acceptedAt)}</dd>
               </div>
+            )}
+
+            {/* Client metadata */}
+            {(quote.platform || quote.geoCountry) && (
+              <>
+                <div className="my-1 h-px bg-border" />
+                {quote.platform && (
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Platform</dt>
+                    <dd className="font-medium">{quote.platform}</dd>
+                  </div>
+                )}
+                {quote.geoCountry && (
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Location</dt>
+                    <dd className="font-medium">
+                      {[quote.geoCity, quote.geoRegion, quote.geoCountry]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </dd>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Inspection results */}
