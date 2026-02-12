@@ -41,6 +41,7 @@ import { escapeCsvField, downloadCsv } from "@/lib/csv-export";
 
 interface Device {
   id: string;
+  deviceId?: number | string;
   make: string;
   model: string;
   storage: string;
@@ -392,7 +393,7 @@ export default function DeviceLibraryPage() {
                 {paginatedDevices.map((device) => (
                   <TableRow key={device.id}>
                     <TableCell className="font-mono text-xs text-muted-foreground">
-                      {device.id}
+                      {device.deviceId ?? device.id}
                     </TableCell>
                     <TableCell className="font-medium">{device.make}</TableCell>
                     <TableCell>{device.model}</TableCell>
