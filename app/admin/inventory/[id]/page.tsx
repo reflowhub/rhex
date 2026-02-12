@@ -167,8 +167,8 @@ export default function InventoryDetailPage() {
   const [editData, setEditData] = useState({
     status: "",
     cosmeticGrade: "",
+    costAUD: "",
     sellPriceAUD: "",
-    sellPriceNZD: "",
     batteryHealth: "",
     location: "",
     listed: false,
@@ -202,8 +202,8 @@ export default function InventoryDetailPage() {
     setEditData({
       status: item.status,
       cosmeticGrade: item.cosmeticGrade,
+      costAUD: item.costAUD != null ? String(item.costAUD) : "",
       sellPriceAUD: String(item.sellPriceAUD),
-      sellPriceNZD: item.sellPriceNZD != null ? String(item.sellPriceNZD) : "",
       batteryHealth:
         item.batteryHealth != null ? String(item.batteryHealth) : "",
       location: item.location ?? "",
@@ -228,8 +228,8 @@ export default function InventoryDetailPage() {
       notes: editData.notes,
     };
 
-    if (editData.sellPriceNZD) {
-      body.sellPriceNZD = parseFloat(editData.sellPriceNZD);
+    if (editData.costAUD) {
+      body.costAUD = parseFloat(editData.costAUD);
     }
     if (editData.batteryHealth) {
       body.batteryHealth = parseInt(editData.batteryHealth, 10);
@@ -299,7 +299,7 @@ export default function InventoryDetailPage() {
 
   const badgeProps = statusBadgeProps(item.status);
   const cost = item.costAUD ?? item.costNZD ?? 0;
-  const costLabel = item.costAUD != null ? "Cost (AUD)" : "Cost (NZD)";
+  const costLabel = "Cost (AUD, ex. GST)";
   const margin = item.sellPriceAUD - cost;
   const marginPercent =
     cost > 0 ? ((margin / cost) * 100).toFixed(0) : "\u2014";
@@ -396,17 +396,9 @@ export default function InventoryDetailPage() {
               <dd className="font-medium">{formatPrice(cost)}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">Sell Price (AUD)</dt>
+              <dt className="text-muted-foreground">Sell Price (AUD, inc. GST)</dt>
               <dd className="font-medium">{formatPrice(item.sellPriceAUD)}</dd>
             </div>
-            {item.sellPriceNZD != null && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Sell Price (NZD)</dt>
-                <dd className="font-medium">
-                  {formatPrice(item.sellPriceNZD)}
-                </dd>
-              </div>
-            )}
             <div className="my-1 h-px bg-border" />
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Margin</dt>
@@ -636,9 +628,27 @@ export default function InventoryDetailPage() {
               </Select>
             </div>
 
+            {/* Cost AUD */}
+            <div className="grid gap-2">
+              <Label htmlFor="edit-cost-aud">Cost (AUD, ex. GST)</Label>
+              <Input
+                id="edit-cost-aud"
+                type="number"
+                min="0"
+                step="0.01"
+                value={editData.costAUD}
+                onChange={(e) =>
+                  setEditData((prev) => ({
+                    ...prev,
+                    costAUD: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
             {/* Sell Price AUD */}
             <div className="grid gap-2">
-              <Label htmlFor="edit-sell-price-aud">Sell Price (AUD)</Label>
+              <Label htmlFor="edit-sell-price-aud">Sell Price (AUD, inc. GST)</Label>
               <Input
                 id="edit-sell-price-aud"
                 type="number"
@@ -649,26 +659,6 @@ export default function InventoryDetailPage() {
                   setEditData((prev) => ({
                     ...prev,
                     sellPriceAUD: e.target.value,
-                  }))
-                }
-              />
-            </div>
-
-            {/* Sell Price NZD */}
-            <div className="grid gap-2">
-              <Label htmlFor="edit-sell-price">
-                Sell Price (NZD) — optional
-              </Label>
-              <Input
-                id="edit-sell-price"
-                type="number"
-                min="0"
-                step="0.01"
-                value={editData.sellPriceNZD}
-                onChange={(e) =>
-                  setEditData((prev) => ({
-                    ...prev,
-                    sellPriceNZD: e.target.value,
                   }))
                 }
               />

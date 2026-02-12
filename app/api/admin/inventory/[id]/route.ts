@@ -106,7 +106,7 @@ const ALLOWED_FIELDS = [
   "cosmeticGrade",
   "batteryHealth",
   "notes",
-  "sellPriceNZD",
+  "costAUD",
   "sellPriceAUD",
   "listed",
   "location",

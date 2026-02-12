@@ -373,8 +373,8 @@ export default function InventoryPage() {
                 <TableHead>Device</TableHead>
                 <TableHead>Serial</TableHead>
                 <TableHead>Grade</TableHead>
-                <TableHead className="text-right">Cost</TableHead>
-                <TableHead className="text-right">Sell Price</TableHead>
+                <TableHead className="text-right">Cost (ex. GST)</TableHead>
+                <TableHead className="text-right">Sell (inc. GST)</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Date</TableHead>
               </TableRow>
