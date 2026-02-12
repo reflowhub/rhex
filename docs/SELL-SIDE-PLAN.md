@@ -32,10 +32,17 @@ Status: paid           Assign sell price          Order fulfilled
   serial: string              // IMEI or serial number
 
   // Sourcing (links back to buy-side)
-  sourceType: "trade-in" | "bulk" | "direct-purchase"
+  sourceType: "trade-in" | "bulk" | "direct-purchase" | "manual" | "return"
   sourceQuoteId?: string      // → quotes/{id} or bulkQuotes/{id}
+  sourceName?: string         // supplier name (for direct purchases)
   acquiredAt: Timestamp
-  costNZD: number             // what you paid (the trade-in payout)
+  costNZD?: number            // what you paid — NZD (trade-in/bulk sources)
+  costAUD?: number            // what you paid — AUD (direct purchase/manual sources)
+
+  // Return tracking (populated when sourceType is "return")
+  returnReason?: string       // e.g. "Customer changed mind", "Faulty device"
+  returnedFromOrderId?: string // → orders/{id} the item was originally sold in
+  returnedAt?: Timestamp
 
   // Condition & grading
   cosmeticGrade: string       // "A" | "B" | "C" etc.
@@ -361,6 +368,41 @@ Transformed `/shop` from a bare product grid into a Braun-inspired landing page.
 
 **Files:** `app/shop/page.tsx` (rewritten), `app/shop/browse/page.tsx` (new), `app/shop/[id]/page.tsx`, `app/shop/cart/page.tsx`, `app/shop/checkout/page.tsx`, `app/shop/order/[id]/page.tsx` (link updates)
 
+### Phase 6 — Multiple Inventory Sources ✓ Complete
+
+Previously, the only way to add inventory was "Receive from Quote" (individual or bulk trade-in). Added three additional intake paths: direct purchase from suppliers, manual entry, and customer return processing.
+
+**New routes:**
+
+```text
+/admin/inventory/add/purchase    → Direct Purchase form (device search, supplier, cost AUD)
+/admin/inventory/add/manual      → Manual Entry form (device search, cost AUD, no supplier)
+/admin/inventory/add/return      → Process Return (find order → select sold item → return details)
+POST /api/admin/inventory/return → Reset sold item back to "received" with return metadata
+```
+
+**Implemented:**
+
+- "Add Inventory" dropdown menu replaces single "Receive from Quote" button — offers 4 options: Receive from Quote, Direct Purchase, Manual Entry, Process Return
+- `DeviceSearchSelect` component (`components/admin/device-search-select.tsx`) — reusable searchable device picker with debounced search against `/api/admin/devices`, auto-complete dropdown
+- `InventoryIntakeForm` component (`components/admin/inventory-intake-form.tsx`) — shared form used by both Direct Purchase and Manual Entry pages, accepts `sourceType` and `showSupplier` props
+- Direct Purchase page: device search, serial/IMEI, supplier name (required), cost AUD, grade, sell price AUD, battery health, location, notes → `POST /api/admin/inventory` with `sourceType: "direct-purchase"`
+- Manual Entry page: same as Direct Purchase minus supplier field → `sourceType: "manual"`
+- Process Return page: 3-step progressive disclosure (mirrors Receive from Quote pattern) — search orders → select sold item → fill return details (re-grade, reason, battery, location, notes) → `POST /api/admin/inventory/return`
+- Return endpoint validates item has `status: "sold"`, updates to `status: "received"`, sets `sourceType: "return"`, records `returnReason`, `returnedFromOrderId`, `returnedAt`
+- `POST /api/admin/inventory` now accepts `costAUD` (for direct purchase/manual) alongside existing `costNZD` (for trade-in/bulk). Either is valid.
+- `sourceName` field added to inventory schema for supplier tracking on direct purchases
+- Inventory detail page updated: human-readable source type labels (Trade-in, Bulk Quote, Direct Purchase, Manual Entry, Customer Return), supplier display, return info section (date, reason, linked order), cost shown in correct currency (AUD or NZD depending on source)
+- Inventory list page cost column shows `costAUD ?? costNZD`
+
+**Key decisions:**
+
+- Direct purchases and manual entries use AUD cost (business buys from AU/international suppliers); trade-in/bulk stays NZD (NZ-based trade-in channel)
+- Returns update the existing inventory doc rather than creating a new one (same serial number, preserves acquisition history)
+- `shadcn/ui` DropdownMenu component added (`components/ui/dropdown-menu.tsx`)
+
+**Files:** `app/admin/inventory/page.tsx` (modified), `app/admin/inventory/[id]/page.tsx` (modified), `app/api/admin/inventory/route.ts` (modified), `app/api/admin/inventory/[id]/route.ts` (modified), `app/admin/inventory/add/purchase/page.tsx` (new), `app/admin/inventory/add/manual/page.tsx` (new), `app/admin/inventory/add/return/page.tsx` (new), `app/api/admin/inventory/return/route.ts` (new), `components/admin/device-search-select.tsx` (new), `components/admin/inventory-intake-form.tsx` (new), `components/ui/dropdown-menu.tsx` (new)
+
 ---
 
 ## Design Aesthetic
@@ -375,20 +417,18 @@ Inspired by Dieter Rams and Braun — functional, restrained, quietly confident.
 
 ### Palette
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `background` | `#F5F3F0` | Page background — warm off-white, like brushed paper |
-| `surface` | `#EDEAE6` | Cards, panels — soft warm grey |
-| `surface-elevated` | `#FFFFFF` | Modals, popovers — clean white lift |
-| `border` | `#D9D5CF` | Subtle dividers — visible but quiet |
-| `text-primary` | `#1A1A1A` | Headings, prices — near-black |
-| `text-secondary` | `#6B6560` | Descriptions, metadata — warm mid-grey |
-| `text-tertiary` | `#9C9690` | Hints, placeholders — light warm grey |
-| `accent` | `#2C2C2C` | CTAs, selected states — charcoal (not blue) |
-| `accent-hover` | `#404040` | Button hover — slightly lifted charcoal |
-| `success` | `#3D7A4A` | In stock, confirmed — muted forest green |
-| `caution` | `#B8860B` | Low stock, reserved — dark goldenrod |
-| `error` | `#A63D2F` | Out of stock, failed — muted brick red |
+Pure neutral greys — no warmth, no hue. White background with light grey section bands.
+
+| Token | HSL | Hex | Usage |
+|-------|-----|-----|-------|
+| `background` | `0 0% 100%` | `#FFFFFF` | Page background — pure white |
+| `card` | `0 0% 100%` | `#FFFFFF` | Cards, panels — white (borders provide definition) |
+| `muted` | `0 0% 96%` | `#F5F5F5` | Section bands (trust signals, category, CTA) — light grey |
+| `border` | `0 0% 90%` | `#E6E6E6` | Dividers, card borders — subtle neutral grey |
+| `foreground` | `0 0% 9%` | `#171717` | Headings, prices — near-black |
+| `muted-foreground` | `0 0% 45%` | `#737373` | Descriptions, metadata — mid-grey |
+| `primary` | `0 0% 15%` | `#262626` | CTAs, selected states — charcoal |
+| `primary-foreground` | `0 0% 100%` | `#FFFFFF` | Button text on charcoal — white |
 
 ### Typography
 
