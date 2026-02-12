@@ -322,6 +322,12 @@ export default function Home() {
           </Link>
           <div className="flex items-center gap-3">
             <Link
+              href="/shop"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Shop
+            </Link>
+            <Link
               href="/business"
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >

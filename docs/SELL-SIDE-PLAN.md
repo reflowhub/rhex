@@ -230,33 +230,56 @@ Stripe Checkout is the fastest path — no need to build a payment form, PCI sco
 
 ## Build Phases
 
-### Phase 1 — Inventory + Admin
+### Phase 1 — Inventory + Admin ✓ Complete
 
 Receive devices, track status, set sell prices. No public storefront yet — just the internal system. This is valuable on its own for warehouse ops.
 
-- `inventory/` Firestore collection
-- `POST /api/admin/inventory` — create item (manual or from quote)
-- `POST /api/admin/inventory/receive` — receive from accepted quote (auto-fills device, cost, grade)
-- `GET /api/admin/inventory` — list with filters (status, category, source)
-- `PATCH /api/admin/inventory/[id]` — update grade, price, status, listing toggle
-- `/admin/inventory` — list page with status/category filters
-- `/admin/inventory/[id]` — detail page with edit form
-- `/admin/inventory/receive` — intake form (search quotes, scan IMEI)
+**Implemented:**
 
-### Phase 2 — Storefront + Checkout
+- `inventory/` Firestore collection with auto-incrementing `inventoryId` via `counters/inventory` transaction
+- `GET /api/admin/inventory?status=&category=&search=` — list with filters, batch device lookup for joins
+- `POST /api/admin/inventory` — create item with duplicate serial check
+- `GET /api/admin/inventory/[id]` — detail with joined device + source quote
+- `PATCH /api/admin/inventory/[id]` — update grade, price, status, listing toggle, battery, location, notes
+- `POST /api/admin/inventory/receive` — receive from individual or bulk quote (auto-fills device, cost, grade)
+- `/admin/inventory` — list page with category tabs, status pill filters, debounced search, pagination (25/page)
+- `/admin/inventory/[id]` — detail page with device info, financials (margin calc), source card, condition card, edit dialog
+- `/admin/inventory/receive` — progressive disclosure: find quote → summary → intake form
+- Admin sidebar nav link (Box icon, after Bulk Quotes)
 
-Public `/shop` pages, Stripe Checkout integration, order creation. Customers can browse and buy.
+**Not yet implemented (deferred to Phase 2+):**
 
-- `GET /api/shop/products` — listed inventory (paginated, filterable by category/make/model/grade)
-- `GET /api/shop/products/[id]` — single product detail
-- `POST /api/shop/checkout` — create Stripe Checkout Session, reserve items
-- `POST /api/shop/webhook` — Stripe webhook handler (create order, mark sold)
-- `/shop` — product listing page with filters
-- `/shop/[id]` — product detail page
-- `/shop/cart` — cart page (localStorage-based)
-- `/shop/checkout` — initiate Stripe Checkout
-- `/shop/order/[id]` — order confirmation page
-- `orders/` Firestore collection
+- Image upload UI (placeholder card shown on detail page)
+- 360° spin video capture/upload
+
+### Phase 2 — Storefront + Checkout ✓ Complete
+
+Public `/shop` pages with Dieter Rams aesthetic, Stripe Checkout (stubbed), order creation. Customers can browse listed inventory and buy.
+
+**Implemented:**
+
+- `.shop-theme` CSS variables in `globals.css` — warm grey Rams palette scoped to `/shop` via class override
+- `lib/cart-context.tsx` — React Context + localStorage cart (unique physical units, no quantity)
+- `GET /api/shop/products` — public product listing (listed inventory, paginated, filterable by category/make/grade)
+- `GET /api/shop/products/[id]` — public product detail (404 if not listed)
+- `POST /api/shop/checkout` — creates order + reserves inventory via Firestore transaction; stub mode marks paid immediately, Stripe mode creates Checkout Session when `STRIPE_SECRET_KEY` is set
+- `POST /api/shop/webhook` — Stripe webhook handler (returns 501 when not configured)
+- `GET /api/shop/orders/[id]` — public order lookup with email verification
+- `/shop` layout with Inter font, Rams header/footer, cart icon with count badge
+- `/shop` — product grid (3-col desktop, 2-col tablet, 1-col mobile) with category tabs, pagination (24/page)
+- `/shop/[id]` — two-column detail: image/video area + grade, battery health bar, price, Add to Cart
+- `/shop/cart` — cart with item availability validation on load, summary, checkout button
+- `/shop/checkout` — customer + shipping form with order summary sidebar
+- `/shop/order/[id]` — order confirmation with items, address, totals
+- "Shop" link added to homepage header nav
+- `orders/` Firestore collection with auto-incrementing `orderNumber` via `counters/orders` (starts at 1001)
+- `stripe` package installed, Firebase Storage image domain in `next.config.ts`
+
+**Not yet implemented (deferred to Phase 3+):**
+
+- Image upload UI (product images show placeholder)
+- Real Stripe Checkout (add `STRIPE_SECRET_KEY` to .env to activate)
+- Reserved-but-unpaid item release (checkout.session.expired webhook + TTL cron)
 
 ### Phase 3 — Order Management + Fulfillment
 
