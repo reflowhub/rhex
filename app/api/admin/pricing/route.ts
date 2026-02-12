@@ -8,6 +8,7 @@ import {
   getCategoryGrades,
   invalidateCategoriesCache,
 } from "@/lib/categories";
+import { logPriceAudit, createPriceSnapshot } from "@/lib/audit-log";
 
 // ---------------------------------------------------------------------------
 // CSV Parsing (dynamic grade columns)
@@ -247,12 +248,21 @@ export async function POST(request: NextRequest) {
 
     let priceListRef: FirebaseFirestore.DocumentReference;
     let isNewPriceList = false;
+    let snapshotId = "";
 
     if (existingPriceListId) {
       // Overwrite existing price list
       priceListRef = adminDb.collection("priceLists").doc(existingPriceListId);
       const existingDoc = await priceListRef.get();
       if (existingDoc.exists) {
+        // Snapshot current prices before overwrite
+        snapshotId = await createPriceSnapshot({
+          priceListId: existingPriceListId,
+          category,
+          adminUid: adminUser.uid,
+          adminEmail: adminUser.email,
+        });
+
         // Delete all existing prices in batches
         const existingPrices = await priceListRef.collection("prices").get();
         const BATCH_DEL = 200;
@@ -351,6 +361,23 @@ export async function POST(request: NextRequest) {
     // Invalidate caches since pricing import may also create new devices
     invalidateDeviceCache();
     invalidatePriceCache();
+
+    // Audit log
+    const isOverwrite = !isNewPriceList;
+    logPriceAudit({
+      adminUid: adminUser.uid,
+      adminEmail: adminUser.email,
+      action: "csv_upload",
+      priceListId: priceListRef.id,
+      category,
+      summary: `${isOverwrite ? "Replaced" : "Created"} ${name.trim()} (${rows.length} devices)`,
+      details: {
+        priceListName: name.trim(),
+        deviceCount: rows.length,
+        snapshotId: snapshotId || null,
+        isOverwrite,
+      },
+    });
 
     return NextResponse.json({
       id: priceListRef.id,

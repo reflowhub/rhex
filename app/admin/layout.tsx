@@ -16,6 +16,7 @@ import {
   Users,
   ContactRound,
   Settings,
+  History,
   Menu,
   X,
   LogOut,
@@ -62,6 +63,11 @@ const sidebarLinks = [
     href: "/admin/settings",
     label: "Settings",
     icon: Settings,
+  },
+  {
+    href: "/admin/audit-log",
+    label: "Audit Log",
+    icon: History,
   },
 ];
 

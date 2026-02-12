@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getCategoryGrades } from "@/lib/categories";
+import { logPriceAudit } from "@/lib/audit-log";
 
 // ---------------------------------------------------------------------------
 // PATCH /api/admin/pricing/[id]/prices/[deviceId] — Update grades for a device
@@ -82,6 +83,37 @@ export async function PATCH(
     const mergedGrades = { ...existingGrades, ...sanitized };
 
     await priceRef.set({ grades: mergedGrades }, { merge: true });
+
+    // Audit log — record per-grade changes
+    const changes: { grade: string; old: number; new: number }[] = [];
+    for (const key of Object.keys(sanitized)) {
+      const oldVal = existingGrades[key] ?? 0;
+      const newVal = mergedGrades[key] ?? 0;
+      if (oldVal !== newVal) {
+        changes.push({ grade: key, old: oldVal, new: newVal });
+      }
+    }
+    if (changes.length > 0) {
+      // Look up device name for the summary
+      const deviceDoc = await adminDb.doc(`devices/${deviceId}`).get();
+      const deviceData = deviceDoc.data();
+      const deviceName = deviceData
+        ? `${deviceData.make} ${deviceData.model} ${deviceData.storage}`
+        : deviceId;
+      const changeSummary = changes
+        .map((c) => `${c.grade}: $${c.old}→$${c.new}`)
+        .join(", ");
+
+      logPriceAudit({
+        adminUid: adminUser.uid,
+        adminEmail: adminUser.email,
+        action: "inline_edit",
+        priceListId: id,
+        category,
+        summary: `${deviceName} — ${changeSummary}`,
+        details: { deviceId, deviceName, changes },
+      });
+    }
 
     return NextResponse.json({ deviceId, grades: mergedGrades });
   } catch (error) {

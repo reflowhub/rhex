@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { invalidateDeviceCache } from "@/lib/device-cache";
 import { findDuplicateDevice } from "@/lib/device-uniqueness";
 import { getActivePriceList } from "@/lib/categories";
+import { logPriceAudit } from "@/lib/audit-log";
 
 // GET /api/admin/devices/[id] — Get a single device by document ID
 export async function GET(
@@ -124,6 +125,7 @@ export async function DELETE(
     invalidateDeviceCache();
 
     // Also delete the corresponding price entry if it exists
+    let priceDeleted = false;
     if (activePriceListId) {
       const priceRef = adminDb.doc(
         `priceLists/${activePriceListId}/prices/${id}`
@@ -131,8 +133,25 @@ export async function DELETE(
       const priceDoc = await priceRef.get();
       if (priceDoc.exists) {
         await priceRef.delete();
+        priceDeleted = true;
       }
     }
+
+    // Audit log
+    const deviceName = `${deviceData.make} ${deviceData.model} ${deviceData.storage}`;
+    logPriceAudit({
+      adminUid: adminUser.uid,
+      adminEmail: adminUser.email,
+      action: "device_delete",
+      priceListId: activePriceListId,
+      category: deviceCategory,
+      summary: `Deleted ${deviceName}`,
+      details: {
+        deviceId: id,
+        deviceName,
+        priceDeleted,
+      },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

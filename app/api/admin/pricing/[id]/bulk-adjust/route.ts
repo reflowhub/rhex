@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { loadPricingSettings, roundPrice } from "@/lib/pricing-settings";
 import { readGrades } from "@/lib/grades";
 import { getCategoryGrades } from "@/lib/categories";
+import { logPriceAudit } from "@/lib/audit-log";
 
 // ---------------------------------------------------------------------------
 // POST /api/admin/pricing/[id]/bulk-adjust — Bulk adjust prices
@@ -119,6 +120,33 @@ export async function POST(
       }
       await batch.commit();
     }
+
+    // Audit log
+    let summary = "";
+    if (operation === "adjust_percent") {
+      const sign = value! >= 0 ? "+" : "";
+      summary = `Adjusted ${updates.length} devices by ${sign}${value}%`;
+    } else if (operation === "adjust_dollar") {
+      const sign = value! >= 0 ? "+$" : "-$";
+      summary = `Adjusted ${updates.length} devices by ${sign}${Math.abs(value!)}`;
+    } else if (operation === "set_ratios") {
+      summary = `Set grade ratios for ${updates.length} devices`;
+    }
+
+    logPriceAudit({
+      adminUid: adminUser.uid,
+      adminEmail: adminUser.email,
+      action: "bulk_adjust",
+      priceListId: id,
+      category,
+      summary,
+      details: {
+        operation,
+        value: value ?? null,
+        deviceCount: updates.length,
+        deviceIds,
+      },
+    });
 
     return NextResponse.json({
       updated: updates.length,
