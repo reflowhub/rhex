@@ -316,11 +316,11 @@ export default function Home() {
               height={28}
               className="h-7 w-7"
             />
-            <span className="text-xl font-bold tracking-tight">
+            <span className="text-xl font-bold tracking-tight whitespace-nowrap">
               Trade-In
             </span>
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link
               href="/shop"
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -329,7 +329,7 @@ export default function Home() {
             </Link>
             <Link
               href="/business"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              className="hidden sm:inline text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Business
             </Link>
