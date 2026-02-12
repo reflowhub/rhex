@@ -32,7 +32,6 @@ import {
   RotateCcw,
   Package,
 } from "lucide-react";
-import { useFX } from "@/lib/use-fx";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -225,10 +224,12 @@ export default function InventoryPage() {
     });
   };
 
-  const { formatPrice: fxFormatPrice } = useFX();
-
   const formatPrice = (amount: number | null | undefined) => {
-    return fxFormatPrice(amount, "AUD");
+    if (amount == null) return "\u2014";
+    return new Intl.NumberFormat("en-AU", {
+      style: "currency",
+      currency: "AUD",
+    }).format(amount);
   };
 
   const formatStatus = (status: string) => {

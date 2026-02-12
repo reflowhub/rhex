@@ -33,7 +33,6 @@ import {
   Pencil,
   ImageIcon,
 } from "lucide-react";
-import { useFX } from "@/lib/use-fx";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -157,7 +156,6 @@ function formatStatus(status: string) {
 export default function InventoryDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { formatPrice: fxFormatPrice } = useFX();
 
   // ---- data state ---------------------------------------------------------
   const [item, setItem] = useState<InventoryItem | null>(null);
@@ -261,7 +259,11 @@ export default function InventoryDetailPage() {
 
   // ---- helpers ------------------------------------------------------------
   const formatPrice = (amount: number | null | undefined) => {
-    return fxFormatPrice(amount, "AUD");
+    if (amount == null) return "\u2014";
+    return new Intl.NumberFormat("en-AU", {
+      style: "currency",
+      currency: "AUD",
+    }).format(amount);
   };
 
   // ---- render: loading ----------------------------------------------------
