@@ -120,7 +120,7 @@ export default function OrderConfirmationPage() {
 
   // ---- render -------------------------------------------------------------
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-2xl px-4 py-8">
       {/* Success header */}
       <div className="text-center">
         <CheckCircle2 className="mx-auto h-12 w-12 text-foreground" />

@@ -116,7 +116,7 @@ export default function ShopHomePage() {
   };
 
   return (
-    <div className="-mx-4 -mt-8">
+    <div>
       {/* ================================================================= */}
       {/* Hero                                                              */}
       {/* ================================================================= */}
@@ -152,7 +152,7 @@ export default function ShopHomePage() {
       {/* ================================================================= */}
       {/* Trust Signals                                                     */}
       {/* ================================================================= */}
-      <section className="border-y border-border bg-muted/60 px-4 py-16">
+      <section className="border-y border-border bg-muted px-4 py-16">
         <div className="mx-auto grid max-w-6xl gap-12 sm:grid-cols-3">
           {[
             {
@@ -264,7 +264,7 @@ export default function ShopHomePage() {
       {/* Browse by Category                                                */}
       {/* ================================================================= */}
       {categories.length > 0 && (
-        <section className="border-t border-border bg-muted/60 px-4 py-20 sm:py-28">
+        <section className="border-t border-border bg-muted px-4 py-20 sm:py-28">
           <div className="mx-auto max-w-6xl">
             <h2 className="text-2xl font-medium tracking-tight text-foreground sm:text-3xl">
               Browse by Category
@@ -364,7 +364,7 @@ export default function ShopHomePage() {
       {/* ================================================================= */}
       {/* Bottom CTA                                                        */}
       {/* ================================================================= */}
-      <section className="border-t border-border bg-muted/60 px-4 py-20 sm:py-24">
+      <section className="border-t border-border bg-muted px-4 py-20 sm:py-24">
         <div className="mx-auto max-w-6xl text-center">
           <h2 className="text-2xl font-medium tracking-tight text-foreground sm:text-3xl">
             Ready to find your next device?

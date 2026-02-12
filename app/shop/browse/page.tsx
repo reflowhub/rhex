@@ -129,7 +129,7 @@ function BrowsePageInner() {
 
   // ---- render -------------------------------------------------------------
   return (
-    <div>
+    <div className="mx-auto max-w-6xl px-4 py-8">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-medium tracking-tight">Browse Devices</h1>

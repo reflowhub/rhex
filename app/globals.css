@@ -55,7 +55,7 @@ body {
   }
 
   .shop-theme {
-    --background: 0 0% 96%;
+    --background: 0 0% 100%;
     --foreground: 0 0% 9%;
     --card: 0 0% 100%;
     --card-foreground: 0 0% 9%;
@@ -63,16 +63,16 @@ body {
     --popover-foreground: 0 0% 9%;
     --primary: 0 0% 15%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 94%;
+    --secondary: 0 0% 96%;
     --secondary-foreground: 0 0% 35%;
-    --muted: 0 0% 94%;
+    --muted: 0 0% 96%;
     --muted-foreground: 0 0% 45%;
-    --accent: 0 0% 94%;
+    --accent: 0 0% 96%;
     --accent-foreground: 0 0% 9%;
     --destructive: 0 60% 42%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89%;
-    --input: 0 0% 89%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
     --ring: 0 0% 15%;
   }
 
