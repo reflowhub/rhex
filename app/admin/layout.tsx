@@ -19,6 +19,7 @@ import {
   History,
   BarChart3,
   Box,
+  ShoppingCart,
   Menu,
   X,
   LogOut,
@@ -50,6 +51,11 @@ const sidebarLinks = [
     href: "/admin/inventory",
     label: "Inventory",
     icon: Box,
+  },
+  {
+    href: "/admin/orders",
+    label: "Orders",
+    icon: ShoppingCart,
   },
   {
     href: "/admin/aliases",

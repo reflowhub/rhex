@@ -281,18 +281,29 @@ Public `/shop` pages with Dieter Rams aesthetic, Stripe Checkout (stubbed), orde
 - Real Stripe Checkout (add `STRIPE_SECRET_KEY` to .env to activate)
 - Reserved-but-unpaid item release (checkout.session.expired webhook + TTL cron)
 
-### Phase 3 — Order Management + Fulfillment
+### Phase 3 — Order Management + Fulfillment ✓ Complete
 
-Admin order management, shipping integration, email notifications.
+Admin order management with status workflow and manual tracking entry.
 
-- `GET /api/admin/orders` — list orders with status filters
-- `GET /api/admin/orders/[id]` — order detail
-- `PATCH /api/admin/orders/[id]` — update status, add tracking number
-- `POST /api/admin/orders/[id]/refund` — process Stripe refund
-- `/admin/orders` — order list page
-- `/admin/orders/[id]` — order detail with fulfillment actions
+**Implemented:**
+
+- `GET /api/admin/orders?status=&search=` — list orders with status filter + search (order #, name, email)
+- `GET /api/admin/orders/[id]` — full order detail with all fields, null-defaults for tracking fields
+- `PATCH /api/admin/orders/[id]` — status transitions with validation (`paid → processing → shipped → delivered`), cancellation with batch write to re-list inventory items
+- Status transition validation: `VALID_TRANSITIONS` map enforces allowed state changes, rejects updates on `pending` orders
+- Shipping: `processing → shipped` requires `trackingNumber` + `trackingCarrier` (NZ Post, CourierPost, AusPost, Other)
+- Cancellation: batch write atomically sets order to `cancelled` and re-lists all inventory items (`status: "listed"`, `listed: true`)
+- `/admin/orders` — order list page with status pill filters (paid, processing, shipped, delivered, cancelled), 300ms debounced search, paginated table (25/page), row click to detail
+- `/admin/orders/[id]` — two-column detail page: customer info (mailto link), items (linked to `/admin/inventory/[id]`), shipping address, order summary (subtotal/shipping/total, payment status, Stripe IDs), fulfillment card with contextual actions per status
+- Fulfillment card: "Mark as Processing" → tracking number input + carrier select + "Mark as Shipped" → "Mark as Delivered"
+- Cancel confirmation dialog prevents accidental cancellation
+- Admin sidebar "Orders" link with ShoppingCart icon (after Inventory)
+
+**Not yet implemented (deferred):**
+
 - Email notifications (order confirmation, shipped with tracking, delivered)
 - Shipping label integration (EasyPost, Shippo, or carrier API)
+- Refund endpoint (`POST /api/admin/orders/[id]/refund`) — deferred until Stripe goes live
 
 ### Phase 4 — Margin & Analytics
 
