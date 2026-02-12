@@ -20,6 +20,7 @@ import {
   BarChart3,
   Box,
   ShoppingCart,
+  Gift,
   Menu,
   X,
   LogOut,
@@ -56,6 +57,11 @@ const sidebarLinks = [
     href: "/admin/orders",
     label: "Orders",
     icon: ShoppingCart,
+  },
+  {
+    href: "/admin/upsells",
+    label: "Upsells",
+    icon: Gift,
   },
   {
     href: "/admin/aliases",

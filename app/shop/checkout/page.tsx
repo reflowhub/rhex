@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Smartphone } from "lucide-react";
+import { ArrowLeft, Loader2, Smartphone, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/select";
 import { useCart } from "@/lib/cart-context";
 import { useCurrency } from "@/lib/currency-context";
+import { calculateGST } from "@/lib/gst";
+import { calculateShipping, type ShippingConfig } from "@/lib/shipping";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -23,7 +25,7 @@ import { useCurrency } from "@/lib/currency-context";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, clearCart } = useCart();
+  const { items, upsellItems, clearCart } = useCart();
   const { currency, convertFromAUD } = useCurrency();
 
   // ---- form state ---------------------------------------------------------
@@ -35,10 +37,19 @@ export default function CheckoutPage() {
   const [city, setCity] = useState("");
   const [region, setRegion] = useState("");
   const [postcode, setPostcode] = useState("");
-  const [country, setCountry] = useState("NZ");
+  const [country, setCountry] = useState("AU");
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [shippingConfig, setShippingConfig] = useState<ShippingConfig | null>(null);
+
+  // ---- fetch shipping config -----------------------------------------------
+  useEffect(() => {
+    fetch("/api/shop/shipping")
+      .then((res) => res.json())
+      .then((data) => setShippingConfig(data))
+      .catch(() => {});
+  }, []);
 
   // ---- helpers ------------------------------------------------------------
   const formatPrice = (priceAUD: number) => {
@@ -52,7 +63,17 @@ export default function CheckoutPage() {
     }).format(displayPrice);
   };
 
-  const subtotalAUD = items.reduce((sum, item) => sum + item.sellPriceAUD, 0);
+  const inventorySubtotalAUD = items.reduce((sum, item) => sum + item.sellPriceAUD, 0);
+  const upsellSubtotalAUD = upsellItems.reduce((sum, u) => sum + u.priceAUD * u.quantity, 0);
+  const subtotalAUD = inventorySubtotalAUD + upsellSubtotalAUD;
+  const shippingAUD = shippingConfig
+    ? calculateShipping(
+        items.map((i) => i.category ?? "Phone"),
+        subtotalAUD,
+        shippingConfig
+      )
+    : 0;
+  const totalAUD = subtotalAUD + shippingAUD;
 
   const isFormValid =
     name.trim() &&
@@ -80,6 +101,10 @@ export default function CheckoutPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           items: items.map((item) => ({ inventoryId: item.inventoryId })),
+          upsellItems: upsellItems.map((u) => ({
+            upsellId: u.upsellId,
+            quantity: u.quantity,
+          })),
           customerName: name.trim(),
           customerEmail: email.trim(),
           customerPhone: phone.trim() || null,
@@ -117,7 +142,7 @@ export default function CheckoutPage() {
   };
 
   // ---- empty cart redirect ------------------------------------------------
-  if (items.length === 0 && !submitting) {
+  if (items.length === 0 && upsellItems.length === 0 && !submitting) {
     return (
       <div className="mx-auto max-w-3xl py-20 text-center">
         <p className="text-sm text-muted-foreground">Your cart is empty.</p>
@@ -308,6 +333,41 @@ export default function CheckoutPage() {
                 })}
               </div>
 
+              {/* Upsell items */}
+              {upsellItems.length > 0 && (
+                <div className="mt-2 divide-y divide-border border-t border-border">
+                  {upsellItems.map((item) => (
+                    <div
+                      key={item.upsellId}
+                      className="flex items-center gap-3 py-3"
+                    >
+                      <div className="h-8 w-8 flex-shrink-0 overflow-hidden rounded border border-border bg-background">
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="h-full w-full object-contain"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-muted-foreground">
+                            <Package className="h-3 w-3" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{item.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Qty: {item.quantity}
+                        </p>
+                      </div>
+                      <p className="text-sm font-medium tabular-nums">
+                        {formatPrice(item.priceAUD * item.quantity)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="mt-4 border-t border-border pt-4 space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
@@ -317,15 +377,20 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Shipping</span>
-                  <span className="text-muted-foreground">Free</span>
+                  <span className="tabular-nums text-muted-foreground">
+                    {shippingAUD > 0 ? formatPrice(shippingAUD) : "Free"}
+                  </span>
                 </div>
                 <div className="border-t border-border pt-2">
                   <div className="flex items-center justify-between">
                     <span className="font-medium">Total</span>
                     <span className="text-lg font-medium tabular-nums">
-                      {formatPrice(subtotalAUD)}
+                      {formatPrice(totalAUD)}
                     </span>
                   </div>
+                  <p className="mt-1 text-xs text-muted-foreground text-right">
+                    Includes {formatPrice(calculateGST(totalAUD))} GST
+                  </p>
                 </div>
               </div>
             </div>

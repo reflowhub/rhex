@@ -3,10 +3,12 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Smartphone, X, ShoppingBag, ArrowRight } from "lucide-react";
+import { Smartphone, X, ShoppingBag, ArrowRight, Package, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart-context";
 import { useCurrency } from "@/lib/currency-context";
+import { calculateGST } from "@/lib/gst";
+import { calculateShipping, type ShippingConfig } from "@/lib/shipping";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -14,10 +16,19 @@ import { useCurrency } from "@/lib/currency-context";
 
 export default function CartPage() {
   const router = useRouter();
-  const { items, removeItem } = useCart();
+  const { items, removeItem, upsellItems, removeUpsellItem, updateUpsellQuantity } = useCart();
   const { currency, convertFromAUD } = useCurrency();
   const [validating, setValidating] = useState(true);
   const [removedNames, setRemovedNames] = useState<string[]>([]);
+  const [shippingConfig, setShippingConfig] = useState<ShippingConfig | null>(null);
+
+  // ---- fetch shipping config -----------------------------------------------
+  useEffect(() => {
+    fetch("/api/shop/shipping")
+      .then((res) => res.json())
+      .then((data) => setShippingConfig(data))
+      .catch(() => {});
+  }, []);
 
   // ---- validate cart items on mount ---------------------------------------
   useEffect(() => {
@@ -61,7 +72,17 @@ export default function CartPage() {
     }).format(displayPrice);
   };
 
-  const subtotalAUD = items.reduce((sum, item) => sum + item.sellPriceAUD, 0);
+  const inventorySubtotalAUD = items.reduce((sum, item) => sum + item.sellPriceAUD, 0);
+  const upsellSubtotalAUD = upsellItems.reduce((sum, u) => sum + u.priceAUD * u.quantity, 0);
+  const subtotalAUD = inventorySubtotalAUD + upsellSubtotalAUD;
+  const shippingAUD = shippingConfig
+    ? calculateShipping(
+        items.map((i) => i.category ?? "Phone"),
+        subtotalAUD,
+        shippingConfig
+      )
+    : 0;
+  const totalAUD = subtotalAUD + shippingAUD;
 
   // ---- render -------------------------------------------------------------
   return (
@@ -82,7 +103,7 @@ export default function CartPage() {
         <div className="flex items-center justify-center py-20">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
         </div>
-      ) : items.length === 0 ? (
+      ) : items.length === 0 && upsellItems.length === 0 ? (
         <div className="py-20 text-center">
           <ShoppingBag className="mx-auto h-10 w-10 text-muted-foreground" />
           <p className="mt-4 text-sm text-muted-foreground">
@@ -154,6 +175,71 @@ export default function CartPage() {
             })}
           </div>
 
+          {/* Upsell items */}
+          {upsellItems.length > 0 && (
+            <div className="mt-4">
+              <h2 className="text-sm font-medium text-muted-foreground mb-2">Add-ons</h2>
+              <div className="divide-y divide-border rounded-lg border border-border bg-card">
+                {upsellItems.map((item) => (
+                  <div
+                    key={item.upsellId}
+                    className="flex items-center gap-4 p-4"
+                  >
+                    <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded border border-border bg-background">
+                      {item.image ? (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="h-full w-full object-contain"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-muted-foreground">
+                          <Package className="h-5 w-5" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-foreground">{item.name}</p>
+                      <p className="text-xs text-muted-foreground tabular-nums">
+                        {formatPrice(item.priceAUD)} each
+                      </p>
+                    </div>
+                    {/* Quantity controls */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => updateUpsellQuantity(item.upsellId, item.quantity - 1)}
+                        className="flex h-7 w-7 items-center justify-center rounded border border-border text-muted-foreground hover:text-foreground transition-colors"
+                        aria-label="Decrease quantity"
+                      >
+                        <Minus className="h-3 w-3" />
+                      </button>
+                      <span className="w-6 text-center text-sm tabular-nums font-medium">
+                        {item.quantity}
+                      </span>
+                      <button
+                        onClick={() => updateUpsellQuantity(item.upsellId, item.quantity + 1)}
+                        className="flex h-7 w-7 items-center justify-center rounded border border-border text-muted-foreground hover:text-foreground transition-colors"
+                        aria-label="Increase quantity"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <p className="font-medium tabular-nums text-foreground w-16 text-right">
+                      {formatPrice(item.priceAUD * item.quantity)}
+                    </p>
+                    <button
+                      onClick={() => removeUpsellItem(item.upsellId)}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label="Remove item"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Summary */}
           <div className="mt-6 rounded-lg border border-border bg-card p-4">
             <div className="flex items-center justify-between">
@@ -164,15 +250,25 @@ export default function CartPage() {
             </div>
             <div className="mt-2 flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Shipping</span>
-              <span className="text-sm text-muted-foreground">Free</span>
+              <span className="text-sm tabular-nums text-muted-foreground">
+                {shippingAUD > 0 ? formatPrice(shippingAUD) : "Free"}
+              </span>
             </div>
+            {shippingConfig && shippingConfig.freeThreshold > 0 && shippingAUD > 0 && (
+              <p className="mt-1 text-xs text-muted-foreground text-right">
+                Free shipping on orders over {formatPrice(shippingConfig.freeThreshold)}
+              </p>
+            )}
             <div className="mt-3 border-t border-border pt-3">
               <div className="flex items-center justify-between">
                 <span className="font-medium">Total</span>
                 <span className="text-lg font-medium tabular-nums">
-                  {formatPrice(subtotalAUD)}
+                  {formatPrice(totalAUD)}
                 </span>
               </div>
+              <p className="mt-1 text-xs text-muted-foreground text-right">
+                Includes {formatPrice(calculateGST(totalAUD))} GST
+              </p>
             </div>
           </div>
 

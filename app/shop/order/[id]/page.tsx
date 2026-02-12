@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle2, Smartphone } from "lucide-react";
+import { CheckCircle2, Smartphone, Package } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCurrency } from "@/lib/currency-context";
@@ -19,6 +19,13 @@ interface OrderItem {
   priceAUD: number;
 }
 
+interface UpsellOrderItem {
+  upsellId: string;
+  name: string;
+  priceAUD: number;
+  quantity: number;
+}
+
 interface OrderDetail {
   id: string;
   orderNumber: number;
@@ -27,9 +34,11 @@ interface OrderDetail {
   status: string;
   paymentStatus: string;
   items: OrderItem[];
+  upsellItems: UpsellOrderItem[];
   subtotalAUD: number;
   shippingAUD: number;
   totalAUD: number;
+  gstAUD: number;
   displayCurrency: string;
   shippingAddress: {
     line1: string;
@@ -153,6 +162,24 @@ export default function OrderConfirmationPage() {
               </p>
             </div>
           ))}
+          {/* Upsell items */}
+          {order.upsellItems?.length > 0 &&
+            order.upsellItems.map((item, idx) => (
+              <div key={`upsell-${idx}`} className="flex items-center gap-3 p-4">
+                <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded border border-border bg-background">
+                  <div className="flex h-full items-center justify-center text-muted-foreground">
+                    <Package className="h-4 w-4" />
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{item.name}</p>
+                  <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
+                </div>
+                <p className="text-sm font-medium tabular-nums">
+                  {formatPrice(item.priceAUD * item.quantity)}
+                </p>
+              </div>
+            ))}
         </div>
 
         {/* Totals */}
@@ -176,6 +203,9 @@ export default function OrderConfirmationPage() {
                 {formatPrice(order.totalAUD)}
               </span>
             </div>
+            <p className="mt-1 text-xs text-muted-foreground text-right">
+              Includes {formatPrice(order.gstAUD)} GST
+            </p>
           </div>
         </div>
       </div>

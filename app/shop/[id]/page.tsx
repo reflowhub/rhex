@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Smartphone, Check, ShoppingBag } from "lucide-react";
+import { ArrowLeft, Smartphone, Check, ShoppingBag, Package, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useCurrency } from "@/lib/currency-context";
@@ -47,12 +47,15 @@ const GRADE_DESCRIPTIONS: Record<string, string> = {
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { currency, convertFromAUD } = useCurrency();
-  const { addItem, isInCart } = useCart();
+  const { addItem, isInCart, addUpsellItem } = useCart();
 
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
+  const [upsells, setUpsells] = useState<
+    { id: string; name: string; description: string; priceAUD: number; image: string | null }[]
+  >([]);
 
   const alreadyInCart = product ? isInCart(product.id) : false;
 
@@ -71,6 +74,15 @@ export default function ProductDetailPage() {
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // ---- fetch upsells for this product's category ---------------------------
+  useEffect(() => {
+    if (!product) return;
+    fetch(`/api/shop/upsells?category=${encodeURIComponent(product.category)}`)
+      .then((res) => res.json())
+      .then((data) => setUpsells(data))
+      .catch(() => {});
+  }, [product]);
 
   // ---- helpers ------------------------------------------------------------
   const formatPrice = (priceAUD: number) => {
@@ -91,6 +103,7 @@ export default function ProductDetailPage() {
       make: product.make,
       model: product.model,
       storage: product.storage,
+      category: product.category,
       cosmeticGrade: product.cosmeticGrade,
       sellPriceAUD: product.sellPriceAUD,
       image: product.images[0] ?? null,
@@ -278,6 +291,58 @@ export default function ProductDetailPage() {
               </>
             )}
           </Button>
+
+          {/* Upsell products */}
+          {upsells.length > 0 && (
+            <div className="mt-8">
+              <h2 className="text-sm font-medium text-muted-foreground">
+                Accessories &amp; Add-ons
+              </h2>
+              <div className="mt-3 space-y-3">
+                {upsells.map((upsell) => (
+                  <div
+                    key={upsell.id}
+                    className="flex items-center gap-3 rounded-lg border border-border p-3"
+                  >
+                    <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded border border-border bg-background">
+                      {upsell.image ? (
+                        <img
+                          src={upsell.image}
+                          alt={upsell.name}
+                          className="h-full w-full object-contain"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-muted-foreground">
+                          <Package className="h-5 w-5" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{upsell.name}</p>
+                      <p className="text-xs text-muted-foreground tabular-nums">
+                        {formatPrice(upsell.priceAUD)}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        addUpsellItem({
+                          upsellId: upsell.id,
+                          name: upsell.name,
+                          priceAUD: upsell.priceAUD,
+                          image: upsell.image,
+                        })
+                      }
+                    >
+                      <Plus className="mr-1 h-3 w-3" />
+                      Add
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

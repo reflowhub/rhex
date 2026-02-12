@@ -72,22 +72,35 @@ export default function AdminSettingsPage() {
   const [pricingSaved, setPricingSaved] = useState(false);
   const [pricingError, setPricingError] = useState<string | null>(null);
 
+  // ---- shipping settings state ----------------------------------------------
+  const [shippingRates, setShippingRates] = useState<Record<string, number>>({});
+  const [shippingFreeThreshold, setShippingFreeThreshold] = useState<string>("0");
+  const [shippingDefaultRate, setShippingDefaultRate] = useState<string>("10");
+  const [shippingSaving, setShippingSaving] = useState(false);
+  const [shippingSaved, setShippingSaved] = useState(false);
+  const [shippingError, setShippingError] = useState<string | null>(null);
+
   // ---- fetch data ---------------------------------------------------------
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [catRes, pricingRes] = await Promise.all([
+      const [catRes, pricingRes, shippingRes] = await Promise.all([
         fetch("/api/admin/categories"),
         fetch(`/api/admin/settings/pricing?category=Phone`),
+        fetch("/api/admin/shipping"),
       ]);
       const catData = await catRes.json();
       const pricingData: PricingSettingsData = await pricingRes.json();
+      const shippingData = await shippingRes.json();
 
       if (catData.categories) {
         setCategories(catData.categories);
       }
       setGradeRatios(pricingData.gradeRatios ?? {});
       setRounding(String(pricingData.rounding ?? 5));
+      setShippingRates(shippingData.rates ?? {});
+      setShippingFreeThreshold(String(shippingData.freeThreshold ?? 0));
+      setShippingDefaultRate(String(shippingData.defaultRate ?? 10));
     } catch (err) {
       console.error("Failed to load settings:", err);
     } finally {
@@ -271,6 +284,38 @@ export default function AdminSettingsPage() {
       setPricingError("Failed to save pricing settings");
     } finally {
       setPricingSaving(false);
+    }
+  };
+
+  // ---- save shipping settings ---------------------------------------------
+  const handleSaveShipping = async () => {
+    setShippingSaving(true);
+    setShippingError(null);
+    setShippingSaved(false);
+
+    try {
+      const res = await fetch("/api/admin/shipping", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rates: shippingRates,
+          freeThreshold: parseFloat(shippingFreeThreshold) || 0,
+          defaultRate: parseFloat(shippingDefaultRate) || 10,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setShippingError(data.error || "Failed to save shipping settings");
+        return;
+      }
+
+      setShippingSaved(true);
+      setTimeout(() => setShippingSaved(false), 3000);
+    } catch {
+      setShippingError("Failed to save shipping settings");
+    } finally {
+      setShippingSaving(false);
     }
   };
 
@@ -479,6 +524,104 @@ export default function AdminSettingsPage() {
             Save Pricing Settings
           </Button>
           {pricingSaved && (
+            <span className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
+              <Check className="h-4 w-4" />
+              Saved
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Section 3: Shipping Settings                                     */}
+      {/* ---------------------------------------------------------------- */}
+      <div className="mt-6 max-w-2xl rounded-lg border border-border bg-card p-6">
+        <h2 className="text-lg font-semibold">Shipping</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Flat-rate shipping per category. The highest category rate in the cart
+          is used (single shipment).
+        </p>
+
+        {/* Per-category rates */}
+        <div className="mt-4">
+          <Label className="text-sm font-medium">Rates per Category (AUD)</Label>
+          <div className="mt-2 grid grid-cols-2 gap-4">
+            {categoryNames.map((name) => (
+              <div key={name} className="grid gap-1">
+                <Label htmlFor={`ship-${name}`} className="text-xs">
+                  {name}
+                </Label>
+                <Input
+                  id={`ship-${name}`}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={shippingRates[name] ?? ""}
+                  onChange={(e) =>
+                    setShippingRates({
+                      ...shippingRates,
+                      [name]: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  placeholder="0"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Default rate */}
+        <div className="mt-4 max-w-[200px]">
+          <Label htmlFor="ship-default" className="text-sm font-medium">
+            Default Rate (AUD)
+          </Label>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Used for categories without a specific rate.
+          </p>
+          <Input
+            id="ship-default"
+            type="number"
+            min={0}
+            step="0.01"
+            value={shippingDefaultRate}
+            onChange={(e) => setShippingDefaultRate(e.target.value)}
+            className="mt-1"
+          />
+        </div>
+
+        {/* Free threshold */}
+        <div className="mt-4 max-w-[200px]">
+          <Label htmlFor="ship-threshold" className="text-sm font-medium">
+            Free Shipping Threshold (AUD)
+          </Label>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Orders above this subtotal get free shipping. Set to 0 to disable.
+          </p>
+          <Input
+            id="ship-threshold"
+            type="number"
+            min={0}
+            step="1"
+            value={shippingFreeThreshold}
+            onChange={(e) => setShippingFreeThreshold(e.target.value)}
+            className="mt-1"
+          />
+        </div>
+
+        {shippingError && (
+          <div className="mt-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            {shippingError}
+          </div>
+        )}
+
+        <div className="mt-6 flex items-center gap-3">
+          <Button onClick={handleSaveShipping} disabled={shippingSaving}>
+            {shippingSaving && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            Save Shipping Settings
+          </Button>
+          {shippingSaved && (
             <span className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
               <Check className="h-4 w-4" />
               Saved

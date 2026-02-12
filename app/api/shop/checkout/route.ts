@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
+import { calculateShipping, type ShippingConfig } from "@/lib/shipping";
 
 // ---------------------------------------------------------------------------
 // POST /api/shop/checkout — Create order + reserve inventory
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       items,
+      upsellItems: upsellItemsInput,
       customerName,
       customerEmail,
       customerPhone,
@@ -44,6 +46,7 @@ export async function POST(request: NextRequest) {
       currency,
     } = body as {
       items: CheckoutItem[];
+      upsellItems?: { upsellId: string; quantity: number }[];
       customerName: string;
       customerEmail: string;
       customerPhone?: string;
@@ -52,7 +55,9 @@ export async function POST(request: NextRequest) {
     };
 
     // Validate required fields
-    if (!items?.length) {
+    const hasItems = items?.length > 0;
+    const hasUpsells = upsellItemsInput && upsellItemsInput.length > 0;
+    if (!hasItems && !hasUpsells) {
       return NextResponse.json(
         { error: "At least one item is required" },
         { status: 400 }
@@ -77,29 +82,65 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const inventoryRefs = items.map((item) =>
+    const inventoryRefs = (items ?? []).map((item) =>
       adminDb.collection("inventory").doc(item.inventoryId)
     );
 
     // Batch-fetch device info for order line items
-    const inventorySnaps = await adminDb.getAll(...inventoryRefs);
-    const deviceIdSet = new Set<string>();
-    for (const snap of inventorySnaps) {
-      if (snap.exists) {
-        const ref = snap.data()?.deviceRef;
-        if (ref) deviceIdSet.add(ref as string);
+    const deviceMap = new Map<string, Record<string, unknown>>();
+    if (inventoryRefs.length > 0) {
+      const inventorySnaps = await adminDb.getAll(...inventoryRefs);
+      const deviceIdSet = new Set<string>();
+      for (const snap of inventorySnaps) {
+        if (snap.exists) {
+          const ref = snap.data()?.deviceRef;
+          if (ref) deviceIdSet.add(ref as string);
+        }
+      }
+      if (deviceIdSet.size > 0) {
+        const deviceRefs = Array.from(deviceIdSet).map((id) =>
+          adminDb.collection("devices").doc(id)
+        );
+        const deviceDocs = await adminDb.getAll(...deviceRefs);
+        deviceDocs.forEach((doc) => {
+          if (doc.exists) deviceMap.set(doc.id, doc.data() as Record<string, unknown>);
+        });
       }
     }
-    const deviceMap = new Map<string, Record<string, unknown>>();
-    if (deviceIdSet.size > 0) {
-      const deviceRefs = Array.from(deviceIdSet).map((id) =>
-        adminDb.collection("devices").doc(id)
+
+    // Validate and fetch upsell products
+    let upsellOrderItems: { upsellId: string; name: string; priceAUD: number; quantity: number }[] = [];
+    if (upsellItemsInput?.length) {
+      const upsellRefs = upsellItemsInput.map((u) =>
+        adminDb.collection("upsellProducts").doc(u.upsellId)
       );
-      const deviceDocs = await adminDb.getAll(...deviceRefs);
-      deviceDocs.forEach((doc) => {
-        if (doc.exists) deviceMap.set(doc.id, doc.data() as Record<string, unknown>);
-      });
+      const upsellDocs = await adminDb.getAll(...upsellRefs);
+      for (let i = 0; i < upsellItemsInput.length; i++) {
+        const doc = upsellDocs[i];
+        if (!doc.exists || !doc.data()?.active) {
+          return NextResponse.json(
+            { error: `Add-on product is no longer available` },
+            { status: 409 }
+          );
+        }
+        const data = doc.data()!;
+        upsellOrderItems.push({
+          upsellId: doc.id,
+          name: data.name as string,
+          priceAUD: data.priceAUD as number,
+          quantity: upsellItemsInput[i].quantity,
+        });
+      }
     }
+
+    // Load shipping config
+    const shippingDoc = await adminDb.doc("settings/shipping").get();
+    const shippingConfigData = shippingDoc.data() ?? {};
+    const shippingConfig: ShippingConfig = {
+      rates: shippingConfigData.rates ?? {},
+      freeThreshold: shippingConfigData.freeThreshold ?? 0,
+      defaultRate: shippingConfigData.defaultRate ?? 10,
+    };
 
     // Transaction: verify availability, reserve items, create order
     let orderId: string = "";
@@ -156,12 +197,21 @@ export async function POST(request: NextRequest) {
           };
         });
 
-        const subtotalAUD = orderItems.reduce(
+        const inventorySubtotal = orderItems.reduce(
           (sum, item) => sum + item.priceAUD,
           0
         );
-        const shippingAUD = 0; // Free shipping for now
+        const upsellSubtotal = upsellOrderItems.reduce(
+          (sum, item) => sum + item.priceAUD * item.quantity,
+          0
+        );
+        const subtotalAUD = inventorySubtotal + upsellSubtotal;
+        const itemCategories = inventoryDocs.map(
+          (doc) => (doc.data()?.category as string) ?? "Phone"
+        );
+        const shippingAUD = calculateShipping(itemCategories, subtotalAUD, shippingConfig);
         const totalAUD = subtotalAUD + shippingAUD;
+        const gstAUD = Math.round((totalAUD / 11) * 100) / 100;
 
         // Create order document
         const orderRef = adminDb.collection("orders").doc();
@@ -174,9 +224,11 @@ export async function POST(request: NextRequest) {
           customerPhone: customerPhone ?? null,
           shippingAddress,
           items: orderItems,
+          upsellItems: upsellOrderItems,
           subtotalAUD,
           shippingAUD,
           totalAUD,
+          gstAUD,
           displayCurrency: currency ?? "AUD",
           stripePaymentIntentId: null,
           stripeCheckoutSessionId: null,
@@ -223,6 +275,35 @@ export async function POST(request: NextRequest) {
           },
           quantity: 1,
         }));
+
+        // Add upsell items as line items
+        const orderUpsells = (orderData.upsellItems ?? []) as {
+          name: string;
+          priceAUD: number;
+          quantity: number;
+        }[];
+        for (const upsell of orderUpsells) {
+          lineItems.push({
+            price_data: {
+              currency: "aud",
+              product_data: { name: upsell.name },
+              unit_amount: Math.round(upsell.priceAUD * 100),
+            },
+            quantity: upsell.quantity,
+          });
+        }
+
+        // Add shipping as a line item if applicable
+        if (orderData.shippingAUD > 0) {
+          lineItems.push({
+            price_data: {
+              currency: "aud",
+              product_data: { name: "Shipping" },
+              unit_amount: Math.round(orderData.shippingAUD * 100),
+            },
+            quantity: 1,
+          });
+        }
 
         const session = await stripe.checkout.sessions.create({
           mode: "payment",

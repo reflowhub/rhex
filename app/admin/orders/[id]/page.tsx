@@ -26,6 +26,7 @@ import {
   Loader2,
   User,
   Package,
+  Gift,
   MapPin,
   DollarSign,
   Truck,
@@ -40,6 +41,13 @@ interface OrderItem {
   deviceRef: string;
   description: string;
   priceAUD: number;
+}
+
+interface UpsellOrderItem {
+  upsellId: string;
+  name: string;
+  priceAUD: number;
+  quantity: number;
 }
 
 interface OrderDetail {
@@ -57,9 +65,11 @@ interface OrderDetail {
     country: string;
   };
   items: OrderItem[];
+  upsellItems: UpsellOrderItem[];
   subtotalAUD: number;
   shippingAUD: number;
   totalAUD: number;
+  gstAUD: number;
   displayCurrency: string;
   stripePaymentIntentId: string | null;
   stripeCheckoutSessionId: string | null;
@@ -336,7 +346,7 @@ export default function OrderDetailPage() {
             <div className="mb-4 flex items-center gap-2">
               <Package className="h-5 w-5 text-muted-foreground" />
               <h2 className="text-lg font-semibold">
-                Items ({order.items.length})
+                Items ({order.items.length + (order.upsellItems?.length ?? 0)})
               </h2>
             </div>
             <div className="divide-y divide-border">
@@ -361,6 +371,26 @@ export default function OrderDetailPage() {
                   </p>
                 </div>
               ))}
+              {order.upsellItems?.length > 0 &&
+                order.upsellItems.map((item, idx) => (
+                  <div
+                    key={`upsell-${idx}`}
+                    className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <Gift className="h-3.5 w-3.5 text-muted-foreground" />
+                        <p className="text-sm font-medium">{item.name}</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Add-on &middot; Qty: {item.quantity}
+                      </p>
+                    </div>
+                    <p className="ml-4 text-sm font-medium tabular-nums">
+                      {formatAUD(item.priceAUD * item.quantity)}
+                    </p>
+                  </div>
+                ))}
             </div>
           </div>
 
@@ -417,6 +447,12 @@ export default function OrderDetailPage() {
                 <dt className="font-medium">Total</dt>
                 <dd className="text-lg font-medium tabular-nums">
                   {formatAUD(order.totalAUD)}
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">GST (included)</dt>
+                <dd className="font-medium tabular-nums">
+                  {formatAUD(order.gstAUD)}
                 </dd>
               </div>
               <div className="my-1 h-px bg-border" />

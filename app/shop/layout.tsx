@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { ShoppingBag } from "lucide-react";
 import { useCurrency } from "@/lib/currency-context";
 import { CartProvider, useCart } from "@/lib/cart-context";
@@ -25,9 +26,10 @@ const inter = Inter({
 // ---------------------------------------------------------------------------
 
 function ShopLayoutInner({ children }: { children: React.ReactNode }) {
-  const { currency, setCurrency } = useCurrency();
+  const { currency } = useCurrency();
   const pathname = usePathname();
   const { itemCount } = useCart();
+  const [nzTooltip, setNzTooltip] = useState(false);
 
   return (
     <div
@@ -70,29 +72,26 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
             </Link>
 
             {/* Currency switcher */}
-            <div className="flex items-center rounded-lg border border-border bg-background p-0.5 text-xs font-medium">
+            <div className="relative flex items-center rounded-lg border border-border bg-background p-0.5 text-xs font-medium">
               <button
-                onClick={() => setCurrency("AUD")}
-                className={cn(
-                  "rounded-md px-2 py-1 transition-colors",
-                  currency === "AUD"
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
+                className="rounded-md px-2 py-1 bg-primary text-primary-foreground"
               >
                 AUD
               </button>
               <button
-                onClick={() => setCurrency("NZD")}
-                className={cn(
-                  "rounded-md px-2 py-1 transition-colors",
-                  currency === "NZD"
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
+                onClick={() => {
+                  setNzTooltip(true);
+                  setTimeout(() => setNzTooltip(false), 2000);
+                }}
+                className="rounded-md px-2 py-1 text-muted-foreground hover:text-foreground transition-colors"
               >
                 NZD
               </button>
+              {nzTooltip && (
+                <div className="absolute top-full right-0 mt-1.5 whitespace-nowrap rounded-md bg-foreground px-2.5 py-1.5 text-xs text-background shadow-md">
+                  NZ shop coming soon
+                </div>
+              )}
             </div>
 
             <ThemeToggle />
