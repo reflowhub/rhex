@@ -108,8 +108,9 @@ Inline editing of individual device/grade prices directly in the price list view
 
 - Click a cell -> edit in place -> save
 - Single-device price update API: `PATCH /api/admin/pricing/[listId]/prices/[deviceDocId]`
-- **Add Device from pricing page**: "Add Device" button creates a new device (with uniqueness check) + empty price row ($0 across all grades). New devices default to `active: false` (toggled off) — admin sets prices then explicitly toggles on when ready
-- Audit trail: who changed what, when (stretch goal)
+- **Add Device from pricing page**: "Add Device" button creates a new device (with uniqueness check) + empty price row ($0 across all grades). New devices default to active.
+- **Audit trail**: `lib/audit-log.ts` logs all pricing changes to `auditLog` Firestore collection. Tracks admin email, timestamp, action type (`inline_edit`, `bulk_adjust`, `csv_upload`, `device_toggle`, `device_delete`), and before/after details. Viewable at `/admin/audit-log` with filtering by action and category, and cursor-based pagination.
+- **Price list snapshots**: `createPriceSnapshot()` creates a full backup of price list state before CSV overwrites, stored in `auditLog` collection.
 
 ### 3. Change Preview (Unsaved Changes)
 
@@ -219,6 +220,10 @@ Prevent duplicate make + model + storage combinations.
 | `POST /api/admin/pricing/[listId]/bulk-adjust` | POST | Bulk adjust selected devices by %/$/ratios |
 | `GET /api/admin/settings/pricing` | GET | Fetch default grade ratios + rounding |
 | `PUT /api/admin/settings/pricing` | PUT | Update default grade ratios + rounding |
+| `POST /api/admin/devices/import` | POST | Bulk CSV import with duplicate detection (DB + within-CSV) |
+| `GET /api/admin/audit-log` | GET | Fetch audit log entries with action/category filtering + cursor pagination |
+| `GET /api/admin/categories` | GET | Fetch category definitions (includes activePriceList) |
+| `PUT /api/admin/categories` | PUT | Update category definitions |
 
 ---
 
@@ -296,6 +301,19 @@ Currently stored as `gradeA`, `gradeB`, etc. To support variable grades per cate
 
 **Migration note**: existing `gradeA`-`gradeE` fields can be read as-is during a transition period. New writes should use the `grades` map format. The pricing page renders columns dynamically based on the category's grade definition from `settings/categories`.
 
+### `auditLog/{docId}` — Pricing audit entries
+
+```text
+action: string           # "inline_edit" | "bulk_adjust" | "csv_upload" | "device_toggle" | "device_delete"
+admin: string            # admin email
+timestamp: Timestamp     # server timestamp
+category: string         # e.g. "Phone"
+priceListId: string      # e.g. "FP-2B"
+details: object          # action-specific payload (before/after values, affected devices, etc.)
+```
+
+Price list snapshots (created before CSV overwrites) are stored as `action: "snapshot"` with the full price data in `details`.
+
 ### Quote APIs — Check active flag
 
 ```text
@@ -327,6 +345,8 @@ Built for phones but category-aware by design.
 5. ✅ **Change preview** — unsaved changes tracked in client state, yellow highlight for changed cells, orange highlight + warning icon for grade inversions, "N unsaved prices changed" banner with Discard All / Save All
 6. ✅ **Bulk price adjustment** — checkbox row selection, Bulk Adjust dialog with 3 operations (adjust by %, adjust by $, set grade ratios from A), `POST /api/admin/pricing/[id]/bulk-adjust` API using settings for rounding + ratios
 7. ✅ **Pricing settings** — `settings/pricing` Firestore doc, `lib/pricing-settings.ts` loader + `roundPrice()` helper, `/admin/settings` page with grade ratio inputs + rounding select, sidebar link added
+8. ✅ **Audit trail** — `lib/audit-log.ts` with `logPriceAudit()` + `createPriceSnapshot()`. All pricing mutations (inline edit, bulk adjust, CSV upload, device toggle, device delete) write audit entries. `/admin/audit-log` page with action/category filters and cursor-based pagination.
+9. ✅ **Device CSV import** — `POST /api/admin/devices/import` with category-aware bulk import, duplicate detection against both DB and within the CSV, optional DeviceID column.
 
 ### Phase 2: Multi-Category Expansion ✅
 
