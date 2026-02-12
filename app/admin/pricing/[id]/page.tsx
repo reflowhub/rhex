@@ -49,6 +49,7 @@ interface PriceListMeta {
 
 interface PriceEntry {
   deviceId: string;
+  numericId: number | null;
   make: string;
   model: string;
   storage: string;
@@ -395,9 +396,10 @@ export default function PriceListDetailPage() {
 
   // ---- export CSV ---------------------------------------------------------
   const handleExportCsv = () => {
-    const header = ["Device ID", "Make", "Model", "Storage", ...gradeKeys.map((g) => `Grade ${g}`)];
+    const header = ["DeviceID", "Numeric ID", "Make", "Model", "Storage", ...gradeKeys.map((g) => `Grade ${g}`)];
     const rows = filteredPrices.map((p) => [
       p.deviceId,
+      p.numericId != null ? String(p.numericId) : "",
       escapeCsvField(p.make),
       escapeCsvField(p.model),
       escapeCsvField(p.storage),
@@ -670,7 +672,12 @@ export default function PriceListDetailPage() {
                       />
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
-                      {price.deviceId}
+                      {price.numericId != null && (
+                        <div>{price.numericId}</div>
+                      )}
+                      <div className="truncate max-w-[120px]" title={price.deviceId}>
+                        {price.deviceId}
+                      </div>
                     </TableCell>
                     <TableCell className="font-medium">{price.make}</TableCell>
                     <TableCell>{price.model}</TableCell>

@@ -69,6 +69,7 @@ export async function GET(
       const grades = readGrades(priceData);
       return {
         deviceId: doc.id,
+        numericId: device?.deviceId ?? null,
         make: device?.make ?? "",
         model: device?.model ?? "",
         storage: device?.storage ?? "",
