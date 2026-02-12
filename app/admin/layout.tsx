@@ -154,6 +154,11 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
             <LogOut className="h-4 w-4" />
             Sign out
           </button>
+          {process.env.NEXT_PUBLIC_GIT_SHA && (
+            <p className="px-3 pt-1 text-[10px] text-sidebar-foreground/30 font-mono">
+              {process.env.NEXT_PUBLIC_GIT_SHA}
+            </p>
+          )}
         </div>
       </aside>
 
