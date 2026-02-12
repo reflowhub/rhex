@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Smartphone, DollarSign, FileText, ContactRound, Settings } from "lucide-react";
+import { Smartphone, DollarSign, FileText, ContactRound, Settings, BarChart3 } from "lucide-react";
 
 const dashboardCards = [
   {
@@ -31,6 +31,12 @@ const dashboardCards = [
     description: "Configure global trade-in settings like business estimate discounts.",
     href: "/admin/settings",
     icon: Settings,
+  },
+  {
+    title: "Analytics",
+    description: "Quote conversion funnel, revenue trends, and partner performance.",
+    href: "/admin/analytics",
+    icon: BarChart3,
   },
 ];
 

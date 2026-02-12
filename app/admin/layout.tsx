@@ -17,6 +17,7 @@ import {
   ContactRound,
   Settings,
   History,
+  BarChart3,
   Menu,
   X,
   LogOut,
@@ -68,6 +69,11 @@ const sidebarLinks = [
     href: "/admin/audit-log",
     label: "Audit Log",
     icon: History,
+  },
+  {
+    href: "/admin/analytics",
+    label: "Analytics",
+    icon: BarChart3,
   },
 ];
 
