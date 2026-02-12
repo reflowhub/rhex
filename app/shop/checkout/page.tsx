@@ -122,7 +122,7 @@ export default function CheckoutPage() {
       <div className="mx-auto max-w-3xl py-20 text-center">
         <p className="text-sm text-muted-foreground">Your cart is empty.</p>
         <Link
-          href="/shop"
+          href="/shop/browse"
           className="mt-4 inline-block text-sm font-medium text-foreground underline"
         >
           Browse the shop

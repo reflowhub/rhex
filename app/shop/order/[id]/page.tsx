@@ -109,7 +109,7 @@ export default function OrderConfirmationPage() {
       <div className="py-20 text-center">
         <p className="text-sm text-muted-foreground">Order not found.</p>
         <Link
-          href="/shop"
+          href="/shop/browse"
           className="mt-4 inline-block text-sm font-medium text-foreground underline"
         >
           Back to Shop
@@ -210,7 +210,7 @@ export default function OrderConfirmationPage() {
 
       {/* Continue shopping */}
       <div className="mt-6 text-center">
-        <Link href="/shop">
+        <Link href="/shop/browse">
           <Button variant="outline">Continue Shopping</Button>
         </Link>
       </div>

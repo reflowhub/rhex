@@ -111,7 +111,7 @@ export default function ProductDetailPage() {
       <div className="py-20 text-center">
         <p className="text-sm text-muted-foreground">Product not found.</p>
         <Link
-          href="/shop"
+          href="/shop/browse"
           className="mt-4 inline-block text-sm font-medium text-foreground underline"
         >
           Back to Shop
@@ -129,7 +129,7 @@ export default function ProductDetailPage() {
     <div>
       {/* Back link */}
       <Link
-        href="/shop"
+        href="/shop/browse"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />

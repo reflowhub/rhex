@@ -89,7 +89,7 @@ export default function CartPage() {
             Your cart is empty.
           </p>
           <Link
-            href="/shop"
+            href="/shop/browse"
             className="mt-4 inline-block text-sm font-medium text-foreground underline"
           >
             Browse the shop

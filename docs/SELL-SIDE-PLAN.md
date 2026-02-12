@@ -346,6 +346,21 @@ Added sell-side inventory analytics to the existing analytics page via a tab sys
 
 **Files:** `app/api/admin/analytics/inventory/route.ts` (new), `app/admin/analytics/page.tsx` (modified)
 
+### Phase 5 — Shop Homepage ✓ Complete
+
+Transformed `/shop` from a bare product grid into a Braun-inspired landing page. Product browsing moved to `/shop/browse`. No CMS — static content hardcoded, dynamic content from existing APIs.
+
+**Design direction:** Braun BN0171 Classic product page. Near-monochrome warm grey palette, single accent colour (charcoal CTA), massive whitespace (80–120px between sections), large confident typography (32–48px headings, weight 500), thin-line Lucide icons for trust signals.
+
+**Implemented:**
+
+- `/shop` — landing page with 6 sections: Hero (headline + dual CTAs), Trust Signals (Individually Tested, Battery Verified, 90-Day Warranty), Latest Arrivals (4 featured products from `/api/shop/products?limit=4`), Browse by Category (dynamic cards with icons + counts from `/api/categories`), Why Refurbished (Save 30–50%, Reduce E-Waste, Full Performance), Bottom CTA
+- `/shop/browse` — product grid with category tabs, pagination (moved from old `/shop/page.tsx`), reads `?category=` from URL search params for deep-linking from category cards
+- Updated "Back to Shop" / "Continue Shopping" links across product detail, cart, checkout, and order pages to point to `/shop/browse`
+- Layout nav "Shop" link stays at `/shop` (homepage); trade-in homepage "Shop" link stays at `/shop`
+
+**Files:** `app/shop/page.tsx` (rewritten), `app/shop/browse/page.tsx` (new), `app/shop/[id]/page.tsx`, `app/shop/cart/page.tsx`, `app/shop/checkout/page.tsx`, `app/shop/order/[id]/page.tsx` (link updates)
+
 ---
 
 ## Design Aesthetic

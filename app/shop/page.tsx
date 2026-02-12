@@ -1,9 +1,20 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Smartphone, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import {
+  Smartphone,
+  Watch,
+  Tablet,
+  CheckCircle,
+  Battery,
+  Shield,
+  Leaf,
+  DollarSign,
+  Cpu,
+  ArrowRight,
+  Loader2,
+} from "lucide-react";
 import { useCurrency } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +31,6 @@ interface ShopProduct {
   cosmeticGrade: string;
   batteryHealth: number | null;
   sellPriceAUD: number;
-  sellPriceNZD: number | null;
   images: string[];
 }
 
@@ -29,76 +39,72 @@ interface CategoryInfo {
 }
 
 // ---------------------------------------------------------------------------
-// Constants
+// Category icon mapping
 // ---------------------------------------------------------------------------
 
-const PAGE_SIZE = 24;
+const CATEGORY_ICONS: Record<string, React.ElementType> = {
+  Phone: Smartphone,
+  Watch: Watch,
+  Tablet: Tablet,
+};
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export default function ShopPage() {
+export default function ShopHomePage() {
   const { currency, convertFromAUD } = useCurrency();
 
-  // ---- data state ---------------------------------------------------------
-  const [products, setProducts] = useState<ShopProduct[]>([]);
-  const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
+  const [featured, setFeatured] = useState<ShopProduct[]>([]);
+  const [categories, setCategories] = useState<CategoryInfo[]>([]);
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>(
+    {}
+  );
   const [loading, setLoading] = useState(true);
 
-  // ---- category state -----------------------------------------------------
-  const [categories, setCategories] = useState<CategoryInfo[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState("");
-
-  // ---- pagination state ---------------------------------------------------
-  const [currentPage, setCurrentPage] = useState(1);
-
-  // ---- fetch categories on mount ------------------------------------------
+  // Fetch featured products + categories on mount
   useEffect(() => {
-    fetch("/api/categories")
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          const cats = data.map((c: { name: string }) => ({ name: c.name }));
-          setCategories(cats);
+    const fetchData = async () => {
+      try {
+        const [productsRes, categoriesRes] = await Promise.all([
+          fetch("/api/shop/products?limit=4"),
+          fetch("/api/categories"),
+        ]);
+
+        const productsData = await productsRes.json();
+        if (productsData.items) {
+          setFeatured(productsData.items);
         }
-      })
-      .catch(() => {});
+
+        const categoriesData = await categoriesRes.json();
+        if (Array.isArray(categoriesData)) {
+          setCategories(
+            categoriesData.map((c: { name: string }) => ({ name: c.name }))
+          );
+
+          // Fetch counts per category
+          const counts: Record<string, number> = {};
+          await Promise.all(
+            categoriesData.map(async (c: { name: string }) => {
+              const res = await fetch(
+                `/api/shop/products?category=${c.name}&limit=1`
+              );
+              const data = await res.json();
+              counts[c.name] = data.total ?? 0;
+            })
+          );
+          setCategoryCounts(counts);
+        }
+      } catch {
+        // silently fail
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, []);
 
-  // Reset page on filter change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedCategory]);
-
-  // ---- fetch products -----------------------------------------------------
-  const fetchProducts = useCallback(() => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (selectedCategory) params.set("category", selectedCategory);
-    params.set("page", String(currentPage));
-    params.set("limit", String(PAGE_SIZE));
-
-    const url = `/api/shop/products${params.toString() ? `?${params.toString()}` : ""}`;
-
-    fetch(url)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.items) {
-          setProducts(data.items);
-          setTotal(data.total);
-          setTotalPages(data.totalPages);
-        }
-      })
-      .finally(() => setLoading(false));
-  }, [selectedCategory, currentPage]);
-
-  useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
-
-  // ---- helpers ------------------------------------------------------------
   const formatPrice = (priceAUD: number) => {
     const displayPrice =
       currency === "AUD" ? priceAUD : convertFromAUD(priceAUD);
@@ -110,136 +116,281 @@ export default function ShopPage() {
     }).format(displayPrice);
   };
 
-  // ---- render -------------------------------------------------------------
   return (
-    <div>
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-medium tracking-tight">Shop</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Certified refurbished devices, individually graded and photographed.
-        </p>
-      </div>
-
-      {/* Category tabs */}
-      {categories.length > 1 && (
-        <div className="mt-6 flex gap-1 border-b border-border">
-          <button
-            onClick={() => setSelectedCategory("")}
-            className={cn(
-              "px-4 py-2 text-sm font-medium transition-colors",
-              !selectedCategory
-                ? "border-b-2 border-foreground text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            All
-          </button>
-          {categories.map((cat) => (
-            <button
-              key={cat.name}
-              onClick={() => setSelectedCategory(cat.name)}
-              className={cn(
-                "px-4 py-2 text-sm font-medium transition-colors",
-                selectedCategory === cat.name
-                  ? "border-b-2 border-foreground text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
+    <div className="-mx-4 -mt-8">
+      {/* ================================================================= */}
+      {/* Hero                                                              */}
+      {/* ================================================================= */}
+      <section className="px-4 pb-20 pt-16 sm:pb-28 sm:pt-24">
+        <div className="mx-auto max-w-6xl">
+          <h1 className="text-4xl font-medium tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+            Certified Refurbished
+            <br />
+            Devices
+          </h1>
+          <p className="mt-6 max-w-lg text-lg text-muted-foreground">
+            Every device individually tested, graded, and photographed. You see
+            exactly what you get.
+          </p>
+          <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Link
+              href="/shop/browse"
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
-              {cat.name}
-            </button>
+              Browse Devices
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-border px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-card"
+            >
+              Trade In Your Device
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ================================================================= */}
+      {/* Trust Signals                                                     */}
+      {/* ================================================================= */}
+      <section className="border-y border-border bg-card px-4 py-16">
+        <div className="mx-auto grid max-w-6xl gap-12 sm:grid-cols-3">
+          {[
+            {
+              icon: CheckCircle,
+              title: "Individually Tested",
+              desc: "Every device passes a comprehensive functional check before listing.",
+            },
+            {
+              icon: Battery,
+              title: "Battery Health Verified",
+              desc: "Actual battery health percentage reported — no guesswork.",
+            },
+            {
+              icon: Shield,
+              title: "90-Day Warranty",
+              desc: "Full warranty on every device. If something's wrong, we make it right.",
+            },
+          ].map((item) => (
+            <div key={item.title} className="text-center sm:text-left">
+              <item.icon
+                className="mx-auto h-6 w-6 text-muted-foreground sm:mx-0"
+                strokeWidth={1.5}
+              />
+              <h3 className="mt-4 text-sm font-medium tracking-wide text-foreground">
+                {item.title}
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                {item.desc}
+              </p>
+            </div>
           ))}
         </div>
+      </section>
+
+      {/* ================================================================= */}
+      {/* Featured Products                                                 */}
+      {/* ================================================================= */}
+      <section className="px-4 py-20 sm:py-28">
+        <div className="mx-auto max-w-6xl">
+          <div className="flex items-end justify-between">
+            <div>
+              <h2 className="text-2xl font-medium tracking-tight text-foreground sm:text-3xl">
+                Latest Arrivals
+              </h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Recently listed devices, ready to ship.
+              </p>
+            </div>
+            <Link
+              href="/shop/browse"
+              className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:flex sm:items-center sm:gap-1"
+            >
+              View all
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+
+          <div className="mt-10">
+            {loading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : featured.length === 0 ? (
+              <p className="py-16 text-center text-sm text-muted-foreground">
+                No devices listed yet. Check back soon.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {featured.map((product) => (
+                  <Link key={product.id} href={`/shop/${product.id}`}>
+                    <div className="group rounded-lg border border-border bg-card p-6 transition-colors hover:border-foreground/20">
+                      <div className="aspect-square w-full overflow-hidden rounded bg-background">
+                        {product.images.length > 0 ? (
+                          <img
+                            src={product.images[0]}
+                            alt={`${product.make} ${product.model}`}
+                            className="h-full w-full object-contain"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-muted-foreground">
+                            <Smartphone className="h-12 w-12" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-4 space-y-1">
+                        <p className="text-xs text-muted-foreground">
+                          {product.make}
+                        </p>
+                        <p className="font-medium text-foreground">
+                          {product.model} {product.storage}
+                        </p>
+                        <span className="inline-block rounded bg-background px-2 py-0.5 text-xs font-medium text-foreground">
+                          Grade {product.cosmeticGrade}
+                        </span>
+                        <p className="text-lg font-medium tabular-nums text-foreground">
+                          {formatPrice(product.sellPriceAUD)}
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Link
+            href="/shop/browse"
+            className="mt-8 flex items-center justify-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:hidden"
+          >
+            View all devices
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </section>
+
+      {/* ================================================================= */}
+      {/* Browse by Category                                                */}
+      {/* ================================================================= */}
+      {categories.length > 0 && (
+        <section className="border-t border-border bg-card px-4 py-20 sm:py-28">
+          <div className="mx-auto max-w-6xl">
+            <h2 className="text-2xl font-medium tracking-tight text-foreground sm:text-3xl">
+              Browse by Category
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Find exactly what you&apos;re looking for.
+            </p>
+
+            <div
+              className={cn(
+                "mt-10 grid gap-4",
+                categories.length === 1
+                  ? "grid-cols-1 max-w-sm"
+                  : categories.length === 2
+                    ? "grid-cols-1 sm:grid-cols-2"
+                    : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+              )}
+            >
+              {categories.map((cat) => {
+                const Icon = CATEGORY_ICONS[cat.name] ?? Smartphone;
+                const count = categoryCounts[cat.name] ?? 0;
+                return (
+                  <Link
+                    key={cat.name}
+                    href={`/shop/browse?category=${cat.name}`}
+                  >
+                    <div className="group flex items-center gap-6 rounded-lg border border-border bg-background p-8 transition-colors hover:border-foreground/20">
+                      <Icon
+                        className="h-10 w-10 shrink-0 text-muted-foreground"
+                        strokeWidth={1}
+                      />
+                      <div>
+                        <h3 className="text-lg font-medium text-foreground">
+                          {cat.name}
+                        </h3>
+                        <p className="mt-0.5 text-sm text-muted-foreground">
+                          {count} {count === 1 ? "device" : "devices"} available
+                        </p>
+                      </div>
+                      <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </section>
       )}
 
-      {/* Product grid */}
-      <div className="mt-8">
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        ) : products.length === 0 ? (
-          <div className="py-20 text-center">
-            <Smartphone className="mx-auto h-10 w-10 text-muted-foreground" />
-            <p className="mt-4 text-sm text-muted-foreground">
-              No devices available right now.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {products.map((product) => (
-              <Link key={product.id} href={`/shop/${product.id}`}>
-                <div className="group rounded-lg border border-border bg-card p-4 transition-colors hover:border-foreground/20">
-                  {/* Image area */}
-                  <div className="aspect-square w-full overflow-hidden rounded bg-background">
-                    {product.images.length > 0 ? (
-                      <img
-                        src={product.images[0]}
-                        alt={`${product.make} ${product.model}`}
-                        className="h-full w-full object-contain"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-muted-foreground">
-                        <Smartphone className="h-12 w-12" />
-                      </div>
-                    )}
-                  </div>
+      {/* ================================================================= */}
+      {/* Why Buy Refurbished                                               */}
+      {/* ================================================================= */}
+      <section className="px-4 py-20 sm:py-28">
+        <div className="mx-auto max-w-6xl">
+          <h2 className="text-2xl font-medium tracking-tight text-foreground sm:text-3xl">
+            Why Refurbished
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Same performance. Smarter purchase.
+          </p>
 
-                  {/* Info */}
-                  <div className="mt-3 space-y-1">
-                    <p className="text-xs text-muted-foreground">
-                      {product.make}
-                    </p>
-                    <p className="font-medium text-foreground">
-                      {product.model} {product.storage}
-                    </p>
-                    <span className="inline-block rounded bg-background px-2 py-0.5 text-xs font-medium text-foreground">
-                      Grade {product.cosmeticGrade}
-                    </span>
-                    <p className="text-lg font-medium tabular-nums text-foreground">
-                      {formatPrice(product.sellPriceAUD)}
-                    </p>
-                  </div>
-                </div>
-              </Link>
+          <div className="mt-10 grid gap-12 sm:grid-cols-3">
+            {[
+              {
+                icon: DollarSign,
+                title: "Save 30–50%",
+                desc: "Premium devices at a fraction of retail. Every dollar saved is a dollar earned.",
+              },
+              {
+                icon: Leaf,
+                title: "Reduce E-Waste",
+                desc: "Extend a device's life instead of adding to landfill. Good for you, good for the planet.",
+              },
+              {
+                icon: Cpu,
+                title: "Full Performance",
+                desc: "Professionally refurbished to factory standards. Tested, verified, ready to go.",
+              },
+            ].map((item) => (
+              <div key={item.title}>
+                <item.icon
+                  className="h-6 w-6 text-muted-foreground"
+                  strokeWidth={1.5}
+                />
+                <h3 className="mt-4 text-sm font-medium tracking-wide text-foreground">
+                  {item.title}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  {item.desc}
+                </p>
+              </div>
             ))}
           </div>
-        )}
-      </div>
-
-      {/* Pagination */}
-      {!loading && totalPages > 1 && (
-        <div className="mt-8 flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            {total} device{total !== 1 ? "s" : ""}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              disabled={currentPage <= 1}
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              <span className="sr-only">Previous page</span>
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              Page {currentPage} of {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="icon"
-              disabled={currentPage >= totalPages}
-              onClick={() =>
-                setCurrentPage((p) => Math.min(totalPages, p + 1))
-              }
-            >
-              <ChevronRight className="h-4 w-4" />
-              <span className="sr-only">Next page</span>
-            </Button>
-          </div>
         </div>
-      )}
+      </section>
+
+      {/* ================================================================= */}
+      {/* Bottom CTA                                                        */}
+      {/* ================================================================= */}
+      <section className="border-t border-border bg-card px-4 py-20 sm:py-24">
+        <div className="mx-auto max-w-6xl text-center">
+          <h2 className="text-2xl font-medium tracking-tight text-foreground sm:text-3xl">
+            Ready to find your next device?
+          </h2>
+          <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
+            Every device is individually graded and photographed. What you see is
+            what you get.
+          </p>
+          <Link
+            href="/shop/browse"
+            className="mt-8 inline-flex items-center justify-center gap-2 rounded-md bg-primary px-8 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Browse All Devices
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }
