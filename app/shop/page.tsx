@@ -13,7 +13,6 @@ import {
   DollarSign,
   Cpu,
   ArrowRight,
-  Loader2,
 } from "lucide-react";
 import { useCurrency } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
@@ -153,7 +152,7 @@ export default function ShopHomePage() {
       {/* ================================================================= */}
       {/* Trust Signals                                                     */}
       {/* ================================================================= */}
-      <section className="border-y border-border bg-card px-4 py-16">
+      <section className="border-y border-border bg-muted/60 px-4 py-16">
         <div className="mx-auto grid max-w-6xl gap-12 sm:grid-cols-3">
           {[
             {
@@ -189,38 +188,30 @@ export default function ShopHomePage() {
       </section>
 
       {/* ================================================================= */}
-      {/* Featured Products                                                 */}
+      {/* Featured Products (hidden when empty)                              */}
       {/* ================================================================= */}
-      <section className="px-4 py-20 sm:py-28">
-        <div className="mx-auto max-w-6xl">
-          <div className="flex items-end justify-between">
-            <div>
-              <h2 className="text-2xl font-medium tracking-tight text-foreground sm:text-3xl">
-                Latest Arrivals
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Recently listed devices, ready to ship.
-              </p>
-            </div>
-            <Link
-              href="/shop/browse"
-              className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:flex sm:items-center sm:gap-1"
-            >
-              View all
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-
-          <div className="mt-10">
-            {loading ? (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      {!loading && featured.length > 0 && (
+        <section className="px-4 py-20 sm:py-28">
+          <div className="mx-auto max-w-6xl">
+            <div className="flex items-end justify-between">
+              <div>
+                <h2 className="text-2xl font-medium tracking-tight text-foreground sm:text-3xl">
+                  Latest Arrivals
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Recently listed devices, ready to ship.
+                </p>
               </div>
-            ) : featured.length === 0 ? (
-              <p className="py-16 text-center text-sm text-muted-foreground">
-                No devices listed yet. Check back soon.
-              </p>
-            ) : (
+              <Link
+                href="/shop/browse"
+                className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:flex sm:items-center sm:gap-1"
+              >
+                View all
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+
+            <div className="mt-10">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {featured.map((product) => (
                   <Link key={product.id} href={`/shop/${product.id}`}>
@@ -256,24 +247,24 @@ export default function ShopHomePage() {
                   </Link>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
 
-          <Link
-            href="/shop/browse"
-            className="mt-8 flex items-center justify-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:hidden"
-          >
-            View all devices
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-      </section>
+            <Link
+              href="/shop/browse"
+              className="mt-8 flex items-center justify-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:hidden"
+            >
+              View all devices
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </section>
+      )}
 
       {/* ================================================================= */}
       {/* Browse by Category                                                */}
       {/* ================================================================= */}
       {categories.length > 0 && (
-        <section className="border-t border-border bg-card px-4 py-20 sm:py-28">
+        <section className="border-t border-border bg-muted/60 px-4 py-20 sm:py-28">
           <div className="mx-auto max-w-6xl">
             <h2 className="text-2xl font-medium tracking-tight text-foreground sm:text-3xl">
               Browse by Category
@@ -373,7 +364,7 @@ export default function ShopHomePage() {
       {/* ================================================================= */}
       {/* Bottom CTA                                                        */}
       {/* ================================================================= */}
-      <section className="border-t border-border bg-card px-4 py-20 sm:py-24">
+      <section className="border-t border-border bg-muted/60 px-4 py-20 sm:py-24">
         <div className="mx-auto max-w-6xl text-center">
           <h2 className="text-2xl font-medium tracking-tight text-foreground sm:text-3xl">
             Ready to find your next device?
