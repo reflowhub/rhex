@@ -110,6 +110,8 @@ const ALLOWED_FIELDS = [
   "sellPriceAUD",
   "listed",
   "location",
+  "images",
+  "spinVideo",
 ];
 
 export async function PATCH(
@@ -141,6 +143,29 @@ export async function PATCH(
       }
     }
 
+    // Validate images is an array of strings
+    if (updateData.images !== undefined) {
+      if (
+        !Array.isArray(updateData.images) ||
+        !updateData.images.every((url: unknown) => typeof url === "string")
+      ) {
+        return NextResponse.json(
+          { error: "images must be an array of strings" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate spinVideo is a string or null
+    if (updateData.spinVideo !== undefined) {
+      if (updateData.spinVideo !== null && typeof updateData.spinVideo !== "string") {
+        return NextResponse.json(
+          { error: "spinVideo must be a string or null" },
+          { status: 400 }
+        );
+      }
+    }
+
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
         { error: "No valid fields to update" },
@@ -165,6 +190,8 @@ export async function PATCH(
       sellPriceNZD: data.sellPriceNZD ?? null,
       listed: data.listed ?? false,
       location: data.location ?? null,
+      images: data.images ?? [],
+      spinVideo: data.spinVideo ?? null,
       updatedAt: serializeTimestamp(data.updatedAt),
     });
   } catch (error) {

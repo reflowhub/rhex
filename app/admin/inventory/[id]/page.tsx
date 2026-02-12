@@ -32,7 +32,19 @@ import {
   MapPin,
   Pencil,
   ImageIcon,
+  Upload,
+  Video,
+  Trash2,
+  X,
 } from "lucide-react";
+import { auth, storage } from "@/lib/firebase";
+import {
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
+import { onAuthStateChanged } from "firebase/auth";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -150,6 +162,24 @@ function formatStatus(status: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Firebase auth helper — waits for auth state to restore after page refresh
+// ---------------------------------------------------------------------------
+
+function waitForAuth(): Promise<import("firebase/auth").User> {
+  return new Promise((resolve, reject) => {
+    if (auth.currentUser) {
+      resolve(auth.currentUser);
+      return;
+    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe();
+      if (user) resolve(user);
+      else reject(new Error("Not authenticated with Firebase"));
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -176,6 +206,16 @@ export default function InventoryDetailPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // ---- image upload state -------------------------------------------------
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // ---- spin video upload state --------------------------------------------
+  const [spinUploading, setSpinUploading] = useState(false);
+  const [spinProgress, setSpinProgress] = useState(0);
+  const [spinError, setSpinError] = useState<string | null>(null);
 
   // ---- fetch item ---------------------------------------------------------
   const fetchItem = useCallback(() => {
@@ -264,6 +304,207 @@ export default function InventoryDetailPage() {
       style: "currency",
       currency: "AUD",
     }).format(amount);
+  };
+
+  // ---- upload images ------------------------------------------------------
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!item || !e.target.files?.length) return;
+
+    const files = Array.from(e.target.files);
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    const invalidFiles = files.filter((f) => !allowedTypes.includes(f.type));
+    if (invalidFiles.length > 0) {
+      setUploadError("Only JPEG, PNG, and WebP images are allowed.");
+      return;
+    }
+
+    const oversizedFiles = files.filter((f) => f.size > 10 * 1024 * 1024);
+    if (oversizedFiles.length > 0) {
+      setUploadError("Each image must be under 10 MB.");
+      return;
+    }
+
+    setUploadError(null);
+    setUploading(true);
+    setUploadProgress({});
+
+    try {
+      await waitForAuth();
+      const newUrls: string[] = [];
+
+      for (const file of files) {
+        const timestamp = Date.now();
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const storagePath = `inventory/${item.id}/images/${timestamp}_${safeName}`;
+        const storageRef = ref(storage, storagePath);
+
+        const url = await new Promise<string>((resolve, reject) => {
+          const task = uploadBytesResumable(storageRef, file);
+          task.on(
+            "state_changed",
+            (snap) => {
+              setUploadProgress((prev) => ({
+                ...prev,
+                [file.name]: Math.round(
+                  (snap.bytesTransferred / snap.totalBytes) * 100
+                ),
+              }));
+            },
+            reject,
+            async () => {
+              resolve(await getDownloadURL(task.snapshot.ref));
+            }
+          );
+        });
+        newUrls.push(url);
+      }
+
+      const updatedImages = [...item.images, ...newUrls];
+      const res = await fetch(`/api/admin/inventory/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images: updatedImages }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to save images");
+      }
+      fetchItem();
+    } catch (err) {
+      console.error("Image upload failed:", err);
+      setUploadError(
+        err instanceof Error ? err.message : "Upload failed. Please try again."
+      );
+    } finally {
+      setUploading(false);
+      setUploadProgress({});
+      e.target.value = "";
+    }
+  };
+
+  // ---- delete image -------------------------------------------------------
+  const handleImageDelete = async (imageUrl: string, index: number) => {
+    if (!item) return;
+    if (!confirm("Delete this image?")) return;
+
+    try {
+      try {
+        await waitForAuth();
+        await deleteObject(ref(storage, imageUrl));
+      } catch {
+        // Storage object may already be deleted — still remove from Firestore
+      }
+
+      const updatedImages = item.images.filter((_, i) => i !== index);
+      const res = await fetch(`/api/admin/inventory/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images: updatedImages }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to remove image");
+      }
+      fetchItem();
+    } catch (err) {
+      console.error("Image delete failed:", err);
+      setUploadError(
+        err instanceof Error ? err.message : "Failed to delete image."
+      );
+    }
+  };
+
+  // ---- upload spin video --------------------------------------------------
+  const handleSpinUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!item || !e.target.files?.length) return;
+    const file = e.target.files[0];
+
+    if (!file.type.startsWith("video/")) {
+      setSpinError("Please select a video file.");
+      return;
+    }
+    if (file.size > 100 * 1024 * 1024) {
+      setSpinError("Video must be under 100 MB.");
+      return;
+    }
+
+    setSpinError(null);
+    setSpinUploading(true);
+    setSpinProgress(0);
+
+    try {
+      await waitForAuth();
+      const storagePath = `inventory/${item.id}/spin.mp4`;
+      const storageRef = ref(storage, storagePath);
+
+      const url = await new Promise<string>((resolve, reject) => {
+        const task = uploadBytesResumable(storageRef, file);
+        task.on(
+          "state_changed",
+          (snap) => {
+            setSpinProgress(
+              Math.round((snap.bytesTransferred / snap.totalBytes) * 100)
+            );
+          },
+          reject,
+          async () => {
+            resolve(await getDownloadURL(task.snapshot.ref));
+          }
+        );
+      });
+
+      const res = await fetch(`/api/admin/inventory/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spinVideo: url }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to save video");
+      }
+      fetchItem();
+    } catch (err) {
+      console.error("Spin video upload failed:", err);
+      setSpinError(
+        err instanceof Error ? err.message : "Upload failed. Please try again."
+      );
+    } finally {
+      setSpinUploading(false);
+      setSpinProgress(0);
+      e.target.value = "";
+    }
+  };
+
+  // ---- delete spin video --------------------------------------------------
+  const handleSpinDelete = async () => {
+    if (!item?.spinVideo) return;
+    if (!confirm("Delete the spin video?")) return;
+
+    try {
+      try {
+        await waitForAuth();
+        await deleteObject(ref(storage, item.spinVideo));
+      } catch {
+        // Storage object may already be deleted
+      }
+
+      const res = await fetch(`/api/admin/inventory/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spinVideo: null }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to remove video");
+      }
+      fetchItem();
+    } catch (err) {
+      console.error("Spin video delete failed:", err);
+      setSpinError(
+        err instanceof Error ? err.message : "Failed to delete video."
+      );
+    }
   };
 
   // ---- render: loading ----------------------------------------------------
@@ -542,21 +783,196 @@ export default function InventoryDetailPage() {
         </dl>
       </div>
 
-      {/* Images placeholder card */}
+      {/* Images card */}
       <div className="mt-6 rounded-lg border border-border bg-card p-6">
-        <div className="mb-4 flex items-center gap-2">
-          <ImageIcon className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Images</h2>
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ImageIcon className="h-5 w-5 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Images</h2>
+            {item.images.length > 0 && (
+              <span className="text-sm text-muted-foreground">
+                ({item.images.length})
+              </span>
+            )}
+          </div>
+          <label>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              className="hidden"
+              onChange={handleImageUpload}
+              disabled={uploading}
+            />
+            <Button variant="outline" size="sm" disabled={uploading} asChild>
+              <span>
+                <Upload className="mr-2 h-4 w-4" />
+                {uploading ? "Uploading\u2026" : "Upload Images"}
+              </span>
+            </Button>
+          </label>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Image management coming in Phase 2.
-          {item.images.length > 0 && (
-            <span className="ml-1">
-              ({item.images.length} image{item.images.length !== 1 ? "s" : ""}{" "}
-              attached)
-            </span>
+
+        {uploadError && (
+          <div className="mb-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            {uploadError}
+          </div>
+        )}
+
+        {uploading && Object.keys(uploadProgress).length > 0 && (
+          <div className="mb-4 space-y-2">
+            {Object.entries(uploadProgress).map(([fileName, progress]) => (
+              <div key={fileName} className="space-y-1">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span className="max-w-[200px] truncate">{fileName}</span>
+                  <span>{progress}%</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {item.images.length > 0 ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+            {item.images.map((imageUrl, index) => (
+              <div
+                key={index}
+                className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-background"
+              >
+                <img
+                  src={imageUrl}
+                  alt={`Image ${index + 1}`}
+                  className="h-full w-full object-contain"
+                />
+                <button
+                  onClick={() => handleImageDelete(imageUrl, index)}
+                  className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/80"
+                  title="Delete image"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
+                  {index + 1}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          !uploading && (
+            <p className="text-sm text-muted-foreground">
+              No images uploaded yet. Click &ldquo;Upload Images&rdquo; to add
+              photos.
+            </p>
+          )
+        )}
+      </div>
+
+      {/* Spin Video card */}
+      <div className="mt-6 rounded-lg border border-border bg-card p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Video className="h-5 w-5 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">360° Spin Video</h2>
+          </div>
+          {!item.spinVideo && (
+            <label>
+              <input
+                type="file"
+                accept="video/*"
+                className="hidden"
+                onChange={handleSpinUpload}
+                disabled={spinUploading}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={spinUploading}
+                asChild
+              >
+                <span>
+                  <Upload className="mr-2 h-4 w-4" />
+                  {spinUploading ? "Uploading\u2026" : "Upload Video"}
+                </span>
+              </Button>
+            </label>
           )}
-        </p>
+        </div>
+
+        {spinError && (
+          <div className="mb-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            {spinError}
+          </div>
+        )}
+
+        {spinUploading && (
+          <div className="mb-4 space-y-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Uploading video\u2026</span>
+              <span>{spinProgress}%</span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-300"
+                style={{ width: `${spinProgress}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {item.spinVideo ? (
+          <div className="space-y-3">
+            <div className="aspect-video w-full max-w-md overflow-hidden rounded-lg border border-border bg-background">
+              <video
+                src={item.spinVideo}
+                controls
+                muted
+                loop
+                playsInline
+                className="h-full w-full object-contain"
+              />
+            </div>
+            <div className="flex gap-2">
+              <label>
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  onChange={handleSpinUpload}
+                  disabled={spinUploading}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={spinUploading}
+                  asChild
+                >
+                  <span>Replace</span>
+                </Button>
+              </label>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSpinDelete}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </Button>
+            </div>
+          </div>
+        ) : (
+          !spinUploading && (
+            <p className="text-sm text-muted-foreground">
+              No spin video uploaded. Upload a 360° video for the product page.
+            </p>
+          )
+        )}
       </div>
 
       {/* Timestamps */}
