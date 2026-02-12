@@ -211,7 +211,7 @@ export default function ProductDetailPage() {
           {/* Grade */}
           <div className="mt-6 rounded-lg border border-border bg-card p-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Cosmetic Grade</span>
+              <span className="text-sm font-medium">Grade</span>
               <Badge variant="secondary" className="text-sm">
                 Grade {product.cosmeticGrade}
               </Badge>

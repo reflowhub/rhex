@@ -373,7 +373,7 @@ export default function InventoryDetailPage() {
               <dd className="font-mono text-xs">{item.serial}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">Cosmetic Grade</dt>
+              <dt className="text-muted-foreground">Grade</dt>
               <dd>
                 <Badge variant="outline">{item.cosmeticGrade}</Badge>
               </dd>
@@ -612,9 +612,9 @@ export default function InventoryDetailPage() {
               </Select>
             </div>
 
-            {/* Cosmetic Grade */}
+            {/* Grade */}
             <div className="grid gap-2">
-              <Label htmlFor="edit-grade">Cosmetic Grade</Label>
+              <Label htmlFor="edit-grade">Grade</Label>
               <Select
                 value={editData.cosmeticGrade}
                 onValueChange={(val) =>

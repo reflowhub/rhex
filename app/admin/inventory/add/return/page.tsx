@@ -432,9 +432,9 @@ export default function ProcessReturnPage() {
                 )}
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {/* Cosmetic Grade */}
+                  {/* Grade */}
                   <div className="grid gap-2">
-                    <Label htmlFor="grade">Cosmetic Grade *</Label>
+                    <Label htmlFor="grade">Grade *</Label>
                     <Select
                       value={cosmeticGrade}
                       onValueChange={setCosmeticGrade}

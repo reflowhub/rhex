@@ -617,9 +617,9 @@ export default function ReceiveInventoryPage() {
                 />
               </div>
 
-              {/* Cosmetic Grade */}
+              {/* Grade */}
               <div className="grid gap-2">
-                <Label htmlFor="grade">Cosmetic Grade *</Label>
+                <Label htmlFor="grade">Grade *</Label>
                 <Select value={cosmeticGrade} onValueChange={setCosmeticGrade}>
                   <SelectTrigger id="grade">
                     <SelectValue placeholder="Select grade..." />
