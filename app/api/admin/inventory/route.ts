@@ -77,7 +77,9 @@ export async function GET(request: NextRequest) {
         serial: data.serial,
         sourceType: data.sourceType,
         cosmeticGrade: data.cosmeticGrade,
-        costNZD: data.costNZD,
+        costNZD: data.costNZD ?? null,
+        costAUD: data.costAUD ?? null,
+        sourceName: data.sourceName ?? null,
         sellPriceAUD: data.sellPriceAUD ?? 0,
         sellPriceNZD: data.sellPriceNZD ?? null,
         status: data.status,
@@ -121,12 +123,13 @@ export async function POST(request: NextRequest) {
     if (adminUser instanceof NextResponse) return adminUser;
 
     const body = await request.json();
-    const { deviceRef, category, serial, sourceType, cosmeticGrade, costNZD, sellPriceAUD } = body;
+    const { deviceRef, category, serial, sourceType, cosmeticGrade, costNZD, costAUD, sellPriceAUD } = body;
 
-    // Validate required fields
-    if (!deviceRef || !serial || !sourceType || !cosmeticGrade || costNZD == null || sellPriceAUD == null) {
+    // Validate required fields — cost can be NZD or AUD
+    const hasCost = costNZD != null || costAUD != null;
+    if (!deviceRef || !serial || !sourceType || !cosmeticGrade || !hasCost || sellPriceAUD == null) {
       return NextResponse.json(
-        { error: "deviceRef, serial, sourceType, cosmeticGrade, costNZD, and sellPriceAUD are required" },
+        { error: "deviceRef, serial, sourceType, cosmeticGrade, cost (NZD or AUD), and sellPriceAUD are required" },
         { status: 400 }
       );
     }
@@ -161,7 +164,7 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    const inventoryData = {
+    const inventoryData: Record<string, unknown> = {
       inventoryId: inventoryId!,
       deviceRef,
       category: category || "Phone",
@@ -169,7 +172,8 @@ export async function POST(request: NextRequest) {
       sourceType,
       sourceQuoteId: body.sourceQuoteId ?? null,
       acquiredAt: admin.firestore.FieldValue.serverTimestamp(),
-      costNZD,
+      costNZD: costNZD ?? null,
+      costAUD: costAUD ?? null,
       cosmeticGrade,
       batteryHealth: body.batteryHealth ?? null,
       notes: body.notes ?? "",
@@ -180,6 +184,7 @@ export async function POST(request: NextRequest) {
       images: [],
       spinVideo: null,
       location: body.location ?? null,
+      sourceName: body.sourceName ?? null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };

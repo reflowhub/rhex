@@ -56,7 +56,9 @@ interface InventoryItem {
     quotePriceNZD: number | null;
   } | null;
   acquiredAt: string | null;
-  costNZD: number;
+  costNZD: number | null;
+  costAUD: number | null;
+  sourceName: string | null;
   cosmeticGrade: string;
   batteryHealth: number | null;
   notes: string;
@@ -67,6 +69,9 @@ interface InventoryItem {
   images: string[];
   spinVideo: string | null;
   location: string | null;
+  returnReason: string | null;
+  returnedFromOrderId: string | null;
+  returnedAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -291,9 +296,19 @@ export default function InventoryDetailPage() {
   }
 
   const badgeProps = statusBadgeProps(item.status);
-  const margin = item.sellPriceAUD - item.costNZD;
+  const cost = item.costAUD ?? item.costNZD ?? 0;
+  const costLabel = item.costAUD != null ? "Cost (AUD)" : "Cost (NZD)";
+  const margin = item.sellPriceAUD - cost;
   const marginPercent =
-    item.costNZD > 0 ? ((margin / item.costNZD) * 100).toFixed(0) : "\u2014";
+    cost > 0 ? ((margin / cost) * 100).toFixed(0) : "\u2014";
+
+  const sourceTypeLabel: Record<string, string> = {
+    "trade-in": "Trade-in",
+    bulk: "Bulk Quote",
+    "direct-purchase": "Direct Purchase",
+    manual: "Manual Entry",
+    return: "Customer Return",
+  };
 
   // ---- render: main -------------------------------------------------------
   return (
@@ -375,8 +390,8 @@ export default function InventoryDetailPage() {
 
           <dl className="grid gap-3 text-sm">
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">Cost (NZD)</dt>
-              <dd className="font-medium">{formatPrice(item.costNZD)}</dd>
+              <dt className="text-muted-foreground">{costLabel}</dt>
+              <dd className="font-medium">{formatPrice(cost)}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Sell Price (AUD)</dt>
@@ -421,9 +436,17 @@ export default function InventoryDetailPage() {
           <div className="flex justify-between">
             <dt className="text-muted-foreground">Source Type</dt>
             <dd>
-              <Badge variant="secondary">{item.sourceType}</Badge>
+              <Badge variant="secondary">
+                {sourceTypeLabel[item.sourceType] ?? item.sourceType}
+              </Badge>
             </dd>
           </div>
+          {item.sourceName && (
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Supplier</dt>
+              <dd className="font-medium">{item.sourceName}</dd>
+            </div>
+          )}
           {item.sourceQuoteId && (
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Source Quote</dt>
@@ -452,6 +475,38 @@ export default function InventoryDetailPage() {
             <dt className="text-muted-foreground">Acquired</dt>
             <dd>{formatDate(item.acquiredAt)}</dd>
           </div>
+          {item.returnedAt && (
+            <>
+              <div className="my-1 h-px bg-border" />
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Returned</dt>
+                <dd>{formatDate(item.returnedAt)}</dd>
+              </div>
+              {item.returnReason && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Return Reason</dt>
+                  <dd className="font-medium">{item.returnReason}</dd>
+                </div>
+              )}
+              {item.returnedFromOrderId && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">From Order</dt>
+                  <dd>
+                    <button
+                      onClick={() =>
+                        router.push(
+                          `/admin/orders/${item.returnedFromOrderId}`
+                        )
+                      }
+                      className="font-medium text-primary underline-offset-4 hover:underline"
+                    >
+                      {item.returnedFromOrderId.substring(0, 8)}...
+                    </button>
+                  </dd>
+                </div>
+              )}
+            </>
+          )}
         </dl>
       </div>
 

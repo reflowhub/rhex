@@ -15,11 +15,22 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Loader2,
   Search,
   ChevronLeft,
   ChevronRight,
   Plus,
+  ChevronDown,
+  ShoppingCart,
+  PenLine,
+  RotateCcw,
+  Package,
 } from "lucide-react";
 import { useFX } from "@/lib/use-fx";
 import { cn } from "@/lib/utils";
@@ -39,7 +50,8 @@ interface InventoryItem {
   serial: string;
   sourceType: string;
   cosmeticGrade: string;
-  costNZD: number;
+  costNZD: number | null;
+  costAUD: number | null;
   sellPriceAUD: number;
   status: string;
   listed: boolean;
@@ -236,12 +248,41 @@ export default function InventoryPage() {
               : `${items.length} item${items.length !== 1 ? "s" : ""} found`}
           </p>
         </div>
-        <Link href="/admin/inventory/receive">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Receive from Quote
-          </Button>
-        </Link>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Inventory
+              <ChevronDown className="ml-2 h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem asChild>
+              <Link href="/admin/inventory/receive">
+                <Package className="mr-2 h-4 w-4" />
+                Receive from Quote
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/admin/inventory/add/purchase">
+                <ShoppingCart className="mr-2 h-4 w-4" />
+                Direct Purchase
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/admin/inventory/add/manual">
+                <PenLine className="mr-2 h-4 w-4" />
+                Manual Entry
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/admin/inventory/add/return">
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Process Return
+              </Link>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Category tabs */}
@@ -363,7 +404,7 @@ export default function InventoryPage() {
                       <Badge variant="outline">{item.cosmeticGrade}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {formatPrice(item.costNZD)}
+                      {formatPrice(item.costAUD ?? item.costNZD)}
                     </TableCell>
                     <TableCell className="text-right">
                       {formatPrice(item.sellPriceAUD)}
