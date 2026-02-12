@@ -311,11 +311,14 @@ export async function POST(request: NextRequest) {
     const devicesSnapshot = await adminDb.collection("devices").get();
     const devicesByDeviceId = new Map<string, string>();
     const devicesByMakeModelStorage = new Map<string, string>();
+    // Reverse map: docId -> current numericId (so we can remove stale entries)
+    const docIdToDeviceId = new Map<string, string>();
     devicesSnapshot.docs.forEach((doc) => {
       const data = doc.data();
       const numericId = String(data.deviceId ?? "");
       if (numericId) {
         devicesByDeviceId.set(numericId, doc.id);
+        docIdToDeviceId.set(doc.id, numericId);
       }
       // Secondary lookup by make|model|storage (case-insensitive)
       const key = `${String(data.make ?? "").toLowerCase().trim()}|${String(data.model ?? "").toLowerCase().trim()}|${String(data.storage ?? "").toLowerCase().trim()}`;
@@ -338,6 +341,11 @@ export async function POST(request: NextRequest) {
           const mmsKey = `${row.make.toLowerCase().trim()}|${row.model.toLowerCase().trim()}|${row.storage.toLowerCase().trim()}`;
           deviceDocId = devicesByMakeModelStorage.get(mmsKey);
           if (deviceDocId) {
+            // Remove stale deviceId mapping before reassigning
+            const oldNumericId = docIdToDeviceId.get(deviceDocId);
+            if (oldNumericId) {
+              devicesByDeviceId.delete(oldNumericId);
+            }
             // Update the numeric deviceId on the matched device
             const parsedId = parseInt(row.deviceId, 10) || row.deviceId;
             batch.update(adminDb.collection("devices").doc(deviceDocId), {
@@ -345,6 +353,7 @@ export async function POST(request: NextRequest) {
               updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             });
             devicesByDeviceId.set(row.deviceId, deviceDocId);
+            docIdToDeviceId.set(deviceDocId, row.deviceId);
           }
         }
 
