@@ -307,14 +307,20 @@ export async function POST(request: NextRequest) {
       invalidateCategoriesCache();
     }
 
-    // Build a lookup of existing devices by deviceId (numeric) to find their doc IDs
+    // Build lookups of existing devices to find their doc IDs
     const devicesSnapshot = await adminDb.collection("devices").get();
     const devicesByDeviceId = new Map<string, string>();
+    const devicesByMakeModelStorage = new Map<string, string>();
     devicesSnapshot.docs.forEach((doc) => {
       const data = doc.data();
       const numericId = String(data.deviceId ?? "");
       if (numericId) {
         devicesByDeviceId.set(numericId, doc.id);
+      }
+      // Secondary lookup by make|model|storage (case-insensitive)
+      const key = `${String(data.make ?? "").toLowerCase().trim()}|${String(data.model ?? "").toLowerCase().trim()}|${String(data.storage ?? "").toLowerCase().trim()}`;
+      if (key !== "||") {
+        devicesByMakeModelStorage.set(key, doc.id);
       }
     });
 
@@ -325,11 +331,25 @@ export async function POST(request: NextRequest) {
       const batch = adminDb.batch();
 
       for (const row of chunk) {
-        // Find or create the device document
+        // Find device: first by numeric deviceId, then by make|model|storage
         let deviceDocId = devicesByDeviceId.get(row.deviceId);
 
         if (!deviceDocId) {
-          // Device doesn't exist — create it
+          const mmsKey = `${row.make.toLowerCase().trim()}|${row.model.toLowerCase().trim()}|${row.storage.toLowerCase().trim()}`;
+          deviceDocId = devicesByMakeModelStorage.get(mmsKey);
+          if (deviceDocId) {
+            // Update the numeric deviceId on the matched device
+            const parsedId = parseInt(row.deviceId, 10) || row.deviceId;
+            batch.update(adminDb.collection("devices").doc(deviceDocId), {
+              deviceId: parsedId,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            devicesByDeviceId.set(row.deviceId, deviceDocId);
+          }
+        }
+
+        if (!deviceDocId) {
+          // Device doesn't exist by either key — create it
           const newDeviceRef = adminDb.collection("devices").doc();
           deviceDocId = newDeviceRef.id;
           const modelStorage = row.storage
