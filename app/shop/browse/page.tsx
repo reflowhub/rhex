@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Smartphone, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
@@ -40,6 +40,20 @@ const PAGE_SIZE = 24;
 // ---------------------------------------------------------------------------
 
 export default function BrowsePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <BrowsePageInner />
+    </Suspense>
+  );
+}
+
+function BrowsePageInner() {
   const { currency, convertFromAUD } = useCurrency();
   const searchParams = useSearchParams();
   const initialCategory = searchParams.get("category") ?? "";
