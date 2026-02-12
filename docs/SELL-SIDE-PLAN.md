@@ -43,8 +43,8 @@ Status: paid           Assign sell price          Order fulfilled
   notes?: string              // "minor scratch on bezel"
 
   // Sell pricing
-  sellPriceNZD: number
-  sellPriceAUD?: number       // pre-computed or at order time
+  sellPriceAUD: number        // primary sell price (store is AUD-based)
+  sellPriceNZD?: number       // optional NZD override
 
   // Status lifecycle
   status: "received" | "inspecting" | "refurbishing"
@@ -87,15 +87,14 @@ Status: paid           Assign sell price          Order fulfilled
     inventoryId: string       // → inventory/{id}
     deviceRef: string         // → devices/{id} for display
     description: string       // "iPhone 15 Pro 256GB - Grade A"
-    priceNZD: number
+    priceAUD: number
   }]
 
-  // Totals
-  subtotalNZD: number
-  shippingNZD: number
-  totalNZD: number
-  displayCurrency: "NZD" | "AUD"
-  totalDisplay: number
+  // Totals (AUD-based — store currency)
+  subtotalAUD: number
+  shippingAUD: number
+  totalAUD: number
+  displayCurrency: "AUD" | "NZD"
   fxRate?: number
 
   // Payment
@@ -305,14 +304,47 @@ Admin order management with status workflow and manual tracking entry.
 - Shipping label integration (EasyPost, Shippo, or carrier API)
 - Refund endpoint (`POST /api/admin/orders/[id]/refund`) — deferred until Stripe goes live
 
-### Phase 4 — Margin & Analytics
+### Currency Refactor — NZD → AUD Base ✓ Complete
 
-Cost-vs-sell reporting, inventory aging, category performance, turn rates.
+Refactored the entire sell-side from NZD-based to AUD-based. The store primarily targets Australian customers, so AUD is now the base currency for all sell-side pricing, orders, and Stripe charges. Buy-side (trade-ins) remains NZD.
 
-- Margin dashboard: `costNZD` vs `sellPriceNZD` per unit and aggregate
-- Inventory aging: days from `acquiredAt` to `sold`
-- Category performance: units sold, avg margin, turn rate
-- Source analysis: trade-in vs bulk vs direct purchase profitability
+**Scope (20+ files):**
+
+- `lib/currency-context.tsx` — default currency `"AUD"`, added `convertFromAUD()` (AUD→NZD = `aud / NZD_AUD_rate`, rounded to nearest $5), geo-detect flipped to check for NZ (not AU)
+- `lib/cart-context.tsx` — `CartItem.sellPriceNZD` → `CartItem.sellPriceAUD`
+- Shop APIs (`products`, `products/[id]`, `checkout`, `orders/[id]`) — `sellPriceAUD` primary, order items store `priceAUD`, totals `subtotalAUD/shippingAUD/totalAUD`, Stripe `currency: "aud"`
+- Shop pages (`/shop`, `/shop/[id]`, `/shop/cart`, `/shop/checkout`, `/shop/order/[id]`) — all use `convertFromAUD`, display AUD by default, NZD toggle available
+- Admin order APIs + pages — `totalAUD` with NZD fallback for legacy orders (`data.totalAUD ?? data.totalNZD ?? 0`), `formatAUD()` helper
+- Admin inventory APIs — `sellPriceAUD` required in POST/receive, returned as primary in GET with NZD fallback
+- Admin inventory pages — AUD primary in financial card + edit dialog, NZD shown as secondary/optional
+- Receive page — form collects `sellPriceAUD` (was `sellPriceNZD`)
+
+**Key decisions:**
+
+- No Firestore migration — existing docs keep old field names; code reads new fields with fallbacks to old (`data.totalAUD ?? data.totalNZD ?? 0`)
+- `costNZD` stays NZD (acquisition cost from NZ trade-ins)
+- Margin calculation uses `sellPriceAUD - costNZD` (cross-currency approximation)
+- TypeScript passes with zero errors
+
+### Phase 4 — Margin & Analytics ✓ Complete
+
+Added sell-side inventory analytics to the existing analytics page via a tab system ("Quotes" for buy-side, "Inventory" for sell-side). Both tabs share the same date range picker.
+
+**New API route:** `GET /api/admin/analytics/inventory?from=&to=`
+
+- Fetches all inventory docs, computes metrics server-side with 60s cache
+- Date range filters sold-item metrics; snapshot/aging metrics are unfiltered
+- Uses `updatedAt` as `soldAt` proxy (set by webhook/checkout when status → "sold")
+
+**Inventory tab shows:**
+
+- KPI cards: Units Sold, Revenue (AUD), Avg Margin, Avg Days to Sell, In Stock count, Stock Value
+- Status Distribution pie chart (all items)
+- Inventory Aging bar chart with brackets (0-7d, 8-30d, 31-60d, 61-90d, 90d+)
+- Category Performance: margin bar chart + detailed table (revenue, cost, margin per category)
+- Source Analysis: trade-in vs bulk margin bar chart + table
+
+**Files:** `app/api/admin/analytics/inventory/route.ts` (new), `app/admin/analytics/page.tsx` (modified)
 
 ---
 
@@ -405,4 +437,4 @@ Think Braun ET66 calculator, Vitsoe 606 shelving, Apple Store product pages circ
 | Sell pricing | Manual per-unit | Refurbished devices vary; no formula-based pricing |
 | Images | Firebase Storage, actual unit photos | Real photos of each device — trust signal, reduces returns |
 | Inventory ↔ Quote link | `sourceQuoteId` field | Full traceability from acquisition to sale |
-| Currency | Reuse existing `lib/fx.ts` | Consistent NZD/AUD handling across buy and sell |
+| Currency | AUD base for sell-side, NZD for buy-side | Store targets AU customers; buy-side (trade-ins) stays NZD; FX conversion via `lib/fx.ts` |

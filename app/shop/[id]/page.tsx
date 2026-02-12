@@ -21,8 +21,8 @@ interface ProductDetail {
   category: string;
   cosmeticGrade: string;
   batteryHealth: number | null;
-  sellPriceNZD: number;
-  sellPriceAUD: number | null;
+  sellPriceAUD: number;
+  sellPriceNZD: number | null;
   images: string[];
   spinVideo: string | null;
   notes: string;
@@ -46,7 +46,7 @@ const GRADE_DESCRIPTIONS: Record<string, string> = {
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { currency, convertFromNZD } = useCurrency();
+  const { currency, convertFromAUD } = useCurrency();
   const { addItem, isInCart } = useCart();
 
   const [product, setProduct] = useState<ProductDetail | null>(null);
@@ -73,9 +73,9 @@ export default function ProductDetailPage() {
   }, [id]);
 
   // ---- helpers ------------------------------------------------------------
-  const formatPrice = (priceNZD: number) => {
+  const formatPrice = (priceAUD: number) => {
     const displayPrice =
-      currency === "NZD" ? priceNZD : convertFromNZD(priceNZD);
+      currency === "AUD" ? priceAUD : convertFromAUD(priceAUD);
     return new Intl.NumberFormat(currency === "AUD" ? "en-AU" : "en-NZ", {
       style: "currency",
       currency,
@@ -92,7 +92,7 @@ export default function ProductDetailPage() {
       model: product.model,
       storage: product.storage,
       cosmeticGrade: product.cosmeticGrade,
-      sellPriceNZD: product.sellPriceNZD,
+      sellPriceAUD: product.sellPriceAUD,
       image: product.images[0] ?? null,
     });
   };
@@ -202,7 +202,7 @@ export default function ProductDetailPage() {
 
           {/* Price */}
           <p className="mt-6 text-3xl font-medium tabular-nums">
-            {formatPrice(product.sellPriceNZD)}
+            {formatPrice(product.sellPriceAUD)}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {currency === "AUD" ? "AUD incl. GST" : "NZD incl. GST"}

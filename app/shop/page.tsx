@@ -19,8 +19,8 @@ interface ShopProduct {
   category: string;
   cosmeticGrade: string;
   batteryHealth: number | null;
-  sellPriceNZD: number;
-  sellPriceAUD: number | null;
+  sellPriceAUD: number;
+  sellPriceNZD: number | null;
   images: string[];
 }
 
@@ -39,7 +39,7 @@ const PAGE_SIZE = 24;
 // ---------------------------------------------------------------------------
 
 export default function ShopPage() {
-  const { currency, convertFromNZD } = useCurrency();
+  const { currency, convertFromAUD } = useCurrency();
 
   // ---- data state ---------------------------------------------------------
   const [products, setProducts] = useState<ShopProduct[]>([]);
@@ -99,9 +99,9 @@ export default function ShopPage() {
   }, [fetchProducts]);
 
   // ---- helpers ------------------------------------------------------------
-  const formatPrice = (priceNZD: number) => {
+  const formatPrice = (priceAUD: number) => {
     const displayPrice =
-      currency === "NZD" ? priceNZD : convertFromNZD(priceNZD);
+      currency === "AUD" ? priceAUD : convertFromAUD(priceAUD);
     return new Intl.NumberFormat(currency === "AUD" ? "en-AU" : "en-NZ", {
       style: "currency",
       currency,
@@ -197,7 +197,7 @@ export default function ShopPage() {
                       Grade {product.cosmeticGrade}
                     </span>
                     <p className="text-lg font-medium tabular-nums text-foreground">
-                      {formatPrice(product.sellPriceNZD)}
+                      {formatPrice(product.sellPriceAUD)}
                     </p>
                   </div>
                 </div>

@@ -24,7 +24,7 @@ import { useCurrency } from "@/lib/currency-context";
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, clearCart } = useCart();
-  const { currency, convertFromNZD } = useCurrency();
+  const { currency, convertFromAUD } = useCurrency();
 
   // ---- form state ---------------------------------------------------------
   const [name, setName] = useState("");
@@ -41,9 +41,9 @@ export default function CheckoutPage() {
   const [error, setError] = useState("");
 
   // ---- helpers ------------------------------------------------------------
-  const formatPrice = (priceNZD: number) => {
+  const formatPrice = (priceAUD: number) => {
     const displayPrice =
-      currency === "NZD" ? priceNZD : convertFromNZD(priceNZD);
+      currency === "AUD" ? priceAUD : convertFromAUD(priceAUD);
     return new Intl.NumberFormat(currency === "AUD" ? "en-AU" : "en-NZ", {
       style: "currency",
       currency,
@@ -52,7 +52,7 @@ export default function CheckoutPage() {
     }).format(displayPrice);
   };
 
-  const subtotalNZD = items.reduce((sum, item) => sum + item.sellPriceNZD, 0);
+  const subtotalAUD = items.reduce((sum, item) => sum + item.sellPriceAUD, 0);
 
   const isFormValid =
     name.trim() &&
@@ -301,7 +301,7 @@ export default function CheckoutPage() {
                         </p>
                       </div>
                       <p className="text-sm font-medium tabular-nums">
-                        {formatPrice(item.sellPriceNZD)}
+                        {formatPrice(item.sellPriceAUD)}
                       </p>
                     </div>
                   );
@@ -312,7 +312,7 @@ export default function CheckoutPage() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
                   <span className="tabular-nums">
-                    {formatPrice(subtotalNZD)}
+                    {formatPrice(subtotalAUD)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
@@ -323,7 +323,7 @@ export default function CheckoutPage() {
                   <div className="flex items-center justify-between">
                     <span className="font-medium">Total</span>
                     <span className="text-lg font-medium tabular-nums">
-                      {formatPrice(subtotalNZD)}
+                      {formatPrice(subtotalAUD)}
                     </span>
                   </div>
                 </div>

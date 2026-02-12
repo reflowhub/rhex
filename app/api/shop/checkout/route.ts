@@ -152,16 +152,16 @@ export async function POST(request: NextRequest) {
             description: description
               ? `${description} - Grade ${data.cosmeticGrade}`
               : `Grade ${data.cosmeticGrade}`,
-            priceNZD: data.sellPriceNZD as number,
+            priceAUD: data.sellPriceAUD as number,
           };
         });
 
-        const subtotalNZD = orderItems.reduce(
-          (sum, item) => sum + item.priceNZD,
+        const subtotalAUD = orderItems.reduce(
+          (sum, item) => sum + item.priceAUD,
           0
         );
-        const shippingNZD = 0; // Free shipping for now
-        const totalNZD = subtotalNZD + shippingNZD;
+        const shippingAUD = 0; // Free shipping for now
+        const totalAUD = subtotalAUD + shippingAUD;
 
         // Create order document
         const orderRef = adminDb.collection("orders").doc();
@@ -174,10 +174,10 @@ export async function POST(request: NextRequest) {
           customerPhone: customerPhone ?? null,
           shippingAddress,
           items: orderItems,
-          subtotalNZD,
-          shippingNZD,
-          totalNZD,
-          displayCurrency: currency ?? "NZD",
+          subtotalAUD,
+          shippingAUD,
+          totalAUD,
+          displayCurrency: currency ?? "AUD",
           stripePaymentIntentId: null,
           stripeCheckoutSessionId: null,
           paymentStatus: "pending",
@@ -214,12 +214,12 @@ export async function POST(request: NextRequest) {
         const orderData = orderDoc.data()!;
 
         const lineItems = (
-          orderData.items as { description: string; priceNZD: number }[]
+          orderData.items as { description: string; priceAUD: number }[]
         ).map((item) => ({
           price_data: {
-            currency: "nzd",
+            currency: "aud",
             product_data: { name: item.description },
-            unit_amount: Math.round(item.priceNZD * 100),
+            unit_amount: Math.round(item.priceAUD * 100),
           },
           quantity: 1,
         }));

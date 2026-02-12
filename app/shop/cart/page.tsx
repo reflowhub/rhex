@@ -15,7 +15,7 @@ import { useCurrency } from "@/lib/currency-context";
 export default function CartPage() {
   const router = useRouter();
   const { items, removeItem } = useCart();
-  const { currency, convertFromNZD } = useCurrency();
+  const { currency, convertFromAUD } = useCurrency();
   const [validating, setValidating] = useState(true);
   const [removedNames, setRemovedNames] = useState<string[]>([]);
 
@@ -50,9 +50,9 @@ export default function CartPage() {
   }, []);
 
   // ---- helpers ------------------------------------------------------------
-  const formatPrice = (priceNZD: number) => {
+  const formatPrice = (priceAUD: number) => {
     const displayPrice =
-      currency === "NZD" ? priceNZD : convertFromNZD(priceNZD);
+      currency === "AUD" ? priceAUD : convertFromAUD(priceAUD);
     return new Intl.NumberFormat(currency === "AUD" ? "en-AU" : "en-NZ", {
       style: "currency",
       currency,
@@ -61,7 +61,7 @@ export default function CartPage() {
     }).format(displayPrice);
   };
 
-  const subtotalNZD = items.reduce((sum, item) => sum + item.sellPriceNZD, 0);
+  const subtotalAUD = items.reduce((sum, item) => sum + item.sellPriceAUD, 0);
 
   // ---- render -------------------------------------------------------------
   return (
@@ -138,7 +138,7 @@ export default function CartPage() {
 
                   {/* Price */}
                   <p className="font-medium tabular-nums text-foreground">
-                    {formatPrice(item.sellPriceNZD)}
+                    {formatPrice(item.sellPriceAUD)}
                   </p>
 
                   {/* Remove */}
@@ -159,7 +159,7 @@ export default function CartPage() {
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Subtotal</span>
               <span className="font-medium tabular-nums">
-                {formatPrice(subtotalNZD)}
+                {formatPrice(subtotalAUD)}
               </span>
             </div>
             <div className="mt-2 flex items-center justify-between">
@@ -170,7 +170,7 @@ export default function CartPage() {
               <div className="flex items-center justify-between">
                 <span className="font-medium">Total</span>
                 <span className="text-lg font-medium tabular-nums">
-                  {formatPrice(subtotalNZD)}
+                  {formatPrice(subtotalAUD)}
                 </span>
               </div>
             </div>

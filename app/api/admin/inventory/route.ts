@@ -78,7 +78,8 @@ export async function GET(request: NextRequest) {
         sourceType: data.sourceType,
         cosmeticGrade: data.cosmeticGrade,
         costNZD: data.costNZD,
-        sellPriceNZD: data.sellPriceNZD,
+        sellPriceAUD: data.sellPriceAUD ?? 0,
+        sellPriceNZD: data.sellPriceNZD ?? null,
         status: data.status,
         listed: data.listed ?? false,
         location: data.location ?? null,
@@ -120,12 +121,12 @@ export async function POST(request: NextRequest) {
     if (adminUser instanceof NextResponse) return adminUser;
 
     const body = await request.json();
-    const { deviceRef, category, serial, sourceType, cosmeticGrade, costNZD, sellPriceNZD } = body;
+    const { deviceRef, category, serial, sourceType, cosmeticGrade, costNZD, sellPriceAUD } = body;
 
     // Validate required fields
-    if (!deviceRef || !serial || !sourceType || !cosmeticGrade || costNZD == null || sellPriceNZD == null) {
+    if (!deviceRef || !serial || !sourceType || !cosmeticGrade || costNZD == null || sellPriceAUD == null) {
       return NextResponse.json(
-        { error: "deviceRef, serial, sourceType, cosmeticGrade, costNZD, and sellPriceNZD are required" },
+        { error: "deviceRef, serial, sourceType, cosmeticGrade, costNZD, and sellPriceAUD are required" },
         { status: 400 }
       );
     }
@@ -172,8 +173,8 @@ export async function POST(request: NextRequest) {
       cosmeticGrade,
       batteryHealth: body.batteryHealth ?? null,
       notes: body.notes ?? "",
-      sellPriceNZD,
-      sellPriceAUD: body.sellPriceAUD ?? null,
+      sellPriceAUD,
+      sellPriceNZD: body.sellPriceNZD ?? null,
       status: "received",
       listed: false,
       images: [],

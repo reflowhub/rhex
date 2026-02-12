@@ -16,12 +16,12 @@ export async function POST(request: NextRequest) {
     if (adminUser instanceof NextResponse) return adminUser;
 
     const body = await request.json();
-    const { quoteType, quoteId, lineId, serial, cosmeticGrade, sellPriceNZD } = body;
+    const { quoteType, quoteId, lineId, serial, cosmeticGrade, sellPriceAUD } = body;
 
     // Validate required fields
-    if (!quoteType || !quoteId || !serial || !cosmeticGrade || sellPriceNZD == null) {
+    if (!quoteType || !quoteId || !serial || !cosmeticGrade || sellPriceAUD == null) {
       return NextResponse.json(
-        { error: "quoteType, quoteId, serial, cosmeticGrade, and sellPriceNZD are required" },
+        { error: "quoteType, quoteId, serial, cosmeticGrade, and sellPriceAUD are required" },
         { status: 400 }
       );
     }
@@ -172,8 +172,8 @@ export async function POST(request: NextRequest) {
       cosmeticGrade,
       batteryHealth: body.batteryHealth ?? null,
       notes: body.notes ?? "",
-      sellPriceNZD,
-      sellPriceAUD: null,
+      sellPriceAUD,
+      sellPriceNZD: null,
       status: "received",
       listed: false,
       images: [],

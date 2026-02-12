@@ -25,7 +25,7 @@ interface OrderSummary {
   customerName: string;
   customerEmail: string;
   itemCount: number;
-  totalNZD: number;
+  totalAUD: number;
   displayCurrency: string;
   status: string;
   paymentStatus: string;
@@ -167,10 +167,10 @@ export default function OrdersPage() {
     });
   };
 
-  const formatNZD = (amount: number) => {
-    return new Intl.NumberFormat("en-NZ", {
+  const formatAUD = (amount: number) => {
+    return new Intl.NumberFormat("en-AU", {
       style: "currency",
-      currency: "NZD",
+      currency: "AUD",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
@@ -278,7 +278,7 @@ export default function OrdersPage() {
                       {order.itemCount !== 1 ? "s" : ""}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatNZD(order.totalNZD)}
+                      {formatAUD(order.totalAUD)}
                     </TableCell>
                     <TableCell>
                       <Badge

@@ -16,7 +16,7 @@ interface OrderItem {
   inventoryId: string;
   deviceRef: string;
   description: string;
-  priceNZD: number;
+  priceAUD: number;
 }
 
 interface OrderDetail {
@@ -27,9 +27,9 @@ interface OrderDetail {
   status: string;
   paymentStatus: string;
   items: OrderItem[];
-  subtotalNZD: number;
-  shippingNZD: number;
-  totalNZD: number;
+  subtotalAUD: number;
+  shippingAUD: number;
+  totalAUD: number;
   displayCurrency: string;
   shippingAddress: {
     line1: string;
@@ -48,7 +48,7 @@ interface OrderDetail {
 
 export default function OrderConfirmationPage() {
   const { id } = useParams<{ id: string }>();
-  const { currency, convertFromNZD } = useCurrency();
+  const { currency, convertFromAUD } = useCurrency();
 
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,9 +75,9 @@ export default function OrderConfirmationPage() {
   }, [id]);
 
   // ---- helpers ------------------------------------------------------------
-  const formatPrice = (priceNZD: number) => {
+  const formatPrice = (priceAUD: number) => {
     const displayPrice =
-      currency === "NZD" ? priceNZD : convertFromNZD(priceNZD);
+      currency === "AUD" ? priceAUD : convertFromAUD(priceAUD);
     return new Intl.NumberFormat(currency === "AUD" ? "en-AU" : "en-NZ", {
       style: "currency",
       currency,
@@ -149,7 +149,7 @@ export default function OrderConfirmationPage() {
                 <p className="text-sm font-medium">{item.description}</p>
               </div>
               <p className="text-sm font-medium tabular-nums">
-                {formatPrice(item.priceNZD)}
+                {formatPrice(item.priceAUD)}
               </p>
             </div>
           ))}
@@ -160,20 +160,20 @@ export default function OrderConfirmationPage() {
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Subtotal</span>
             <span className="tabular-nums">
-              {formatPrice(order.subtotalNZD)}
+              {formatPrice(order.subtotalAUD)}
             </span>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Shipping</span>
             <span className="text-muted-foreground">
-              {order.shippingNZD > 0 ? formatPrice(order.shippingNZD) : "Free"}
+              {order.shippingAUD > 0 ? formatPrice(order.shippingAUD) : "Free"}
             </span>
           </div>
           <div className="border-t border-border pt-2">
             <div className="flex items-center justify-between">
               <span className="font-medium">Total</span>
               <span className="text-lg font-medium tabular-nums">
-                {formatPrice(order.totalNZD)}
+                {formatPrice(order.totalAUD)}
               </span>
             </div>
           </div>

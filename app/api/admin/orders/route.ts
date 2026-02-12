@@ -31,15 +31,15 @@ export async function GET(request: NextRequest) {
 
     let orders = snapshot.docs.map((doc) => {
       const data = doc.data();
-      const items = (data.items as { inventoryId: string; description: string; priceNZD: number }[]) ?? [];
+      const items = (data.items as { inventoryId: string; description: string; priceAUD: number }[]) ?? [];
       return {
         id: doc.id,
         orderNumber: data.orderNumber,
         customerName: data.customerName ?? "",
         customerEmail: data.customerEmail ?? "",
         itemCount: items.length,
-        totalNZD: data.totalNZD ?? 0,
-        displayCurrency: data.displayCurrency ?? "NZD",
+        totalAUD: data.totalAUD ?? data.totalNZD ?? 0,
+        displayCurrency: data.displayCurrency ?? "AUD",
         status: data.status,
         paymentStatus: data.paymentStatus ?? "pending",
         createdAt: serializeTimestamp(data.createdAt),

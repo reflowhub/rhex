@@ -76,8 +76,8 @@ export async function GET(request: NextRequest) {
         category: data.category ?? "Phone",
         cosmeticGrade: data.cosmeticGrade ?? "",
         batteryHealth: data.batteryHealth ?? null,
-        sellPriceNZD: data.sellPriceNZD ?? 0,
-        sellPriceAUD: data.sellPriceAUD ?? null,
+        sellPriceAUD: data.sellPriceAUD ?? 0,
+        sellPriceNZD: data.sellPriceNZD ?? null,
         images: (data.images as string[]) ?? [],
       };
     });

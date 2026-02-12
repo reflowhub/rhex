@@ -106,7 +106,7 @@ export default function ReceiveInventoryPage() {
   const [serial, setSerial] = useState("");
   const [cosmeticGrade, setCosmeticGrade] = useState("");
   const [batteryHealth, setBatteryHealth] = useState("");
-  const [sellPriceNZD, setSellPriceNZD] = useState("");
+  const [sellPriceAUD, setSellPriceAUD] = useState("");
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -205,7 +205,7 @@ export default function ReceiveInventoryPage() {
   };
 
   const resetFormValues = () => {
-    setSellPriceNZD("");
+    setSellPriceAUD("");
     setBatteryHealth("");
     setLocation("");
     setNotes("");
@@ -220,7 +220,7 @@ export default function ReceiveInventoryPage() {
 
   // ---- submit -------------------------------------------------------------
   const handleSubmit = async () => {
-    if (!serial || !cosmeticGrade || !sellPriceNZD) return;
+    if (!serial || !cosmeticGrade || !sellPriceAUD) return;
 
     setSubmitting(true);
     setFormError(null);
@@ -229,7 +229,7 @@ export default function ReceiveInventoryPage() {
       quoteType,
       serial,
       cosmeticGrade,
-      sellPriceNZD: parseFloat(sellPriceNZD),
+      sellPriceAUD: parseFloat(sellPriceAUD),
     };
 
     if (batteryHealth) {
@@ -278,7 +278,7 @@ export default function ReceiveInventoryPage() {
     (quoteType === "bulk" && selectedBulk && selectedLine);
 
   const isFormValid =
-    isFormReady && serial.trim() !== "" && cosmeticGrade !== "" && sellPriceNZD !== "";
+    isFormReady && serial.trim() !== "" && cosmeticGrade !== "" && sellPriceAUD !== "";
 
   // ---- render -------------------------------------------------------------
   return (
@@ -648,17 +648,17 @@ export default function ReceiveInventoryPage() {
                 />
               </div>
 
-              {/* Sell Price NZD */}
+              {/* Sell Price AUD */}
               <div className="grid gap-2">
-                <Label htmlFor="sell-price">Sell Price (NZD) *</Label>
+                <Label htmlFor="sell-price">Sell Price (AUD) *</Label>
                 <Input
                   id="sell-price"
                   type="number"
                   min="0"
                   step="0.01"
                   placeholder="Enter sell price"
-                  value={sellPriceNZD}
-                  onChange={(e) => setSellPriceNZD(e.target.value)}
+                  value={sellPriceAUD}
+                  onChange={(e) => setSellPriceAUD(e.target.value)}
                 />
               </div>
 

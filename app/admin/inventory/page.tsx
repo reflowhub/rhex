@@ -40,7 +40,7 @@ interface InventoryItem {
   sourceType: string;
   cosmeticGrade: string;
   costNZD: number;
-  sellPriceNZD: number;
+  sellPriceAUD: number;
   status: string;
   listed: boolean;
   location: string | null;
@@ -366,7 +366,7 @@ export default function InventoryPage() {
                       {formatPrice(item.costNZD)}
                     </TableCell>
                     <TableCell className="text-right">
-                      {formatPrice(item.sellPriceNZD)}
+                      {formatPrice(item.sellPriceAUD)}
                     </TableCell>
                     <TableCell>
                       <Badge

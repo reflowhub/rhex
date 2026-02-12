@@ -19,7 +19,7 @@ export interface CartItem {
   model: string;
   storage: string;
   cosmeticGrade: string;
-  sellPriceNZD: number;
+  sellPriceAUD: number;
   image: string | null;
 }
 

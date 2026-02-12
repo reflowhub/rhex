@@ -60,8 +60,8 @@ interface InventoryItem {
   cosmeticGrade: string;
   batteryHealth: number | null;
   notes: string;
-  sellPriceNZD: number;
-  sellPriceAUD: number | null;
+  sellPriceAUD: number;
+  sellPriceNZD: number | null;
   status: string;
   listed: boolean;
   images: string[];
@@ -164,8 +164,8 @@ export default function InventoryDetailPage() {
   const [editData, setEditData] = useState({
     status: "",
     cosmeticGrade: "",
-    sellPriceNZD: "",
     sellPriceAUD: "",
+    sellPriceNZD: "",
     batteryHealth: "",
     location: "",
     listed: false,
@@ -199,8 +199,8 @@ export default function InventoryDetailPage() {
     setEditData({
       status: item.status,
       cosmeticGrade: item.cosmeticGrade,
-      sellPriceNZD: String(item.sellPriceNZD),
-      sellPriceAUD: item.sellPriceAUD != null ? String(item.sellPriceAUD) : "",
+      sellPriceAUD: String(item.sellPriceAUD),
+      sellPriceNZD: item.sellPriceNZD != null ? String(item.sellPriceNZD) : "",
       batteryHealth:
         item.batteryHealth != null ? String(item.batteryHealth) : "",
       location: item.location ?? "",
@@ -220,13 +220,13 @@ export default function InventoryDetailPage() {
     const body: Record<string, unknown> = {
       status: editData.status,
       cosmeticGrade: editData.cosmeticGrade,
-      sellPriceNZD: parseFloat(editData.sellPriceNZD),
+      sellPriceAUD: parseFloat(editData.sellPriceAUD),
       listed: editData.listed,
       notes: editData.notes,
     };
 
-    if (editData.sellPriceAUD) {
-      body.sellPriceAUD = parseFloat(editData.sellPriceAUD);
+    if (editData.sellPriceNZD) {
+      body.sellPriceNZD = parseFloat(editData.sellPriceNZD);
     }
     if (editData.batteryHealth) {
       body.batteryHealth = parseInt(editData.batteryHealth, 10);
@@ -291,7 +291,7 @@ export default function InventoryDetailPage() {
   }
 
   const badgeProps = statusBadgeProps(item.status);
-  const margin = item.sellPriceNZD - item.costNZD;
+  const margin = item.sellPriceAUD - item.costNZD;
   const marginPercent =
     item.costNZD > 0 ? ((margin / item.costNZD) * 100).toFixed(0) : "\u2014";
 
@@ -379,14 +379,14 @@ export default function InventoryDetailPage() {
               <dd className="font-medium">{formatPrice(item.costNZD)}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">Sell Price (NZD)</dt>
-              <dd className="font-medium">{formatPrice(item.sellPriceNZD)}</dd>
+              <dt className="text-muted-foreground">Sell Price (AUD)</dt>
+              <dd className="font-medium">{formatPrice(item.sellPriceAUD)}</dd>
             </div>
-            {item.sellPriceAUD != null && (
+            {item.sellPriceNZD != null && (
               <div className="flex justify-between">
-                <dt className="text-muted-foreground">Sell Price (AUD)</dt>
+                <dt className="text-muted-foreground">Sell Price (NZD)</dt>
                 <dd className="font-medium">
-                  {formatPrice(item.sellPriceAUD)}
+                  {formatPrice(item.sellPriceNZD)}
                 </dd>
               </div>
             )}
@@ -579,29 +579,9 @@ export default function InventoryDetailPage() {
               </Select>
             </div>
 
-            {/* Sell Price NZD */}
-            <div className="grid gap-2">
-              <Label htmlFor="edit-sell-price">Sell Price (NZD)</Label>
-              <Input
-                id="edit-sell-price"
-                type="number"
-                min="0"
-                step="0.01"
-                value={editData.sellPriceNZD}
-                onChange={(e) =>
-                  setEditData((prev) => ({
-                    ...prev,
-                    sellPriceNZD: e.target.value,
-                  }))
-                }
-              />
-            </div>
-
             {/* Sell Price AUD */}
             <div className="grid gap-2">
-              <Label htmlFor="edit-sell-price-aud">
-                Sell Price (AUD) — optional
-              </Label>
+              <Label htmlFor="edit-sell-price-aud">Sell Price (AUD)</Label>
               <Input
                 id="edit-sell-price-aud"
                 type="number"
@@ -612,6 +592,26 @@ export default function InventoryDetailPage() {
                   setEditData((prev) => ({
                     ...prev,
                     sellPriceAUD: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            {/* Sell Price NZD */}
+            <div className="grid gap-2">
+              <Label htmlFor="edit-sell-price">
+                Sell Price (NZD) — optional
+              </Label>
+              <Input
+                id="edit-sell-price"
+                type="number"
+                min="0"
+                step="0.01"
+                value={editData.sellPriceNZD}
+                onChange={(e) =>
+                  setEditData((prev) => ({
+                    ...prev,
+                    sellPriceNZD: e.target.value,
                   }))
                 }
               />
@@ -688,7 +688,7 @@ export default function InventoryDetailPage() {
             </Button>
             <Button
               onClick={handleSave}
-              disabled={submitting || !editData.sellPriceNZD}
+              disabled={submitting || !editData.sellPriceAUD}
             >
               {submitting && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

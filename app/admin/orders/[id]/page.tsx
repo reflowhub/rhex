@@ -39,7 +39,7 @@ interface OrderItem {
   inventoryId: string;
   deviceRef: string;
   description: string;
-  priceNZD: number;
+  priceAUD: number;
 }
 
 interface OrderDetail {
@@ -57,9 +57,9 @@ interface OrderDetail {
     country: string;
   };
   items: OrderItem[];
-  subtotalNZD: number;
-  shippingNZD: number;
-  totalNZD: number;
+  subtotalAUD: number;
+  shippingAUD: number;
+  totalAUD: number;
   displayCurrency: string;
   stripePaymentIntentId: string | null;
   stripeCheckoutSessionId: string | null;
@@ -136,10 +136,10 @@ function formatDate(iso: string | undefined | null): string {
   });
 }
 
-function formatNZD(amount: number) {
-  return new Intl.NumberFormat("en-NZ", {
+function formatAUD(amount: number) {
+  return new Intl.NumberFormat("en-AU", {
     style: "currency",
-    currency: "NZD",
+    currency: "AUD",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
@@ -357,7 +357,7 @@ export default function OrderDetailPage() {
                     </button>
                   </div>
                   <p className="ml-4 text-sm font-medium tabular-nums">
-                    {formatNZD(item.priceNZD)}
+                    {formatAUD(item.priceAUD)}
                   </p>
                 </div>
               ))}
@@ -403,20 +403,20 @@ export default function OrderDetailPage() {
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Subtotal</dt>
                 <dd className="font-medium tabular-nums">
-                  {formatNZD(order.subtotalNZD)}
+                  {formatAUD(order.subtotalAUD)}
                 </dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Shipping</dt>
                 <dd className="font-medium">
-                  {order.shippingNZD > 0 ? formatNZD(order.shippingNZD) : "Free"}
+                  {order.shippingAUD > 0 ? formatAUD(order.shippingAUD) : "Free"}
                 </dd>
               </div>
               <div className="my-1 h-px bg-border" />
               <div className="flex justify-between">
                 <dt className="font-medium">Total</dt>
                 <dd className="text-lg font-medium tabular-nums">
-                  {formatNZD(order.totalNZD)}
+                  {formatAUD(order.totalAUD)}
                 </dd>
               </div>
               <div className="my-1 h-px bg-border" />
