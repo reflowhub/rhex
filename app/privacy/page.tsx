@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import Image from "next/image";
+import { ArrowLeft } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Privacy Policy | Reflow Hub",
@@ -8,7 +11,17 @@ export const metadata: Metadata = {
 
 export default function PrivacyPolicyPage() {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-16">
+    <div className="mx-auto max-w-3xl px-4">
+      <div className="flex items-center justify-between py-6">
+        <Link href="/" className="flex items-center gap-2.5">
+          <Image src="/logo-rhex.svg" alt="rhex" width={28} height={28} className="h-7 w-7" />
+          <span className="text-xl font-bold tracking-tight">rhex</span>
+        </Link>
+        <Link href="/" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Link>
+      </div>
       <h1 className="text-3xl font-bold tracking-tight">Privacy Policy</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         Last updated: 13 February 2025

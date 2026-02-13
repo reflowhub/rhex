@@ -48,7 +48,7 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
               alt="rhex"
               width={28}
               height={28}
-              className="h-7 w-7 dark:invert"
+              className="h-7 w-7 "
             />
             <span className="text-xl font-bold tracking-tight">rhex</span>
           </Link>
@@ -125,7 +125,7 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
               alt="rhex"
               width={20}
               height={20}
-              className="h-5 w-5 opacity-40 dark:invert"
+              className="h-5 w-5 opacity-40 "
             />
             <span className="text-xs text-muted-foreground">
               Reflow Hub Pty Ltd
