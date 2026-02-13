@@ -40,6 +40,8 @@ interface GradeDistEntry {
   count: number;
   totalNZD: number;
   avgNZD: number;
+  totalAUD: number;
+  avgAUD: number;
 }
 interface CurrencySplitEntry {
   currency: string;
@@ -66,6 +68,7 @@ interface RevenueData {
     upgrades: number;
     downgrades: number;
     avgRevisionDeltaNZD: number;
+    avgRevisionDeltaAUD: number;
   };
   dailyVolume: DailyVolume[];
 }
@@ -76,10 +79,11 @@ interface TopPartnerEntry {
   mode: string;
   count: number;
   totalNZD: number;
+  totalAUD: number;
 }
 interface PartnerData {
-  directVsPartner: { type: string; count: number; totalNZD: number }[];
-  modeSplit: { mode: string; count: number; totalNZD: number }[];
+  directVsPartner: { type: string; count: number; totalNZD: number; totalAUD: number }[];
+  modeSplit: { mode: string; count: number; totalNZD: number; totalAUD: number }[];
   topPartnersByCount: TopPartnerEntry[];
   topPartnersByValue: TopPartnerEntry[];
 }
@@ -87,7 +91,7 @@ interface PartnerData {
 interface InventoryData {
   soldCount: number;
   revenueAUD: number;
-  totalCostNZD: number;
+  totalCostAUD: number;
   totalMargin: number;
   avgMarginPerUnit: number;
   avgDaysToSell: number;
@@ -98,7 +102,7 @@ interface InventoryData {
     category: string;
     unitsSold: number;
     revenueAUD: number;
-    costNZD: number;
+    costAUD: number;
     margin: number;
     avgMargin: number;
   }[];
@@ -106,7 +110,7 @@ interface InventoryData {
     sourceType: string;
     unitsSold: number;
     revenueAUD: number;
-    costNZD: number;
+    costAUD: number;
     margin: number;
   }[];
   aging: {
@@ -632,8 +636,8 @@ function RevenueSection({ data }: { data: RevenueData }) {
               <YAxis />
               <Tooltip
                 formatter={(value, name) => [
-                  name === "count" ? (value ?? 0) : formatCurrency((value as number) ?? 0, "NZD"),
-                  name === "count" ? "Quotes" : "Avg NZD",
+                  name === "count" ? (value ?? 0) : formatCurrency((value as number) ?? 0),
+                  name === "count" ? "Quotes" : "Avg AUD",
                 ]}
                 contentStyle={{
                   backgroundColor: "hsl(var(--card))",
@@ -720,8 +724,8 @@ function RevenueSection({ data }: { data: RevenueData }) {
           {data.gradeRevisions.revised > 0 && (
             <p className="text-xs text-muted-foreground mt-2">
               Average price revision:{" "}
-              {formatCurrency(data.gradeRevisions.avgRevisionDeltaNZD, "NZD")}{" "}
-              NZD per revised quote
+              {formatCurrency(data.gradeRevisions.avgRevisionDeltaAUD)}{" "}
+              per revised quote
             </p>
           )}
         </div>
@@ -803,8 +807,8 @@ function PartnerSection({ data }: { data: PartnerData }) {
                 formatter={(value, name) => [
                   name === "count"
                     ? (value ?? 0)
-                    : formatCurrency((value as number) ?? 0, "NZD"),
-                  name === "count" ? "Quotes" : "Value (NZD)",
+                    : formatCurrency((value as number) ?? 0),
+                  name === "count" ? "Quotes" : "Value (AUD)",
                 ]}
                 contentStyle={{
                   backgroundColor: "hsl(var(--card))",
@@ -901,7 +905,7 @@ function PartnerSection({ data }: { data: PartnerData }) {
 
           <div>
             <h3 className="text-sm font-medium text-muted-foreground mb-3">
-              Top Partners by Value (NZD)
+              Top Partners by Value (AUD)
             </h3>
             <ResponsiveContainer width="100%" height={Math.max(200, data.topPartnersByValue.length * 36)}>
               <BarChart
@@ -918,7 +922,7 @@ function PartnerSection({ data }: { data: PartnerData }) {
                 />
                 <Tooltip
                   formatter={(value) => [
-                    formatCurrency((value as number) ?? 0, "NZD"),
+                    formatCurrency((value as number) ?? 0),
                     "Value",
                   ]}
                   contentStyle={{
@@ -929,7 +933,7 @@ function PartnerSection({ data }: { data: PartnerData }) {
                   }}
                 />
                 <Bar
-                  dataKey="totalNZD"
+                  dataKey="totalAUD"
                   fill={CHART_COLORS[1]}
                   radius={[0, 4, 4, 0]}
                 />
@@ -1094,7 +1098,7 @@ function InventoryAnalyticsSection({ data }: { data: InventoryData }) {
                     {formatCurrency(cat.revenueAUD)}
                   </span>
                   <span className="text-right tabular-nums">
-                    {formatCurrency(cat.costNZD, "NZD")}
+                    {formatCurrency(cat.costAUD)}
                   </span>
                   <span
                     className={cn(
@@ -1183,7 +1187,7 @@ function InventoryAnalyticsSection({ data }: { data: InventoryData }) {
                     {formatCurrency(src.revenueAUD)}
                   </span>
                   <span className="text-right tabular-nums">
-                    {formatCurrency(src.costNZD, "NZD")}
+                    {formatCurrency(src.costAUD)}
                   </span>
                   <span
                     className={cn(

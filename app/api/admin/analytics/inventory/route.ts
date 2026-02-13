@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getCached, setCache } from "@/lib/analytics-cache";
+import { getTodayFXRate } from "@/lib/fx";
 
 // ---------------------------------------------------------------------------
 // GET /api/admin/analytics/inventory — Inventory margin & analytics
@@ -51,7 +52,10 @@ export async function GET(request: NextRequest) {
     const toDate_ = new Date(to);
     toDate_.setHours(23, 59, 59, 999);
 
-    const snapshot = await adminDb.collection("inventory").get();
+    const [snapshot, fx] = await Promise.all([
+      adminDb.collection("inventory").get(),
+      getTodayFXRate(),
+    ]);
     const now = new Date();
 
     // Accumulators
@@ -149,13 +153,15 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    const totalMargin = revenueAUD - totalCostNZD;
+    const totalCostAUD = totalCostNZD * fx.NZD_AUD;
+    const totalMargin = revenueAUD - totalCostAUD;
 
     const result = {
       // KPIs (sold in date range)
       soldCount,
       revenueAUD: Math.round(revenueAUD * 100) / 100,
       totalCostNZD: Math.round(totalCostNZD * 100) / 100,
+      totalCostAUD: Math.round(totalCostAUD * 100) / 100,
       totalMargin: Math.round(totalMargin * 100) / 100,
       avgMarginPerUnit:
         soldCount > 0
@@ -175,30 +181,36 @@ export async function GET(request: NextRequest) {
 
       // Category performance (sold in date range)
       categoryPerformance: Array.from(categoryMap.entries())
-        .map(([category, data]) => ({
-          category,
-          unitsSold: data.unitsSold,
-          revenueAUD: Math.round(data.revenueAUD * 100) / 100,
-          costNZD: Math.round(data.costNZD * 100) / 100,
-          margin: Math.round((data.revenueAUD - data.costNZD) * 100) / 100,
-          avgMargin:
-            data.unitsSold > 0
-              ? Math.round(
-                  ((data.revenueAUD - data.costNZD) / data.unitsSold) * 100
-                ) / 100
-              : 0,
-        }))
+        .map(([category, data]) => {
+          const costAUD = data.costNZD * fx.NZD_AUD;
+          return {
+            category,
+            unitsSold: data.unitsSold,
+            revenueAUD: Math.round(data.revenueAUD * 100) / 100,
+            costAUD: Math.round(costAUD * 100) / 100,
+            margin: Math.round((data.revenueAUD - costAUD) * 100) / 100,
+            avgMargin:
+              data.unitsSold > 0
+                ? Math.round(
+                    ((data.revenueAUD - costAUD) / data.unitsSold) * 100
+                  ) / 100
+                : 0,
+          };
+        })
         .sort((a, b) => b.unitsSold - a.unitsSold),
 
       // Source analysis (sold in date range)
       sourceAnalysis: Array.from(sourceMap.entries())
-        .map(([sourceType, data]) => ({
-          sourceType,
-          unitsSold: data.unitsSold,
-          revenueAUD: Math.round(data.revenueAUD * 100) / 100,
-          costNZD: Math.round(data.costNZD * 100) / 100,
-          margin: Math.round((data.revenueAUD - data.costNZD) * 100) / 100,
-        }))
+        .map(([sourceType, data]) => {
+          const costAUD = data.costNZD * fx.NZD_AUD;
+          return {
+            sourceType,
+            unitsSold: data.unitsSold,
+            revenueAUD: Math.round(data.revenueAUD * 100) / 100,
+            costAUD: Math.round(costAUD * 100) / 100,
+            margin: Math.round((data.revenueAUD - costAUD) * 100) / 100,
+          };
+        })
         .sort((a, b) => b.unitsSold - a.unitsSold),
 
       // Aging (active items)

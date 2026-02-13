@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getCached, setCache } from "@/lib/analytics-cache";
+import { getTodayFXRate } from "@/lib/fx";
 
 export async function GET(request: NextRequest) {
   const adminUser = await requireAdmin(request);
@@ -97,6 +98,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const fx = await getTodayFXRate();
+
     // Build top-10 lists
     const partnerEntries = Array.from(partnerAgg.entries()).map(
       ([id, { count, totalNZD, mode }]) => ({
@@ -105,6 +108,7 @@ export async function GET(request: NextRequest) {
         mode,
         count,
         totalNZD: Math.round(totalNZD * 100) / 100,
+        totalAUD: Math.round(totalNZD * fx.NZD_AUD * 100) / 100,
       })
     );
 
@@ -122,11 +126,13 @@ export async function GET(request: NextRequest) {
           type: "direct" as const,
           count: directCount,
           totalNZD: Math.round(directValueNZD * 100) / 100,
+          totalAUD: Math.round(directValueNZD * fx.NZD_AUD * 100) / 100,
         },
         {
           type: "partner" as const,
           count: partnerCount,
           totalNZD: Math.round(partnerValueNZD * 100) / 100,
+          totalAUD: Math.round(partnerValueNZD * fx.NZD_AUD * 100) / 100,
         },
       ],
       modeSplit: Array.from(modeMap.entries()).map(
@@ -134,6 +140,7 @@ export async function GET(request: NextRequest) {
           mode: mode === "A" ? "Mode A (Referral)" : mode === "B" ? "Mode B (Direct)" : mode,
           count,
           totalNZD: Math.round(totalNZD * 100) / 100,
+          totalAUD: Math.round(totalNZD * fx.NZD_AUD * 100) / 100,
         })
       ),
       topPartnersByCount: topByCount,

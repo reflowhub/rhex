@@ -105,6 +105,8 @@ export async function GET(request: NextRequest) {
         count,
         totalNZD: Math.round(totalNZD * 100) / 100,
         avgNZD: count > 0 ? Math.round((totalNZD / count) * 100) / 100 : 0,
+        totalAUD: Math.round(totalNZD * fx.NZD_AUD * 100) / 100,
+        avgAUD: count > 0 ? Math.round(((totalNZD / count) * fx.NZD_AUD) * 100) / 100 : 0,
       }))
       .sort((a, b) => {
         const ai = GRADE_ORDER.indexOf(a.grade);
@@ -148,6 +150,10 @@ export async function GET(request: NextRequest) {
         avgRevisionDeltaNZD:
           revisedCount > 0
             ? Math.round((revisionDeltaSum / revisedCount) * 100) / 100
+            : 0,
+        avgRevisionDeltaAUD:
+          revisedCount > 0
+            ? Math.round(((revisionDeltaSum / revisedCount) * fx.NZD_AUD) * 100) / 100
             : 0,
       },
       dailyVolume,
