@@ -362,8 +362,8 @@ export default function AnalyticsPage() {
                   : "\u2014"
               }
               subtitle={
-                revenueData
-                  ? `${formatCurrency(revenueData.paidValueNZD, "NZD")} NZD`
+                revenueData && revenueData.paidCount > 0
+                  ? `FX rate: ${revenueData.fxRate.toFixed(4)}`
                   : undefined
               }
               loading={revenueLoading}
