@@ -138,6 +138,12 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
               Terms
             </Link>
             <Link
+              href="/warranty"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Warranty &amp; Returns
+            </Link>
+            <Link
               href="/privacy"
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
