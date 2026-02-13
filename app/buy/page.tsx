@@ -66,7 +66,7 @@ export default function ShopHomePage() {
     const fetchData = async () => {
       try {
         const [productsRes, categoriesRes] = await Promise.all([
-          fetch("/api/shop/products?limit=4"),
+          fetch("/api/buy/products?limit=4"),
           fetch("/api/categories"),
         ]);
 
@@ -86,7 +86,7 @@ export default function ShopHomePage() {
           await Promise.all(
             categoriesData.map(async (c: { name: string }) => {
               const res = await fetch(
-                `/api/shop/products?category=${c.name}&limit=1`
+                `/api/buy/products?category=${c.name}&limit=1`
               );
               const data = await res.json();
               counts[c.name] = data.total ?? 0;
@@ -133,14 +133,14 @@ export default function ShopHomePage() {
           </p>
           <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
             <Link
-              href="/shop/browse"
+              href="/buy/browse"
               className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               Browse Devices
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
-              href="/"
+              href="/sell"
               className="inline-flex items-center justify-center gap-2 rounded-md border border-border px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-card"
             >
               Trade In Your Device
@@ -203,7 +203,7 @@ export default function ShopHomePage() {
                 </p>
               </div>
               <Link
-                href="/shop/browse"
+                href="/buy/browse"
                 className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:flex sm:items-center sm:gap-1"
               >
                 View all
@@ -214,7 +214,7 @@ export default function ShopHomePage() {
             <div className="mt-10">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {featured.map((product) => (
-                  <Link key={product.id} href={`/shop/${product.id}`}>
+                  <Link key={product.id} href={`/buy/${product.id}`}>
                     <div className="group rounded-lg border border-border bg-card p-6 transition-colors hover:border-foreground/20">
                       <div className="aspect-square w-full overflow-hidden rounded bg-background">
                         {product.images.length > 0 ? (
@@ -250,7 +250,7 @@ export default function ShopHomePage() {
             </div>
 
             <Link
-              href="/shop/browse"
+              href="/buy/browse"
               className="mt-8 flex items-center justify-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:hidden"
             >
               View all devices
@@ -289,7 +289,7 @@ export default function ShopHomePage() {
                 return (
                   <Link
                     key={cat.name}
-                    href={`/shop/browse?category=${cat.name}`}
+                    href={`/buy/browse?category=${cat.name}`}
                   >
                     <div className="group flex items-center gap-6 rounded-lg border border-border bg-background p-8 transition-colors hover:border-foreground/20">
                       <Icon
@@ -374,7 +374,7 @@ export default function ShopHomePage() {
             what you get.
           </p>
           <Link
-            href="/shop/browse"
+            href="/buy/browse"
             className="mt-8 inline-flex items-center justify-center gap-2 rounded-md bg-primary px-8 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             Browse All Devices

@@ -42,7 +42,7 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
       {/* Header */}
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-          <Link href="/" className="flex items-center gap-2.5">
+          <Link href="/sell" className="flex items-center gap-2.5">
             <Image
               src="/logo-rhex.svg"
               alt="rhex"
@@ -54,16 +54,16 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
 
           <nav className="flex items-center gap-6">
             <Link
-              href="/"
+              href="/sell"
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Trade In
             </Link>
             <Link
-              href="/shop"
+              href="/buy"
               className={cn(
                 "text-sm font-medium transition-colors",
-                pathname === "/shop" || pathname.startsWith("/shop/")
+                pathname === "/buy" || pathname.startsWith("/buy/")
                   ? "text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               )}
@@ -98,7 +98,7 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
 
             {/* Cart icon */}
             <Link
-              href="/shop/cart"
+              href="/buy/cart"
               className="relative text-muted-foreground hover:text-foreground transition-colors"
             >
               <ShoppingBag className="h-5 w-5" />

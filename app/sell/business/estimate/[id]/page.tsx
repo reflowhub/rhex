@@ -331,7 +331,7 @@ export default function EstimateResultPage({
       <main className="min-h-screen bg-background">
         <header className="border-b bg-card">
           <div className="mx-auto flex max-w-5xl items-center px-4 py-4">
-            <Button variant="ghost" size="sm" onClick={() => router.push("/business")}>
+            <Button variant="ghost" size="sm" onClick={() => router.push("/sell/business")}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
@@ -351,7 +351,7 @@ export default function EstimateResultPage({
       <main className="min-h-screen bg-background">
         <header className="border-b bg-card">
           <div className="mx-auto flex max-w-5xl items-center px-4 py-4">
-            <Button variant="ghost" size="sm" onClick={() => router.push("/business")}>
+            <Button variant="ghost" size="sm" onClick={() => router.push("/sell/business")}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
@@ -364,7 +364,7 @@ export default function EstimateResultPage({
           <p className="mt-2 text-muted-foreground">
             {error || "The estimate you are looking for does not exist."}
           </p>
-          <Button className="mt-6" onClick={() => router.push("/business/estimate")}>
+          <Button className="mt-6" onClick={() => router.push("/sell/business/estimate")}>
             Create New Estimate
           </Button>
         </div>
@@ -380,7 +380,7 @@ export default function EstimateResultPage({
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <Link href="/" className="flex items-center gap-2.5">
+            <Link href="/sell" className="flex items-center gap-2.5">
               <Image
                 src="/logo-rhex.svg"
                 alt="rhex"
@@ -430,7 +430,7 @@ export default function EstimateResultPage({
           variant="ghost"
           size="sm"
           className="mb-4"
-          onClick={() => router.push("/business")}
+          onClick={() => router.push("/sell/business")}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
@@ -530,7 +530,7 @@ export default function EstimateResultPage({
             </Button>
           )}
           <Button variant="outline" asChild>
-            <Link href="/business/estimate">New Estimate</Link>
+            <Link href="/sell/business/estimate">New Estimate</Link>
           </Button>
         </div>
 

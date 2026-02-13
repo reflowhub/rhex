@@ -16,6 +16,40 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/shop",
+        destination: "/buy",
+        permanent: true,
+      },
+      {
+        source: "/shop/:path*",
+        destination: "/buy/:path*",
+        permanent: true,
+      },
+      {
+        source: "/quote",
+        destination: "/sell/quote",
+        permanent: true,
+      },
+      {
+        source: "/quote/:path*",
+        destination: "/sell/quote/:path*",
+        permanent: true,
+      },
+      {
+        source: "/business",
+        destination: "/sell/business",
+        permanent: true,
+      },
+      {
+        source: "/business/:path*",
+        destination: "/sell/business/:path*",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

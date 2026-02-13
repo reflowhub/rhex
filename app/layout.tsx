@@ -10,8 +10,8 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Trade In | rhex",
-  description: "Trade in your phone for cash",
+  title: "rhex",
+  description: "Buy certified refurbished devices or trade in yours for cash",
 };
 
 export default function RootLayout({

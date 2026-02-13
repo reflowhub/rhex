@@ -427,7 +427,7 @@ export default function EstimatePage() {
       }
 
       const data = await res.json();
-      router.push(`/business/estimate/${data.id}`);
+      router.push(`/sell/business/estimate/${data.id}`);
     } catch {
       setError("An unexpected error occurred");
     } finally {
@@ -449,7 +449,7 @@ export default function EstimatePage() {
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <Link href="/" className="flex items-center gap-2.5">
+            <Link href="/sell" className="flex items-center gap-2.5">
               <Image
                 src="/logo-rhex.svg"
                 alt="rhex"
@@ -499,7 +499,7 @@ export default function EstimatePage() {
         {/* Back + Title */}
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" asChild>
-            <Link href="/business">
+            <Link href="/sell/business">
               <ArrowLeft className="h-5 w-5" />
               <span className="sr-only">Back</span>
             </Link>

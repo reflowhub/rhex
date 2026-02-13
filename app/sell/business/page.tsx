@@ -26,7 +26,7 @@ export default function BusinessPage() {
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <Link href="/" className="flex items-center gap-2.5">
+            <Link href="/sell" className="flex items-center gap-2.5">
               <Image
                 src="/logo-rhex.svg"
                 alt="rhex"
@@ -44,7 +44,7 @@ export default function BusinessPage() {
           </div>
           <div className="flex items-center gap-3">
             <Link
-              href="/"
+              href="/sell"
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Personal
@@ -94,14 +94,14 @@ export default function BusinessPage() {
 
           <div className="mx-auto mt-10 max-w-sm text-center">
             <Button size="lg" className="w-full" asChild>
-              <Link href="/business/estimate">
+              <Link href="/sell/business/estimate">
                 Start Estimate
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
             <p className="mt-3 text-sm text-muted-foreground">
               Or{" "}
-              <Link href="/" className="text-primary hover:underline">
+              <Link href="/sell" className="text-primary hover:underline">
                 trade in a single device
               </Link>
             </p>

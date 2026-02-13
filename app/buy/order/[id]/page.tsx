@@ -73,7 +73,7 @@ export default function OrderConfirmationPage() {
     const params = new URLSearchParams();
     if (email) params.set("email", email);
 
-    fetch(`/api/shop/orders/${id}?${params.toString()}`)
+    fetch(`/api/buy/orders/${id}?${params.toString()}`)
       .then((res) => {
         if (!res.ok) throw new Error("Not found");
         return res.json();
@@ -118,7 +118,7 @@ export default function OrderConfirmationPage() {
       <div className="py-20 text-center">
         <p className="text-sm text-muted-foreground">Order not found.</p>
         <Link
-          href="/shop/browse"
+          href="/buy/browse"
           className="mt-4 inline-block text-sm font-medium text-foreground underline"
         >
           Back to Shop
@@ -240,7 +240,7 @@ export default function OrderConfirmationPage() {
 
       {/* Continue shopping */}
       <div className="mt-6 text-center">
-        <Link href="/shop/browse">
+        <Link href="/buy/browse">
           <Button variant="outline">Continue Shopping</Button>
         </Link>
       </div>

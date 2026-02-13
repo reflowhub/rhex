@@ -45,7 +45,7 @@ export default function CheckoutPage() {
 
   // ---- fetch shipping config -----------------------------------------------
   useEffect(() => {
-    fetch("/api/shop/shipping")
+    fetch("/api/buy/shipping")
       .then((res) => res.json())
       .then((data) => setShippingConfig(data))
       .catch(() => {});
@@ -96,7 +96,7 @@ export default function CheckoutPage() {
     sessionStorage.setItem("checkout-email", email.trim());
 
     try {
-      const res = await fetch("/api/shop/checkout", {
+      const res = await fetch("/api/buy/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -128,7 +128,7 @@ export default function CheckoutPage() {
           window.location.href = data.url;
         } else {
           // Stub mode — redirect to order confirmation
-          router.push(`/shop/order/${data.orderId}`);
+          router.push(`/buy/order/${data.orderId}`);
         }
       } else {
         const errData = await res.json();
@@ -147,7 +147,7 @@ export default function CheckoutPage() {
       <div className="mx-auto max-w-3xl py-20 text-center">
         <p className="text-sm text-muted-foreground">Your cart is empty.</p>
         <Link
-          href="/shop/browse"
+          href="/buy/browse"
           className="mt-4 inline-block text-sm font-medium text-foreground underline"
         >
           Browse the shop
@@ -160,7 +160,7 @@ export default function CheckoutPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <Link
-        href="/shop/cart"
+        href="/buy/cart"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />

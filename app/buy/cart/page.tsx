@@ -24,7 +24,7 @@ export default function CartPage() {
 
   // ---- fetch shipping config -----------------------------------------------
   useEffect(() => {
-    fetch("/api/shop/shipping")
+    fetch("/api/buy/shipping")
       .then((res) => res.json())
       .then((data) => setShippingConfig(data))
       .catch(() => {});
@@ -41,7 +41,7 @@ export default function CartPage() {
       const removed: string[] = [];
       await Promise.allSettled(
         items.map(async (item) => {
-          const res = await fetch(`/api/shop/products/${item.inventoryId}`);
+          const res = await fetch(`/api/buy/products/${item.inventoryId}`);
           if (!res.ok) {
             removed.push(
               [item.make, item.model, item.storage].filter(Boolean).join(" ")
@@ -110,7 +110,7 @@ export default function CartPage() {
             Your cart is empty.
           </p>
           <Link
-            href="/shop/browse"
+            href="/buy/browse"
             className="mt-4 inline-block text-sm font-medium text-foreground underline"
           >
             Browse the shop
@@ -147,7 +147,7 @@ export default function CartPage() {
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <Link
-                      href={`/shop/${item.inventoryId}`}
+                      href={`/buy/${item.inventoryId}`}
                       className="font-medium text-foreground hover:underline"
                     >
                       {deviceName}
@@ -276,7 +276,7 @@ export default function CartPage() {
           <Button
             className="mt-6 w-full"
             size="lg"
-            onClick={() => router.push("/shop/checkout")}
+            onClick={() => router.push("/buy/checkout")}
           >
             Proceed to Checkout
             <ArrowRight className="ml-2 h-4 w-4" />

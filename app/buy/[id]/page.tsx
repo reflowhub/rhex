@@ -63,7 +63,7 @@ export default function ProductDetailPage() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    fetch(`/api/shop/products/${id}`)
+    fetch(`/api/buy/products/${id}`)
       .then((res) => {
         if (!res.ok) throw new Error("Not found");
         return res.json();
@@ -78,7 +78,7 @@ export default function ProductDetailPage() {
   // ---- fetch upsells for this product's category ---------------------------
   useEffect(() => {
     if (!product) return;
-    fetch(`/api/shop/upsells?category=${encodeURIComponent(product.category)}`)
+    fetch(`/api/buy/upsells?category=${encodeURIComponent(product.category)}`)
       .then((res) => res.json())
       .then((data) => setUpsells(data))
       .catch(() => {});
@@ -124,7 +124,7 @@ export default function ProductDetailPage() {
       <div className="py-20 text-center">
         <p className="text-sm text-muted-foreground">Product not found.</p>
         <Link
-          href="/shop/browse"
+          href="/buy/browse"
           className="mt-4 inline-block text-sm font-medium text-foreground underline"
         >
           Back to Shop
@@ -142,7 +142,7 @@ export default function ProductDetailPage() {
     <div className="mx-auto max-w-6xl px-4 py-8">
       {/* Back link */}
       <Link
-        href="/shop/browse"
+        href="/buy/browse"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />

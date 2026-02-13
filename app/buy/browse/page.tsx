@@ -97,7 +97,7 @@ function BrowsePageInner() {
     params.set("page", String(currentPage));
     params.set("limit", String(PAGE_SIZE));
 
-    const url = `/api/shop/products${params.toString() ? `?${params.toString()}` : ""}`;
+    const url = `/api/buy/products${params.toString() ? `?${params.toString()}` : ""}`;
 
     fetch(url)
       .then((res) => res.json())
@@ -185,7 +185,7 @@ function BrowsePageInner() {
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {products.map((product) => (
-              <Link key={product.id} href={`/shop/${product.id}`}>
+              <Link key={product.id} href={`/buy/${product.id}`}>
                 <div className="group rounded-lg border border-border bg-card p-4 transition-colors hover:border-foreground/20">
                   {/* Image area */}
                   <div className="aspect-square w-full overflow-hidden rounded bg-background">

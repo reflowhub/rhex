@@ -145,7 +145,7 @@ function QuotePageContent() {
 
         if (res.ok) {
           const data = await res.json();
-          router.push(`/quote/${data.id}`);
+          router.push(`/sell/quote/${data.id}`);
         } else {
           const errData = await res.json();
           setError(errData.error || "Failed to create quote");
@@ -192,7 +192,7 @@ function QuotePageContent() {
       <main className="min-h-screen bg-background">
         <header className="border-b bg-card">
           <div className="mx-auto flex max-w-5xl items-center px-4 py-4">
-            <Button variant="ghost" size="sm" onClick={() => router.push("/")}>
+            <Button variant="ghost" size="sm" onClick={() => router.push("/sell")}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
@@ -204,7 +204,7 @@ function QuotePageContent() {
           <p className="mt-2 text-muted-foreground">
             Please select a device from the home page to get a quote.
           </p>
-          <Button className="mt-6" onClick={() => router.push("/")}>
+          <Button className="mt-6" onClick={() => router.push("/sell")}>
             Go to Home
           </Button>
         </div>
@@ -218,7 +218,7 @@ function QuotePageContent() {
       <main className="min-h-screen bg-background">
         <header className="border-b bg-card">
           <div className="mx-auto flex max-w-5xl items-center px-4 py-4">
-            <Button variant="ghost" size="sm" onClick={() => router.push("/")}>
+            <Button variant="ghost" size="sm" onClick={() => router.push("/sell")}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
@@ -238,7 +238,7 @@ function QuotePageContent() {
       <main className="min-h-screen bg-background">
         <header className="border-b bg-card">
           <div className="mx-auto flex max-w-5xl items-center px-4 py-4">
-            <Button variant="ghost" size="sm" onClick={() => router.push("/")}>
+            <Button variant="ghost" size="sm" onClick={() => router.push("/sell")}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
@@ -247,7 +247,7 @@ function QuotePageContent() {
         <div className="mx-auto max-w-lg px-4 py-16 text-center">
           <h1 className="text-xl font-semibold text-destructive">Error</h1>
           <p className="mt-2 text-muted-foreground">{error}</p>
-          <Button className="mt-6" onClick={() => router.push("/")}>
+          <Button className="mt-6" onClick={() => router.push("/sell")}>
             Go to Home
           </Button>
         </div>
@@ -263,11 +263,11 @@ function QuotePageContent() {
       {/* Header */}
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-          <Button variant="ghost" size="sm" onClick={() => router.push("/")}>
+          <Button variant="ghost" size="sm" onClick={() => router.push("/sell")}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back
           </Button>
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/sell" className="flex items-center gap-2">
             <Image
               src="/logo-rhex.svg"
               alt="rhex"
