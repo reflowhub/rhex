@@ -42,7 +42,7 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
       {/* Header */}
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-          <Link href="/sell" className="flex items-center gap-2.5">
+          <Link href="/buy" className="flex items-center gap-2.5">
             <Image
               src="/logo-rhex.svg"
               alt="rhex"
@@ -50,6 +50,7 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
               height={28}
               className="h-7 w-7 dark:invert"
             />
+            <span className="text-xl font-bold tracking-tight">rhex</span>
           </Link>
 
           <nav className="flex items-center gap-6">
