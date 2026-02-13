@@ -458,7 +458,7 @@ export default function EstimatePage() {
                 className="h-7 w-7"
               />
               <span className="text-xl font-bold tracking-tight">
-                Trade-In
+                rhex trade-in
               </span>
             </Link>
             <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">

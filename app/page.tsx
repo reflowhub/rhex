@@ -5,13 +5,16 @@ import { ArrowRight } from "lucide-react";
 export default function LandingPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
-      <Image
-        src="/logo-rhex.svg"
-        alt="rhex"
-        width={48}
-        height={48}
-        className="mb-8 h-12 w-12"
-      />
+      <div className="mb-8 flex items-center gap-3">
+        <Image
+          src="/logo-rhex.svg"
+          alt="rhex"
+          width={48}
+          height={48}
+          className="h-12 w-12"
+        />
+        <span className="text-3xl font-bold tracking-tight">rhex</span>
+      </div>
 
       <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
         What would you like to do?

@@ -317,7 +317,7 @@ export default function Home() {
               className="h-7 w-7"
             />
             <span className="text-xl font-bold tracking-tight whitespace-nowrap">
-              Trade-In
+              rhex trade-in
             </span>
           </Link>
           <div className="flex items-center gap-2 sm:gap-3">

@@ -275,7 +275,7 @@ function QuotePageContent() {
               height={24}
               className="h-6 w-6"
             />
-            <span className="text-sm font-bold tracking-tight">Trade-In</span>
+            <span className="text-sm font-bold tracking-tight">rhex trade-in</span>
           </Link>
         </div>
       </header>
