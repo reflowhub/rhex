@@ -50,6 +50,8 @@ interface Customer {
   businessName: string | null;
   totalQuotes: number;
   totalValueNZD: number;
+  totalOrders: number;
+  totalOrderValueAUD: number;
   lastActivityAt: string | null;
   createdAt: string | null;
 }
@@ -278,7 +280,7 @@ export default function CustomersPage() {
           <div className="py-20 text-center text-sm text-muted-foreground">
             {activeType !== "all" || debouncedSearch
               ? "No customers match your filters."
-              : "No customers found. Customers are created automatically when quotes are accepted."}
+              : "No customers found. Customers are created automatically when quotes are accepted or shop orders are placed."}
           </div>
         ) : (
           <Table>
@@ -288,6 +290,7 @@ export default function CustomersPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead className="text-right">Quotes</TableHead>
+                <TableHead className="text-right">Orders</TableHead>
                 <TableHead className="text-right">Total Value</TableHead>
                 <TableHead>Last Activity</TableHead>
                 <TableHead>Created</TableHead>
@@ -321,7 +324,12 @@ export default function CustomersPage() {
                     {customer.totalQuotes}
                   </TableCell>
                   <TableCell className="text-right">
-                    {formatPrice(customer.totalValueNZD)}
+                    {customer.totalOrders}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {formatPrice(
+                      customer.totalValueNZD + customer.totalOrderValueAUD
+                    )}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {formatDate(customer.lastActivityAt)}

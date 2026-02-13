@@ -53,6 +53,7 @@ export async function GET(
       shippingAUD: data.shippingAUD ?? data.shippingNZD ?? 0,
       totalAUD: data.totalAUD ?? data.totalNZD ?? 0,
       gstAUD: data.gstAUD ?? Math.round(((data.totalAUD ?? 0) / 11) * 100) / 100,
+      customerId: data.customerId ?? null,
       displayCurrency: data.displayCurrency ?? "AUD",
       stripePaymentIntentId: data.stripePaymentIntentId ?? null,
       stripeCheckoutSessionId: data.stripeCheckoutSessionId ?? null,

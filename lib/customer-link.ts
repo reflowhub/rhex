@@ -112,3 +112,84 @@ export async function findOrCreateCustomer(
     return ref.id;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Types (Orders)
+// ---------------------------------------------------------------------------
+
+interface OrderCustomerLinkInput {
+  name: string;
+  email: string;
+  phone?: string | null;
+  shippingAddress?: string | null;
+  orderId: string;
+  orderValueAUD: number;
+}
+
+// ---------------------------------------------------------------------------
+// findOrCreateOrderCustomer
+// ---------------------------------------------------------------------------
+
+export async function findOrCreateOrderCustomer(
+  input: OrderCustomerLinkInput
+): Promise<string> {
+  const normalizedEmail = input.email.toLowerCase().trim();
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
+  const snapshot = await adminDb
+    .collection("customers")
+    .where("email", "==", normalizedEmail)
+    .limit(1)
+    .get();
+
+  if (!snapshot.empty) {
+    const existingDoc = snapshot.docs[0];
+
+    const updateData: Record<string, unknown> = {
+      updatedAt: now,
+      name: input.name || existingDoc.data().name,
+      phone: input.phone || existingDoc.data().phone,
+      lastActivityAt: new Date().toISOString(),
+      totalOrders: admin.firestore.FieldValue.increment(1),
+      totalOrderValueAUD: admin.firestore.FieldValue.increment(
+        input.orderValueAUD
+      ),
+      orderIds: admin.firestore.FieldValue.arrayUnion(input.orderId),
+    };
+
+    if (input.shippingAddress) {
+      updateData.shippingAddress = input.shippingAddress;
+    }
+
+    await existingDoc.ref.update(updateData);
+    return existingDoc.id;
+  } else {
+    const customerData: Record<string, unknown> = {
+      type: "individual",
+      name: input.name,
+      email: normalizedEmail,
+      phone: input.phone || null,
+      businessName: null,
+      shippingAddress: input.shippingAddress || null,
+      paymentMethod: null,
+      payIdPhone: null,
+      bankBSB: null,
+      bankAccountNumber: null,
+      bankAccountName: null,
+      quoteIds: [],
+      bulkQuoteIds: [],
+      orderIds: [input.orderId],
+      totalQuotes: 0,
+      totalValueNZD: 0,
+      totalOrders: 1,
+      totalOrderValueAUD: input.orderValueAUD,
+      lastActivityAt: new Date().toISOString(),
+      notes: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const ref = await adminDb.collection("customers").add(customerData);
+    return ref.id;
+  }
+}

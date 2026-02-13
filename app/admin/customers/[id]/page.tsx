@@ -60,6 +60,15 @@ interface BulkQuoteSummary {
   createdAt: string | null;
 }
 
+interface OrderSummary {
+  id: string;
+  orderNumber: number;
+  itemCount: number;
+  totalAUD: number;
+  status: string;
+  createdAt: string | null;
+}
+
 interface Customer {
   id: string;
   type: "individual" | "business";
@@ -75,10 +84,13 @@ interface Customer {
   bankAccountName: string | null;
   totalQuotes: number;
   totalValueNZD: number;
+  totalOrders: number;
+  totalOrderValueAUD: number;
   lastActivityAt: string | null;
   notes: CustomerNote[];
   quotes: QuoteSummary[];
   bulkQuotes: BulkQuoteSummary[];
+  orders: OrderSummary[];
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -112,6 +124,14 @@ function statusBadgeProps(status: string): {
       };
     case "cancelled":
       return { variant: "destructive" };
+    case "processing":
+      return { variant: "secondary" };
+    case "delivered":
+      return {
+        variant: "default",
+        className:
+          "border-transparent bg-green-600 text-white hover:bg-green-600/80",
+      };
     default:
       return { variant: "outline" };
   }
@@ -140,7 +160,7 @@ export default function CustomerDetailPage() {
   const [noteLoading, setNoteLoading] = useState(false);
 
   // ---- quote history tab
-  const [quoteTab, setQuoteTab] = useState<"individual" | "bulk">("individual");
+  const [quoteTab, setQuoteTab] = useState<"individual" | "bulk" | "orders">("individual");
 
   // ---- fetch
   const fetchCustomer = useCallback(() => {
@@ -383,9 +403,19 @@ export default function CustomerDetailPage() {
               <dd className="font-medium">{customer.totalQuotes}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">Total Value</dt>
+              <dt className="text-muted-foreground">Quote Value</dt>
               <dd className="font-medium">
                 {formatPrice(customer.totalValueNZD)}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Total Orders</dt>
+              <dd className="font-medium">{customer.totalOrders}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Order Value</dt>
+              <dd className="font-medium">
+                {formatPrice(customer.totalOrderValueAUD)}
               </dd>
             </div>
             <div className="flex justify-between">
@@ -398,7 +428,7 @@ export default function CustomerDetailPage() {
 
       {/* Quote History */}
       <div className="mt-6 rounded-lg border border-border bg-card p-6">
-        <h2 className="text-lg font-semibold">Quote History</h2>
+        <h2 className="text-lg font-semibold">History</h2>
 
         {/* Tab toggle */}
         <div className="mt-4 flex gap-2">
@@ -421,6 +451,16 @@ export default function CustomerDetailPage() {
             }`}
           >
             Bulk Quotes ({customer.bulkQuotes.length})
+          </button>
+          <button
+            onClick={() => setQuoteTab("orders")}
+            className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+              quoteTab === "orders"
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground"
+            }`}
+          >
+            Orders ({customer.orders.length})
           </button>
         </div>
 
@@ -536,6 +576,62 @@ export default function CustomerDetailPage() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {formatDate(bq.createdAt)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        )}
+
+        {/* Orders table */}
+        {quoteTab === "orders" && (
+          <div className="mt-4">
+            {customer.orders.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No orders linked to this customer.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order #</TableHead>
+                    <TableHead className="text-right">Items</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {customer.orders.map((o) => {
+                    const bp = statusBadgeProps(o.status);
+                    return (
+                      <TableRow
+                        key={o.id}
+                        className="cursor-pointer"
+                        onClick={() => router.push(`/admin/orders/${o.id}`)}
+                      >
+                        <TableCell className="font-mono font-medium">
+                          #{o.orderNumber}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {o.itemCount}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatPrice(o.totalAUD)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={bp.variant}
+                            className={bp.className}
+                          >
+                            {o.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatDate(o.createdAt)}
                         </TableCell>
                       </TableRow>
                     );

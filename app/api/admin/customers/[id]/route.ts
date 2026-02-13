@@ -118,6 +118,32 @@ export async function GET(
       });
     }
 
+    // Batch-fetch linked orders
+    const orderIds: string[] = data.orderIds ?? [];
+    const orders: Record<string, unknown>[] = [];
+
+    if (orderIds.length > 0) {
+      const orderRefs = orderIds.map((oid) =>
+        adminDb.collection("orders").doc(oid)
+      );
+      const orderDocs = await adminDb.getAll(...orderRefs);
+
+      orderDocs.forEach((oDoc) => {
+        if (oDoc.exists) {
+          const oData = oDoc.data()!;
+          const items = (oData.items as { description: string }[]) ?? [];
+          orders.push({
+            id: oDoc.id,
+            orderNumber: oData.orderNumber,
+            itemCount: items.length,
+            totalAUD: oData.totalAUD ?? 0,
+            status: oData.status,
+            createdAt: serializeTimestamp(oData.createdAt),
+          });
+        }
+      });
+    }
+
     return NextResponse.json({
       id: doc.id,
       type: data.type,
@@ -133,10 +159,13 @@ export async function GET(
       bankAccountName: data.bankAccountName ?? null,
       totalQuotes: data.totalQuotes ?? 0,
       totalValueNZD: data.totalValueNZD ?? 0,
+      totalOrders: data.totalOrders ?? 0,
+      totalOrderValueAUD: data.totalOrderValueAUD ?? 0,
       lastActivityAt: data.lastActivityAt ?? null,
       notes: data.notes ?? [],
       quotes,
       bulkQuotes,
+      orders,
       createdAt: serializeTimestamp(data.createdAt),
       updatedAt: serializeTimestamp(data.updatedAt),
     });

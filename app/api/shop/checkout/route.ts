@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { calculateShipping, type ShippingConfig } from "@/lib/shipping";
+import { findOrCreateOrderCustomer } from "@/lib/customer-link";
 
 // ---------------------------------------------------------------------------
 // POST /api/shop/checkout — Create order + reserve inventory
@@ -250,6 +251,37 @@ export async function POST(request: NextRequest) {
       const message =
         err instanceof Error ? err.message : "Checkout failed";
       return NextResponse.json({ error: message }, { status: 409 });
+    }
+
+    // Link/create customer record (non-blocking)
+    try {
+      const orderSnap = await adminDb.collection("orders").doc(orderId).get();
+      const orderTotal = orderSnap.data()?.totalAUD ?? 0;
+
+      const addrParts = [
+        shippingAddress.line1,
+        shippingAddress.line2,
+        shippingAddress.city,
+        shippingAddress.region,
+        shippingAddress.postcode,
+        shippingAddress.country,
+      ].filter(Boolean);
+
+      const customerId = await findOrCreateOrderCustomer({
+        name: customerName,
+        email: customerEmail,
+        phone: customerPhone,
+        shippingAddress: addrParts.join(", "),
+        orderId,
+        orderValueAUD: orderTotal,
+      });
+
+      await adminDb
+        .collection("orders")
+        .doc(orderId)
+        .update({ customerId });
+    } catch (linkErr) {
+      console.error("Customer link error (non-blocking):", linkErr);
     }
 
     // Check if Stripe is configured
