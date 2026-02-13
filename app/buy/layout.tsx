@@ -53,10 +53,10 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
             <span className="text-xl font-bold tracking-tight">rhex</span>
           </Link>
 
-          <nav className="flex items-center gap-6">
+          <nav className="flex items-center gap-3 sm:gap-6">
             <Link
               href="/sell"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              className="hidden sm:inline text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Trade In
             </Link>
@@ -132,6 +132,12 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
             </span>
           </div>
           <div className="flex items-center gap-4">
+            <Link
+              href="/sell"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors sm:hidden"
+            >
+              Trade In
+            </Link>
             <Link
               href="/terms"
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
