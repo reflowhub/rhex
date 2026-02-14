@@ -207,7 +207,7 @@ export default function BusinessPage() {
                 height={16}
                 className="h-4 w-4 opacity-50"
               />
-              <p>Reflow Hub Pty Ltd</p>
+              <a href="https://reflowhub.com" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Reflow Hub Pty Ltd</a>
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <Link href="/terms" className="hover:text-foreground transition-colors">

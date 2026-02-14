@@ -127,9 +127,9 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
               height={20}
               className="h-5 w-5 opacity-40"
             />
-            <span className="text-xs text-muted-foreground">
+            <a href="https://reflowhub.com" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               Reflow Hub Pty Ltd
-            </span>
+            </a>
           </div>
           <div className="flex items-center gap-4">
             <Link
