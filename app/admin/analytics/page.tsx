@@ -273,7 +273,7 @@ export default function AnalyticsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {["7d", "30d", "90d"].map((p) => (
             <button
               key={p}
@@ -295,7 +295,7 @@ export default function AnalyticsPage() {
               setFrom(e.target.value);
               setActivePreset("");
             }}
-            className="h-8 w-[130px] text-xs"
+            className="h-8 w-[130px] min-w-0 text-xs"
           />
           <span className="text-xs text-muted-foreground">to</span>
           <Input
@@ -305,7 +305,7 @@ export default function AnalyticsPage() {
               setTo(e.target.value);
               setActivePreset("");
             }}
-            className="h-8 w-[130px] text-xs"
+            className="h-8 w-[130px] min-w-0 text-xs"
           />
         </div>
       </div>
