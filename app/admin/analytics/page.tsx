@@ -295,7 +295,7 @@ export default function AnalyticsPage() {
               setFrom(e.target.value);
               setActivePreset("");
             }}
-            className="h-8 w-[130px] min-w-0 text-xs"
+            className="h-8 w-[150px] min-w-0 text-xs"
           />
           <span className="text-xs text-muted-foreground">to</span>
           <Input
@@ -305,7 +305,7 @@ export default function AnalyticsPage() {
               setTo(e.target.value);
               setActivePreset("");
             }}
-            className="h-8 w-[130px] min-w-0 text-xs"
+            className="h-8 w-[150px] min-w-0 text-xs"
           />
         </div>
       </div>
