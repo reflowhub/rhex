@@ -96,7 +96,7 @@ const sidebarLinks = [
   },
   {
     href: "/admin/visitors",
-    label: "Live",
+    label: "Visitors",
     icon: Globe,
   },
 ];

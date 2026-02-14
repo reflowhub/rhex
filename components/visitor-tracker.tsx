@@ -18,13 +18,20 @@ function getSessionId(): string {
 export function VisitorTracker() {
   const pathname = usePathname();
   const sessionIdRef = useRef("");
+  const referrerRef = useRef("");
+  const searchRef = useRef("");
+  const pagesVisitedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     sessionIdRef.current = getSessionId();
+    referrerRef.current = document.referrer;
+    searchRef.current = window.location.search;
   }, []);
 
   useEffect(() => {
     if (!sessionIdRef.current) return;
+
+    pagesVisitedRef.current.add(pathname);
 
     const sendHeartbeat = () => {
       fetch("/api/visitors/heartbeat", {
@@ -33,6 +40,9 @@ export function VisitorTracker() {
         body: JSON.stringify({
           sessionId: sessionIdRef.current,
           page: pathname,
+          referrer: referrerRef.current,
+          search: searchRef.current,
+          pagesVisited: pagesVisitedRef.current.size,
         }),
       }).catch(() => {});
     };
@@ -45,6 +55,9 @@ export function VisitorTracker() {
       const data = JSON.stringify({
         sessionId: sessionIdRef.current,
         page: pathname,
+        referrer: referrerRef.current,
+        search: searchRef.current,
+        pagesVisited: pagesVisitedRef.current.size,
       });
       navigator.sendBeacon(
         "/api/visitors/heartbeat",
