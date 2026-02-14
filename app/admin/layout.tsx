@@ -21,6 +21,7 @@ import {
   Box,
   ShoppingCart,
   Gift,
+  Globe,
   Menu,
   X,
   LogOut,
@@ -92,6 +93,11 @@ const sidebarLinks = [
     href: "/admin/analytics",
     label: "Analytics",
     icon: BarChart3,
+  },
+  {
+    href: "/admin/visitors",
+    label: "Live",
+    icon: Globe,
   },
 ];
 

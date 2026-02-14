@@ -3,6 +3,7 @@ import { Geist } from "next/font/google";
 import Script from "next/script";
 import { ThemeProvider } from "@/components/theme-provider";
 import { CurrencyProvider } from "@/lib/currency-context";
+import { VisitorTracker } from "@/components/visitor-tracker";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -35,6 +36,7 @@ export default function RootLayout({
             })(window,document,"clarity","script","${process.env.NEXT_PUBLIC_CLARITY_ID}");
           `}</Script>
         )}
+        <VisitorTracker />
         <ThemeProvider>
           <CurrencyProvider>{children}</CurrencyProvider>
         </ThemeProvider>
