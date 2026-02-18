@@ -29,6 +29,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useCurrency } from "@/lib/currency-context";
 import { captureReferral } from "@/lib/referral";
 import { cn } from "@/lib/utils";
+import { gtagEvent } from "@/lib/gtag";
 
 interface Device {
   id: string;
@@ -177,6 +178,13 @@ export default function Home() {
     setSelectedDevice(device);
     setQuery(`${device.make} ${device.model} ${device.storage}`);
     setOpen(false);
+    gtagEvent("trade_in_device_selection", {
+      device_id: device.id,
+      device_name: `${device.make} ${device.model}`,
+      storage: device.storage,
+      category: selectedCategory,
+      method: searchMode,
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -240,6 +248,13 @@ export default function Home() {
         });
         setStorageOptions(null);
         setImeiDeviceName(null);
+        gtagEvent("trade_in_device_selection", {
+          device_id: data.deviceId,
+          device_name: `${data.make} ${data.model}`,
+          storage: data.storage,
+          category: selectedCategory,
+          method: "imei",
+        });
       } else if (data.needsStorageSelection && data.storageOptions) {
         // Device found but need to pick storage
         setImeiDeviceName(data.deviceName);
@@ -269,6 +284,13 @@ export default function Home() {
       setSelectedDevice(match);
       setStorageOptions(null);
       setImeiDeviceName(null);
+      gtagEvent("trade_in_device_selection", {
+        device_id: match.id,
+        device_name: `${match.make} ${match.model}`,
+        storage: match.storage,
+        category: selectedCategory,
+        method: "imei",
+      });
     }
   };
 

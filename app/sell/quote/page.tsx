@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/lib/currency-context";
 import { getReferralCode } from "@/lib/referral";
+import { gtagEvent } from "@/lib/gtag";
 
 interface Device {
   id: string;
@@ -145,6 +146,12 @@ function QuotePageContent() {
 
         if (res.ok) {
           const data = await res.json();
+          gtagEvent("trade_in_quote_completion", {
+            quote_id: data.id,
+            device_id: deviceId,
+            grade,
+            currency,
+          });
           router.push(`/sell/quote/${data.id}`);
         } else {
           const errData = await res.json();

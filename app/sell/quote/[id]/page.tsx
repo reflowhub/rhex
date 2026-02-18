@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { gtagEvent } from "@/lib/gtag";
 
 interface QuoteData {
   id: string;
@@ -127,6 +128,14 @@ export default function QuoteResultPage({
     setSubmitting(true);
     setError(null);
 
+    gtagEvent("trade_in_form_submission", {
+      quote_id: id,
+      device_id: quote?.deviceId,
+      grade: quote?.grade,
+      currency: quote?.displayCurrency,
+      payment_method: paymentMethod,
+    });
+
     const body: Record<string, string> = {
       customerName,
       customerEmail,
@@ -159,6 +168,14 @@ export default function QuoteResultPage({
         setQuote(data);
         setAccepted(true);
         setShowAcceptForm(false);
+        gtagEvent("trade_in_conversion", {
+          quote_id: id,
+          device_id: data.deviceId,
+          grade: data.grade,
+          value: data.quotePriceDisplay ?? data.quotePriceNZD,
+          currency: data.displayCurrency,
+          payment_method: paymentMethod,
+        });
       } else {
         const errData = await res.json();
         setError(errData.error || "Failed to accept quote");
