@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
+import { sendEmail } from "@/lib/email";
+import OrderConfirmedEmail from "@/emails/order-confirmed";
 
 // ---------------------------------------------------------------------------
 // POST /api/shop/webhook — Stripe webhook handler
@@ -81,6 +83,25 @@ export async function POST(request: NextRequest) {
       }
 
       await batch.commit();
+
+      // Send order confirmation email (non-blocking)
+      if (orderData.customerEmail) {
+        const orderItems = (orderData.items as { description?: string; priceAUD?: number }[]) ?? [];
+        sendEmail({
+          to: orderData.customerEmail as string,
+          subject: `Order #${orderData.orderNumber} confirmed`,
+          react: OrderConfirmedEmail({
+            customerName: (orderData.customerName as string) ?? "there",
+            orderNumber: String(orderData.orderNumber ?? orderId),
+            orderId,
+            items: orderItems.map((item) => ({
+              description: item.description ?? "Device",
+              priceAUD: item.priceAUD ?? 0,
+            })),
+            totalAUD: (orderData.totalAUD as number) ?? 0,
+          }),
+        });
+      }
     }
 
     return NextResponse.json({ received: true });

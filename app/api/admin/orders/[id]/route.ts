@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
+import { sendEmail } from "@/lib/email";
+import OrderShippedEmail from "@/emails/order-shipped";
 
 // ---------------------------------------------------------------------------
 // Valid status transitions
@@ -196,6 +198,21 @@ export async function PATCH(
     }
 
     await orderRef.update(updateData);
+
+    // Send shipped email (non-blocking)
+    if (newStatus === "shipped" && currentData.customerEmail) {
+      sendEmail({
+        to: currentData.customerEmail as string,
+        subject: `Order #${currentData.orderNumber} has shipped`,
+        react: OrderShippedEmail({
+          customerName: (currentData.customerName as string) ?? "there",
+          orderNumber: String(currentData.orderNumber ?? id),
+          orderId: id,
+          trackingNumber: body.trackingNumber as string,
+          trackingCarrier: body.trackingCarrier as string,
+        }),
+      });
+    }
 
     const updated = await orderRef.get();
     const updatedData = updated.data()!;

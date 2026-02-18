@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { onQuotePaid } from "@/lib/commission-trigger";
 import { requireAdmin } from "@/lib/admin-auth";
+import { sendEmail } from "@/lib/email";
+import QuotePaidEmail from "@/emails/quote-paid";
 
 // ---------------------------------------------------------------------------
 // Valid status transitions
@@ -190,13 +192,35 @@ export async function PUT(
 
     await quoteRef.update(updateData);
 
-    // Trigger commission if transitioning to "paid"
+    // Trigger commission + email if transitioning to "paid"
     if (updateData.status === "paid") {
       const freshDoc = await quoteRef.get();
       const freshData = freshDoc.data() as Record<string, unknown>;
       await onQuotePaid(id, freshData).catch((err) =>
         console.error("Commission trigger error:", err)
       );
+
+      // Send payment confirmation email (non-blocking)
+      if (freshData.customerEmail) {
+        let deviceLabel = "your device";
+        if (freshData.deviceId && typeof freshData.deviceId === "string") {
+          const deviceDoc = await adminDb.collection("devices").doc(freshData.deviceId as string).get();
+          if (deviceDoc.exists) {
+            const d = deviceDoc.data()!;
+            deviceLabel = `${d.make} ${d.model} ${d.storage}`.trim();
+          }
+        }
+        sendEmail({
+          to: freshData.customerEmail as string,
+          subject: "Payment sent for your trade-in",
+          react: QuotePaidEmail({
+            customerName: (freshData.customerName as string) ?? "there",
+            deviceName: deviceLabel,
+            finalPriceNZD: (freshData.revisedPriceNZD as number) ?? (freshData.quotePriceNZD as number) ?? 0,
+            paymentMethod: (freshData.paymentMethod as string) ?? "bank_transfer",
+          }),
+        });
+      }
     }
 
     // Return the updated quote

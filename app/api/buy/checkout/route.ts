@@ -3,6 +3,8 @@ import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { calculateShipping, type ShippingConfig } from "@/lib/shipping";
 import { findOrCreateOrderCustomer } from "@/lib/customer-link";
+import { sendEmail } from "@/lib/email";
+import OrderConfirmedEmail from "@/emails/order-confirmed";
 
 // ---------------------------------------------------------------------------
 // POST /api/shop/checkout — Create order + reserve inventory
@@ -377,6 +379,27 @@ export async function POST(request: NextRequest) {
     }
 
     await batch.commit();
+
+    // Send order confirmation email (non-blocking, stub mode)
+    const stubOrderDoc = await adminDb.collection("orders").doc(orderId).get();
+    const stubOrderData = stubOrderDoc.data();
+    if (stubOrderData?.customerEmail) {
+      const orderItems = (stubOrderData.items as { description?: string; priceAUD?: number }[]) ?? [];
+      sendEmail({
+        to: stubOrderData.customerEmail as string,
+        subject: `Order #${orderNumber} confirmed`,
+        react: OrderConfirmedEmail({
+          customerName: customerName ?? "there",
+          orderNumber: String(orderNumber),
+          orderId,
+          items: orderItems.map((item) => ({
+            description: item.description ?? "Device",
+            priceAUD: item.priceAUD ?? 0,
+          })),
+          totalAUD: (stubOrderData.totalAUD as number) ?? 0,
+        }),
+      });
+    }
 
     return NextResponse.json({ orderId, orderNumber }, { status: 201 });
   } catch (error) {

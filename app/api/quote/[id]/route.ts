@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { findOrCreateCustomer } from "@/lib/customer-link";
+import { sendEmail } from "@/lib/email";
+import QuoteAcceptedEmail from "@/emails/quote-accepted";
 
 // GET /api/quote/[id] — Get a quote by ID, including device info
 export async function GET(
@@ -243,6 +245,21 @@ export async function PUT(
         };
       }
     }
+
+    // Send acceptance confirmation email (non-blocking)
+    const deviceLabel = device
+      ? `${device.make} ${device.model} ${device.storage}`.trim()
+      : "your device";
+    sendEmail({
+      to: customerEmail,
+      subject: "Your trade-in quote has been accepted",
+      react: QuoteAcceptedEmail({
+        customerName,
+        deviceName: deviceLabel,
+        quotePriceNZD: existingData?.quotePriceNZD ?? 0,
+        quoteId: id,
+      }),
+    });
 
     return NextResponse.json({
       ...serializedQuote,
