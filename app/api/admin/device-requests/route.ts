@@ -60,8 +60,8 @@ export async function GET(request: NextRequest) {
 }
 
 // ---------------------------------------------------------------------------
-// PATCH /api/admin/device-requests — Update a device request's status
-// Body: { id: string, status: string }
+// PATCH /api/admin/device-requests — Update a device request
+// Body: { id: string, status?: string, device?: string }
 // ---------------------------------------------------------------------------
 
 export async function PATCH(request: NextRequest) {
@@ -70,19 +70,35 @@ export async function PATCH(request: NextRequest) {
     if (adminUser instanceof NextResponse) return adminUser;
 
     const body = await request.json();
-    const { id, status } = body;
+    const { id, status, device } = body;
 
-    if (!id || !status) {
+    if (!id) {
       return NextResponse.json(
-        { error: "id and status are required" },
+        { error: "id is required" },
         { status: 400 }
       );
     }
 
-    const validStatuses = ["pending", "reviewed", "added", "dismissed"];
-    if (!validStatuses.includes(status)) {
+    const updates: Record<string, string> = {};
+
+    if (status) {
+      const validStatuses = ["pending", "reviewed", "added", "dismissed"];
+      if (!validStatuses.includes(status)) {
+        return NextResponse.json(
+          { error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` },
+          { status: 400 }
+        );
+      }
+      updates.status = status;
+    }
+
+    if (typeof device === "string" && device.trim()) {
+      updates.device = device.trim();
+    }
+
+    if (Object.keys(updates).length === 0) {
       return NextResponse.json(
-        { error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` },
+        { error: "No valid fields to update" },
         { status: 400 }
       );
     }
@@ -96,7 +112,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    await docRef.update({ status });
+    await docRef.update(updates);
 
     return NextResponse.json({ success: true });
   } catch (error) {

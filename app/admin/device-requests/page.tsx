@@ -24,6 +24,9 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -89,6 +92,10 @@ export default function DeviceRequestsPage() {
   // ---- updating status
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  // ---- inline device name editing
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+
   // ---- debounce search
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchInput), 300);
@@ -142,6 +149,33 @@ export default function DeviceRequestsPage() {
       }
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  // ---- update device name
+  const handleDeviceRename = async (id: string) => {
+    const trimmed = editValue.trim();
+    if (!trimmed) return;
+    const original = requests.find((r) => r.id === id)?.device;
+    if (trimmed === original) {
+      setEditingId(null);
+      return;
+    }
+    setUpdatingId(id);
+    try {
+      const res = await fetch("/api/admin/device-requests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, device: trimmed }),
+      });
+      if (res.ok) {
+        setRequests((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, device: trimmed } : r))
+        );
+      }
+    } finally {
+      setUpdatingId(null);
+      setEditingId(null);
     }
   };
 
@@ -232,7 +266,52 @@ export default function DeviceRequestsPage() {
                 const badgeProps = statusBadgeProps(req.status);
                 return (
                   <TableRow key={req.id}>
-                    <TableCell className="font-medium">{req.device}</TableCell>
+                    <TableCell className="font-medium">
+                      {editingId === req.id ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleDeviceRename(req.id);
+                              if (e.key === "Escape") setEditingId(null);
+                            }}
+                            className="h-7 text-sm"
+                            autoFocus
+                            disabled={updatingId === req.id}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            onClick={() => handleDeviceRename(req.id)}
+                            disabled={updatingId === req.id}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            onClick={() => setEditingId(null)}
+                            disabled={updatingId === req.id}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <button
+                          className="group flex items-center gap-1.5 text-left"
+                          onClick={() => {
+                            setEditingId(req.id);
+                            setEditValue(req.device);
+                          }}
+                        >
+                          {req.device}
+                          <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </button>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {req.email ?? "\u2014"}
                     </TableCell>
