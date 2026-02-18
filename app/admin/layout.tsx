@@ -15,6 +15,7 @@ import {
   Link2,
   Users,
   ContactRound,
+  Inbox,
   Settings,
   History,
   BarChart3,
@@ -78,6 +79,11 @@ const sidebarLinks = [
     href: "/admin/customers",
     label: "Customers",
     icon: ContactRound,
+  },
+  {
+    href: "/admin/device-requests",
+    label: "Device Requests",
+    icon: Inbox,
   },
   {
     href: "/admin/settings",

@@ -32,27 +32,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET /api/device-requests — List device requests (admin)
-export async function GET() {
-  try {
-    const snapshot = await adminDb
-      .collection("deviceRequests")
-      .orderBy("createdAt", "desc")
-      .limit(200)
-      .get();
-
-    const requests = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || null,
-    }));
-
-    return NextResponse.json(requests);
-  } catch (error) {
-    console.error("Error fetching device requests:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch requests" },
-      { status: 500 }
-    );
-  }
-}
