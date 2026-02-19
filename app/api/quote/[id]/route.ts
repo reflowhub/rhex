@@ -256,7 +256,8 @@ export async function PUT(
       react: QuoteAcceptedEmail({
         customerName,
         deviceName: deviceLabel,
-        quotePriceNZD: existingData?.quotePriceNZD ?? 0,
+        quotePrice: existingData?.quotePriceDisplay ?? existingData?.quotePriceNZD ?? 0,
+        currency: existingData?.displayCurrency ?? "AUD",
         quoteId: id,
       }),
     });

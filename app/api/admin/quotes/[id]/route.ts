@@ -216,7 +216,8 @@ export async function PUT(
           react: QuotePaidEmail({
             customerName: (freshData.customerName as string) ?? "there",
             deviceName: deviceLabel,
-            finalPriceNZD: (freshData.revisedPriceNZD as number) ?? (freshData.quotePriceNZD as number) ?? 0,
+            finalPrice: (freshData.revisedPriceNZD as number) ?? (freshData.quotePriceDisplay as number) ?? (freshData.quotePriceNZD as number) ?? 0,
+            currency: (freshData.displayCurrency as string) ?? "AUD",
             paymentMethod: (freshData.paymentMethod as string) ?? "bank_transfer",
           }),
         });

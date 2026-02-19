@@ -10,14 +10,16 @@ import {
 interface QuotePaidEmailProps {
   customerName: string;
   deviceName: string;
-  finalPriceNZD: number;
+  finalPrice: number;
+  currency: string;
   paymentMethod: string;
 }
 
 export default function QuotePaidEmail({
   customerName,
   deviceName,
-  finalPriceNZD,
+  finalPrice,
+  currency,
   paymentMethod,
 }: QuotePaidEmailProps) {
   const methodLabel = paymentMethod === "payid" ? "PayID" : "bank transfer";
@@ -30,7 +32,7 @@ export default function QuotePaidEmail({
           <Text style={heading}>rhex</Text>
           <Text style={paragraph}>Hi {customerName},</Text>
           <Text style={paragraph}>
-            Payment of <strong>${finalPriceNZD.toFixed(2)} NZD</strong> for your{" "}
+            Payment of <strong>${finalPrice.toFixed(2)} {currency}</strong> for your{" "}
             <strong>{deviceName}</strong> trade-in has been sent via{" "}
             {methodLabel}.
           </Text>

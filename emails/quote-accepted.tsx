@@ -12,14 +12,16 @@ import {
 interface QuoteAcceptedEmailProps {
   customerName: string;
   deviceName: string;
-  quotePriceNZD: number;
+  quotePrice: number;
+  currency: string;
   quoteId: string;
 }
 
 export default function QuoteAcceptedEmail({
   customerName,
   deviceName,
-  quotePriceNZD,
+  quotePrice,
+  currency,
   quoteId,
 }: QuoteAcceptedEmailProps) {
   const quoteUrl = `https://rhex.app/sell/quote/${quoteId}`;
@@ -34,7 +36,7 @@ export default function QuoteAcceptedEmail({
           <Text style={paragraph}>
             Your trade-in quote for <strong>{deviceName}</strong> has been
             accepted. The quoted value is{" "}
-            <strong>${quotePriceNZD.toFixed(2)} NZD</strong>.
+            <strong>${quotePrice.toFixed(2)} {currency}</strong>.
           </Text>
           <Text style={paragraph}>
             Please ship your device to us at your earliest convenience. You can
