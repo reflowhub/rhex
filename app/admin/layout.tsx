@@ -27,6 +27,7 @@ import {
   X,
   LogOut,
   Loader2,
+  Trophy,
 } from "lucide-react";
 
 const sidebarLinks = [
@@ -84,6 +85,11 @@ const sidebarLinks = [
     href: "/admin/device-requests",
     label: "Device Requests",
     icon: Inbox,
+  },
+  {
+    href: "/admin/raffle",
+    label: "Raffle",
+    icon: Trophy,
   },
   {
     href: "/admin/settings",

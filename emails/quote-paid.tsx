@@ -13,6 +13,8 @@ interface QuotePaidEmailProps {
   finalPrice: number;
   currency: string;
   paymentMethod: string;
+  googleReviewUrl?: string;
+  feedbackUrl?: string;
 }
 
 export default function QuotePaidEmail({
@@ -21,6 +23,8 @@ export default function QuotePaidEmail({
   finalPrice,
   currency,
   paymentMethod,
+  googleReviewUrl,
+  feedbackUrl,
 }: QuotePaidEmailProps) {
   const methodLabel = paymentMethod === "payid" ? "PayID" : "bank transfer";
 
@@ -43,6 +47,37 @@ export default function QuotePaidEmail({
           <Text style={paragraph}>
             Thank you for trading in with rhex!
           </Text>
+          {feedbackUrl && (
+            <>
+              <Hr style={hr} />
+              <Text style={paragraph}>
+                Tell us how your trade-in went and go in the draw to win a
+                monthly prize!
+              </Text>
+              <Text style={{ textAlign: "center" as const, margin: "16px 0" }}>
+                <a href={feedbackUrl} style={raffleButton}>
+                  Rate Your Experience
+                </a>
+              </Text>
+              <Text style={smallText}>
+                One entry per trade-in. Winners drawn monthly.
+              </Text>
+            </>
+          )}
+          {googleReviewUrl && (
+            <>
+              <Hr style={hr} />
+              <Text style={paragraph}>
+                Had a great experience? We'd really appreciate a quick Google
+                review — it helps others find us!
+              </Text>
+              <Text style={{ textAlign: "center" as const, margin: "16px 0" }}>
+                <a href={googleReviewUrl} style={reviewButton}>
+                  Leave a Google Review
+                </a>
+              </Text>
+            </>
+          )}
           <Hr style={hr} />
           <Text style={footer}>
             If you have any questions about your payment, reply to this email or
@@ -84,6 +119,33 @@ const paragraph = {
 const hr = {
   borderColor: "#e5e7eb",
   margin: "24px 0",
+};
+
+const raffleButton = {
+  backgroundColor: "#059669",
+  color: "#ffffff",
+  padding: "10px 24px",
+  borderRadius: "6px",
+  fontSize: "14px",
+  fontWeight: "600" as const,
+  textDecoration: "none",
+};
+
+const smallText = {
+  fontSize: "12px",
+  lineHeight: "20px",
+  color: "#9ca3af",
+  textAlign: "center" as const,
+};
+
+const reviewButton = {
+  backgroundColor: "#1a73e8",
+  color: "#ffffff",
+  padding: "10px 24px",
+  borderRadius: "6px",
+  fontSize: "14px",
+  fontWeight: "600" as const,
+  textDecoration: "none",
 };
 
 const footer = {

@@ -210,6 +210,8 @@ export async function PUT(
             deviceLabel = `${d.make} ${d.model} ${d.storage}`.trim();
           }
         }
+        const googlePlaceId = process.env.GOOGLE_PLACE_ID;
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://rhex.app";
         sendEmail({
           to: freshData.customerEmail as string,
           subject: "Payment sent for your trade-in",
@@ -219,6 +221,10 @@ export async function PUT(
             finalPrice: (freshData.revisedPriceNZD as number) ?? (freshData.quotePriceDisplay as number) ?? (freshData.quotePriceNZD as number) ?? 0,
             currency: (freshData.displayCurrency as string) ?? "AUD",
             paymentMethod: (freshData.paymentMethod as string) ?? "bank_transfer",
+            googleReviewUrl: googlePlaceId
+              ? `https://search.google.com/local/writereview?placeid=${googlePlaceId}`
+              : undefined,
+            feedbackUrl: `${siteUrl}/feedback/${id}`,
           }),
         });
       }
