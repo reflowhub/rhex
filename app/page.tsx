@@ -46,6 +46,23 @@ export default function LandingPage() {
           <ArrowRight className="mt-4 h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
         </Link>
       </div>
+
+      <div className="mt-6 w-full max-w-lg">
+        <a
+          href="https://clearvue.rhex.app"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group flex items-center justify-between rounded-xl border border-border bg-card px-8 py-5 transition-colors hover:border-foreground/20"
+        >
+          <div>
+            <span className="text-lg font-medium">ClearVue</span>
+            <span className="ml-2 text-sm text-muted-foreground">
+              iPhone Diagnostics
+            </span>
+          </div>
+          <ArrowRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
+        </a>
+      </div>
     </main>
   );
 }
