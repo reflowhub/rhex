@@ -85,7 +85,7 @@ const FAQ_ITEMS = [
 
 export default function Home() {
   const router = useRouter();
-  const { currency, setCurrency } = useCurrency();
+  const { currency, setCurrency, country } = useCurrency();
   const [categories, setCategories] = useState<CategoryInfo[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("Phone");
   const [devices, setDevices] = useState<Device[]>([]);
@@ -839,6 +839,38 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* ClearVue CTA — Australia only */}
+      {country === "AU" && (
+        <section className="border-t bg-primary/5 py-12">
+          <div className="mx-auto max-w-2xl px-4 text-center">
+            <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 mb-4">
+              <Smartphone className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="text-xl font-bold">
+              Know your phone&apos;s true condition
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground max-w-lg mx-auto">
+              Run a free 2-minute diagnostic with ClearVue before you trade in.
+              A verified report can help you get the best grade and highest
+              quote.
+            </p>
+            <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <a href="https://apps.apple.com/app/clearvue-app/id6443946885" target="_blank" rel="noopener noreferrer">
+                <Button>
+                  Download on iOS
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </a>
+              <a href="https://clearvue.rhex.app" target="_blank" rel="noopener noreferrer">
+                <Button variant="outline">
+                  Try Browser Demo
+                </Button>
+              </a>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* FAQ */}
       <section className="border-t bg-card py-16">

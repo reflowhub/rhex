@@ -14,6 +14,7 @@ interface CurrencyContextType {
   setCurrency: (currency: "AUD" | "NZD") => void;
   fxRate: number;
   loading: boolean;
+  country: string | null;
   convertFromNZD: (priceNZD: number) => number;
   convertFromAUD: (priceAUD: number) => number;
 }
@@ -23,6 +24,7 @@ const CurrencyContext = createContext<CurrencyContextType>({
   setCurrency: () => {},
   fxRate: 1,
   loading: true,
+  country: null,
   convertFromNZD: (price) => price,
   convertFromAUD: (price) => price,
 });
@@ -31,6 +33,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const [currency, setCurrencyState] = useState<"AUD" | "NZD">("AUD");
   const [fxRate, setFxRate] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [country, setCountry] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem("preferred-currency");
@@ -46,6 +49,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
         if (res.ok) {
           const data = await res.json();
           setFxRate(data.NZD_AUD || 1);
+          if (data.country) setCountry(data.country);
 
           // Auto-detect currency from geo if user hasn't explicitly chosen
           if (!hasExplicitChoice && data.country === "NZ") {
@@ -87,7 +91,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
 
   return (
     <CurrencyContext.Provider
-      value={{ currency, setCurrency, fxRate, loading, convertFromNZD, convertFromAUD }}
+      value={{ currency, setCurrency, fxRate, loading, country, convertFromNZD, convertFromAUD }}
     >
       {children}
     </CurrencyContext.Provider>
