@@ -61,17 +61,13 @@ export default function BusinessPage() {
               >
                 AUD
               </button>
-              <button
-                onClick={() => setCurrency("NZD")}
-                className={cn(
-                  "rounded-md px-2 py-1 transition-colors",
-                  currency === "NZD"
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
+              <span
+                className="rounded-md px-2 py-1 text-muted-foreground/50 cursor-not-allowed"
+                title="Coming soon"
               >
                 NZD
-              </button>
+                <span className="ml-0.5 text-[9px] align-super">soon</span>
+              </span>
             </div>
             <ThemeToggle />
           </div>
