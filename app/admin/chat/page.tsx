@@ -9,11 +9,11 @@ import {
   Loader2,
   Send,
   RotateCcw,
-  Code,
   Search,
   FolderOpen,
   FileText,
   MessageSquareCode,
+  AlertCircle,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -156,9 +156,10 @@ export default function CodebaseChatPage() {
     () => new DefaultChatTransport({ api: "/api/admin/chat" }),
     []
   );
-  const { messages, sendMessage, setMessages, status } = useChat({
-    transport,
-  });
+  const { messages, sendMessage, setMessages, status, error, clearError } =
+    useChat({
+      transport,
+    });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [input, setInput] = useState("");
@@ -249,6 +250,20 @@ export default function CodebaseChatPage() {
           </div>
         )}
       </div>
+
+      {/* Error display */}
+      {error && (
+        <div className="mt-2 flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span className="flex-1">{error.message}</span>
+          <button
+            onClick={clearError}
+            className="text-xs underline hover:no-underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Input area */}
       <form onSubmit={handleSubmit} className="mt-4 flex gap-2">

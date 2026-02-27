@@ -17,7 +17,16 @@ export async function POST(request: NextRequest) {
   if (adminUser instanceof NextResponse) return adminUser;
 
   const { messages } = await request.json();
-  const meta = getSnapshotMeta();
+
+  let meta;
+  try {
+    meta = getSnapshotMeta();
+  } catch (err) {
+    return NextResponse.json(
+      { error: "Codebase snapshot not found. Run: npm run build:codebase" },
+      { status: 500 }
+    );
+  }
 
   const result = streamText({
     model: anthropic("claude-sonnet-4-20250514"),

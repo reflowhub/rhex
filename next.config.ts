@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_GIT_SHA: gitSha.slice(0, 7),
   },
+  outputFileTracingIncludes: {
+    "/api/admin/chat": ["./data/codebase-snapshot.json"],
+  },
   images: {
     remotePatterns: [
       {
