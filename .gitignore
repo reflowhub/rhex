@@ -44,3 +44,6 @@ firebase-debug.log
 .firebase/
 .firebaserc
 firebase-credentials.json
+
+# generated codebase snapshot
+data/codebase-snapshot.json

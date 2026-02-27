@@ -28,6 +28,7 @@ import {
   LogOut,
   Loader2,
   Trophy,
+  MessageSquareCode,
 } from "lucide-react";
 
 const sidebarLinks = [
@@ -90,6 +91,11 @@ const sidebarLinks = [
     href: "/admin/raffle",
     label: "Raffle",
     icon: Trophy,
+  },
+  {
+    href: "/admin/chat",
+    label: "Codebase Chat",
+    icon: MessageSquareCode,
   },
   {
     href: "/admin/settings",
