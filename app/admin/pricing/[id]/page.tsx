@@ -184,8 +184,9 @@ export default function PriceListDetailPage() {
     if (searchTerm) {
       const words = searchTerm.toLowerCase().split(/\s+/).filter(Boolean);
       result = result.filter((p) => {
+        const numId = p.numericId != null ? String(p.numericId) : "";
         const combined =
-          `${p.deviceId} ${p.make} ${p.model} ${p.storage}`.toLowerCase();
+          `${numId} ${p.make} ${p.model} ${p.storage}`.toLowerCase();
         return words.every((word) => combined.includes(word));
       });
     }

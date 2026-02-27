@@ -31,13 +31,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // In-memory fuzzy search across make, model, storage
+    // In-memory fuzzy search across deviceId, make, model, storage
     if (search) {
       devices = devices.filter((device) => {
+        const devId = String(device.deviceId ?? "").toLowerCase();
         const make = String(device.make ?? "").toLowerCase();
         const model = String(device.model ?? "").toLowerCase();
         const storage = String(device.storage ?? "").toLowerCase();
-        const combined = `${make} ${model} ${storage}`;
+        const combined = `${devId} ${make} ${model} ${storage}`;
         // Check if every word in the search query appears somewhere in the combined fields
         const searchWords = search.split(/\s+/).filter(Boolean);
         return searchWords.every((word) => combined.includes(word));
@@ -95,20 +96,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Auto-assign next deviceId using a Firestore transaction
+    // Auto-assign next deviceId using a Firestore transaction.
+    // We also check that the chosen ID isn't already taken (e.g. by a CSV import)
+    // and skip forward until we find an unused one.
     const counterRef = adminDb.doc("counters/devices");
+
+    // Build a set of all numeric deviceIds currently in use
+    const allDevices = await getDevices();
+    const usedIds = new Set<number>(
+      allDevices
+        .map((d) => (typeof d.deviceId === "number" ? d.deviceId : parseInt(String(d.deviceId), 10)))
+        .filter((id) => !isNaN(id))
+    );
+
     let deviceId: number;
 
     await adminDb.runTransaction(async (transaction) => {
       const counterDoc = await transaction.get(counterRef);
+      let nextId: number;
 
       if (!counterDoc.exists) {
-        // Initialize counter if it doesn't exist
-        deviceId = 1;
-        transaction.set(counterRef, { nextId: 2 });
+        nextId = 1;
       } else {
-        deviceId = counterDoc.data()?.nextId ?? 1;
-        transaction.update(counterRef, { nextId: deviceId + 1 });
+        nextId = counterDoc.data()?.nextId ?? 1;
+      }
+
+      // Skip IDs that are already in use
+      while (usedIds.has(nextId)) {
+        nextId++;
+      }
+
+      deviceId = nextId;
+      const newNextId = nextId + 1;
+
+      if (!counterDoc.exists) {
+        transaction.set(counterRef, { nextId: newNextId });
+      } else {
+        transaction.update(counterRef, { nextId: newNextId });
       }
     });
 
