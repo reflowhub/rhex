@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
-import { streamText, tool, stepCountIs } from "ai";
+import { streamText, tool, stepCountIs, convertToModelMessages } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import {
@@ -46,7 +46,7 @@ Key architecture:
 You have three tools to explore the codebase. Use them to find and read specific files to answer questions. Always prefer reading actual source code over guessing. When showing code, reference the file path and line numbers.
 
 You are read-only. You can explore and explain the code but cannot modify it.`,
-    messages,
+    messages: await convertToModelMessages(messages),
     tools: {
       list_files: tool({
         description:
