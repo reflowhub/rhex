@@ -102,7 +102,7 @@ You are read-only. You can explore and explain the code but cannot modify it.`,
         },
       }),
     },
-    stopWhen: stepCountIs(10),
+    stopWhen: stepCountIs(5),
   });
 
   return result.toUIMessageStreamResponse();

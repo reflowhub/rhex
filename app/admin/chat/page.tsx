@@ -128,15 +128,28 @@ function MessageBubble({ message }: { message: UIMessage }) {
           if (part.type === "text") {
             return <div key={i}>{renderText(part.text)}</div>;
           }
-          if (part.type === "dynamic-tool") {
+          // Static tool parts: type is "tool-list_files", "tool-read_file", etc.
+          if (part.type.startsWith("tool-")) {
+            const toolName = part.type.slice(5); // remove "tool-" prefix
+            const p = part as unknown as { input?: Record<string, unknown> };
             return (
               <ToolIndicator
                 key={i}
-                toolName={part.toolName}
-                args={
-                  (part as unknown as { input: Record<string, unknown> })
-                    .input ?? {}
-                }
+                toolName={toolName}
+                args={p.input ?? {}}
+              />
+            );
+          }
+          if (part.type === "dynamic-tool") {
+            const p = part as unknown as {
+              toolName: string;
+              input?: Record<string, unknown>;
+            };
+            return (
+              <ToolIndicator
+                key={i}
+                toolName={p.toolName}
+                args={p.input ?? {}}
               />
             );
           }
