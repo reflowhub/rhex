@@ -167,7 +167,7 @@ export default function ShopHomePage() {
             },
             {
               icon: Shield,
-              title: "90-Day Warranty",
+              title: "12 Month Warranty",
               desc: "Full warranty on every device. If something's wrong, we make it right.",
             },
           ].map((item) => (
