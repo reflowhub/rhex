@@ -55,7 +55,7 @@ export default function LandingPage() {
           className="group flex items-center justify-between rounded-xl border border-border bg-card px-8 py-5 transition-colors hover:border-foreground/20"
         >
           <div>
-            <span className="text-lg font-medium">ClearVue</span>
+            <span className="text-lg font-medium">Clearvue</span>
             <span className="ml-2 text-sm text-muted-foreground">
               iPhone Diagnostics
             </span>

@@ -836,7 +836,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ClearVue CTA — Australia only */}
+      {/* Clearvue CTA — Australia only */}
       {country === "AU" && (
         <section className="border-t bg-primary/5 py-12">
           <div className="mx-auto max-w-2xl px-4 text-center">
@@ -844,10 +844,10 @@ export default function Home() {
               <Smartphone className="h-5 w-5 text-primary" />
             </div>
             <h2 className="text-xl font-bold">
-              Know your phone&apos;s true condition
+              Not sure about your phone&apos;s condition?
             </h2>
             <p className="mt-2 text-sm text-muted-foreground max-w-lg mx-auto">
-              Run a free 2-minute diagnostic with ClearVue before you trade in.
+              Run a free 2-minute diagnostic with Clearvue before you trade in.
               A verified report can help you get the best grade and highest
               quote.
             </p>
