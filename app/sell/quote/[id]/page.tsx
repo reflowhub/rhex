@@ -26,7 +26,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { gtagEvent } from "@/lib/gtag";
+import { gtagEvent, gtagConversion } from "@/lib/gtag";
+import { fbPixelEvent } from "@/lib/fbpixel";
 
 interface QuoteData {
   id: string;
@@ -168,13 +169,20 @@ export default function QuoteResultPage({
         setQuote(data);
         setAccepted(true);
         setShowAcceptForm(false);
+        const conversionValue = data.quotePriceDisplay ?? data.quotePriceNZD;
+        const conversionCurrency = data.displayCurrency;
         gtagEvent("trade_in_conversion", {
           quote_id: id,
           device_id: data.deviceId,
           grade: data.grade,
-          value: data.quotePriceDisplay ?? data.quotePriceNZD,
-          currency: data.displayCurrency,
+          value: conversionValue,
+          currency: conversionCurrency,
           payment_method: paymentMethod,
+        });
+        gtagConversion(conversionValue, conversionCurrency);
+        fbPixelEvent("Lead", {
+          value: conversionValue,
+          currency: conversionCurrency,
         });
       } else {
         const errData = await res.json();

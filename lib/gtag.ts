@@ -14,3 +14,15 @@ export function gtagEvent(eventName: string, params?: GtagEventParams) {
     window.gtag("event", eventName, params);
   }
 }
+
+export function gtagConversion(value?: number, currency?: string) {
+  const adsId = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
+  if (!adsId) return;
+  if (typeof window !== "undefined" && typeof window.gtag === "function") {
+    window.gtag("event", "conversion", {
+      send_to: adsId,
+      value,
+      currency,
+    });
+  }
+}

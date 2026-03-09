@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import Script from "next/script";
+import { Analytics } from "@vercel/analytics/react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { CurrencyProvider } from "@/lib/currency-context";
 import { VisitorTracker } from "@/components/visitor-tracker";
@@ -35,8 +36,23 @@ export default function RootLayout({
               function gtag(){dataLayer.push(arguments);}
               gtag('js', new Date());
               gtag('config', '${process.env.NEXT_PUBLIC_GA_ID}');
+              ${process.env.NEXT_PUBLIC_GOOGLE_ADS_ID ? `gtag('config', '${process.env.NEXT_PUBLIC_GOOGLE_ADS_ID}');` : ''}
             `}</Script>
           </>
+        )}
+        {process.env.NEXT_PUBLIC_META_PIXEL_ID && (
+          <Script id="meta-pixel" strategy="afterInteractive">{`
+            !function(f,b,e,v,n,t,s)
+            {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+            n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+            if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+            n.queue=[];t=b.createElement(e);t.async=!0;
+            t.src=v;s=b.getElementsByTagName(e)[0];
+            s.parentNode.insertBefore(t,s)}(window,document,'script',
+            'https://connect.facebook.net/en_US/fbevents.js');
+            fbq('init', '${process.env.NEXT_PUBLIC_META_PIXEL_ID}');
+            fbq('track', 'PageView');
+          `}</Script>
         )}
       </head>
       <body className={geistSans.variable}>
@@ -52,6 +68,7 @@ export default function RootLayout({
             })(window,document,"clarity","script","${process.env.NEXT_PUBLIC_CLARITY_ID}");
           `}</Script>
         )}
+        <Analytics />
         <VisitorTracker />
         <ThemeProvider>
           <CurrencyProvider>{children}</CurrencyProvider>
