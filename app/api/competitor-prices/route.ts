@@ -102,8 +102,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ competitors: [] });
     }
 
+    // Deduplicate: keep highest price per source (Vodafone has multiple entries per device)
+    const bestBySource: Record<string, { source_name: string; price: number; grade_normalized: string }> = {};
+    for (const p of prices ?? []) {
+      if (!bestBySource[p.source_name] || p.price > bestBySource[p.source_name].price) {
+        bestBySource[p.source_name] = p;
+      }
+    }
+
     // Filter: only include competitors where rhex price is higher
-    const competitors = (prices ?? [])
+    const competitors = Object.values(bestBySource)
       .filter((p) => p.price < rhexPrice)
       .map((p) => ({
         name: SOURCE_DISPLAY[p.source_name] ?? p.source_name,
