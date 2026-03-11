@@ -411,7 +411,7 @@ export default function QuoteResultPage({
                     >
                       <span className="text-muted-foreground">{c.name}</span>
                       <div className="flex items-center gap-3">
-                        <span className="text-muted-foreground line-through">
+                        <span className="text-muted-foreground">
                           ${c.price.toFixed(2)}
                         </span>
                         <span className="font-medium text-green-700">
