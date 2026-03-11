@@ -54,6 +54,12 @@ interface QuoteData {
   };
 }
 
+interface CompetitorOffer {
+  name: string;
+  price: number;
+  grade: string;
+}
+
 const GRADE_LABELS: Record<string, string> = {
   A: "Excellent",
   B: "Good",
@@ -86,6 +92,7 @@ export default function QuoteResultPage({
   const [accepted, setAccepted] = useState(false);
   const [copied, setCopied] = useState(false);
   const [requoting, setRequoting] = useState(false);
+  const [competitors, setCompetitors] = useState<CompetitorOffer[]>([]);
 
   // Form state
   const [customerName, setCustomerName] = useState("");
@@ -123,6 +130,25 @@ export default function QuoteResultPage({
     }
     fetchQuote();
   }, [id]);
+
+  // Fetch competitor prices (AUD quotes only)
+  useEffect(() => {
+    if (!quote || quote.displayCurrency !== "AUD" || !quote.device) return;
+    const rhexPrice = quote.quotePriceDisplay ?? quote.quotePriceNZD;
+    const params = new URLSearchParams({
+      make: quote.device.make,
+      model: quote.device.model,
+      storage: quote.device.storage,
+      grade: quote.grade,
+      rhexPrice: String(rhexPrice),
+    });
+    fetch(`/api/competitor-prices?${params}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.competitors?.length) setCompetitors(data.competitors);
+      })
+      .catch(() => {});
+  }, [quote]);
 
   const handleAcceptQuote = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -367,6 +393,37 @@ export default function QuoteResultPage({
               {quote.displayCurrency}
             </p>
           </div>
+
+          {/* Competitor Comparison */}
+          {competitors.length > 0 && (
+            <div className="mb-6 rounded-lg border border-green-200 bg-green-50/50 p-4">
+              <p className="text-sm font-medium text-green-800 mb-3">
+                Compare with other trade-in programs
+              </p>
+              <div className="space-y-2">
+                {competitors.map((c) => {
+                  const rhexPrice = quote.quotePriceDisplay ?? quote.quotePriceNZD;
+                  const savings = rhexPrice - c.price;
+                  return (
+                    <div
+                      key={c.name}
+                      className="flex items-center justify-between rounded-md bg-white/80 px-3 py-2 text-sm"
+                    >
+                      <span className="text-muted-foreground">{c.name}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-muted-foreground line-through">
+                          ${c.price.toFixed(2)}
+                        </span>
+                        <span className="font-medium text-green-700">
+                          +${savings.toFixed(2)} more with us
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Expiry Notice */}
           {!accepted && !isExpired && (
