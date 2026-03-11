@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { indexDb } from "@/lib/index-supabase";
+import { getIndexDb } from "@/lib/index-supabase";
 
 const SOURCES = ["vodafone_au_tradein", "telstra_au_tradein"] as const;
 
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     const modelStorage = `${model} ${storage}`;
 
     // Get latest completed run ID for each source
-    const { data: runs, error: runsError } = await indexDb
+    const { data: runs, error: runsError } = await getIndexDb()
       .from("scrape_runs")
       .select("id, scrape_sources!inner(name)")
       .eq("status", "completed")
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Query competitor prices for this device + grade
-    const { data: prices, error: pricesError } = await indexDb
+    const { data: prices, error: pricesError } = await getIndexDb()
       .from("scraped_prices")
       .select("source_name, price, grade_normalized")
       .in("run_id", runIds)
