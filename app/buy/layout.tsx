@@ -156,6 +156,12 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
             >
               Privacy
             </Link>
+            <Link
+              href="/about"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              About
+            </Link>
           </div>
         </div>
       </footer>
