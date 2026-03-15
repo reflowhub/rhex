@@ -32,6 +32,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { escapeCsvField, downloadCsv } from "@/lib/csv-export";
+import { useFX, type DisplayCurrency } from "@/lib/use-fx";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -112,6 +113,11 @@ export default function PriceListDetailPage() {
   >("adjust_percent");
   const [bulkValue, setBulkValue] = useState("");
   const [bulkSaving, setBulkSaving] = useState(false);
+
+  // ---- currency conversion state ------------------------------------------
+  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>("NZD");
+  const { rates: fxRates, convert: fxConvert } = useFX();
+  const isConverted = displayCurrency !== "NZD";
 
   // ---- add device dialog state --------------------------------------------
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -494,7 +500,8 @@ export default function PriceListDetailPage() {
   };
 
   const formatCurrency = (value: number) => {
-    return `$${value.toLocaleString("en-NZ")}`;
+    const displayValue = isConverted ? fxConvert(value, displayCurrency) : value;
+    return `$${displayValue.toLocaleString("en-NZ")}`;
   };
 
   // Compute the label for the first grade (used in "set ratios" description)
@@ -552,7 +559,20 @@ export default function PriceListDetailPage() {
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
             <span>Effective: {formatDate(priceList.effectiveDate)}</span>
-            <Badge variant="secondary">{priceList.currency}</Badge>
+            <select
+              className="h-6 rounded border border-input bg-background px-1.5 text-xs font-medium"
+              value={displayCurrency}
+              onChange={(e) => setDisplayCurrency(e.target.value as DisplayCurrency)}
+            >
+              <option value="NZD">NZD</option>
+              <option value="AUD">AUD</option>
+              <option value="USD">USD</option>
+            </select>
+            {isConverted && (
+              <span className="text-xs text-muted-foreground">
+                1 NZD = {(displayCurrency === "AUD" ? fxRates.NZD_AUD : fxRates.NZD_USD).toFixed(4)} {displayCurrency}
+              </span>
+            )}
             <span>{priceList.deviceCount} devices</span>
             <Badge variant="outline">{priceList.category}</Badge>
           </div>

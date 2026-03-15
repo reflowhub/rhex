@@ -3,6 +3,8 @@ import { adminDb } from "@/lib/firebase-admin";
 export interface FXRates {
   NZD_AUD: number;
   AUD_NZD: number;
+  NZD_USD: number;
+  USD_NZD: number;
   date: string;
   source: string;
 }
@@ -25,16 +27,19 @@ export async function getTodayFXRate(): Promise<FXRates> {
   if (apiKey) {
     try {
       const res = await fetch(
-        `https://api.freecurrencyapi.com/v1/latest?apikey=${apiKey}&base_currency=NZD&currencies=AUD`,
+        `https://api.freecurrencyapi.com/v1/latest?apikey=${apiKey}&base_currency=NZD&currencies=AUD,USD`,
         { signal: AbortSignal.timeout(5000) }
       );
 
       if (res.ok) {
         const data = await res.json();
         if (data.data?.AUD) {
+          const usdRate = data.data.USD || 0.57;
           const rates: FXRates = {
             NZD_AUD: data.data.AUD,
             AUD_NZD: 1 / data.data.AUD,
+            NZD_USD: usdRate,
+            USD_NZD: 1 / usdRate,
             date: today,
             source: "freecurrencyapi.com",
           };
@@ -61,10 +66,12 @@ export async function getTodayFXRate(): Promise<FXRates> {
   }
 
   // No cached rates at all — use a reasonable default
-  console.warn("No FX rates available, using default NZD_AUD=0.92");
+  console.warn("No FX rates available, using defaults");
   return {
     NZD_AUD: 0.92,
     AUD_NZD: 1.087,
+    NZD_USD: 0.57,
+    USD_NZD: 1.754,
     date: today,
     source: "default",
   };
