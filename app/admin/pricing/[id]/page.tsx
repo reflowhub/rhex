@@ -187,7 +187,14 @@ export default function PriceListDetailPage() {
         const numId = p.numericId != null ? String(p.numericId) : "";
         const combined =
           `${numId} ${p.make} ${p.model} ${p.storage}`.toLowerCase();
-        return words.every((word) => combined.includes(word));
+        return words.every((word) => {
+          if (/^\d+$/.test(word)) {
+            // Numeric words use word-boundary matching so "12" matches
+            // "iPhone 12" but not "128GB"
+            return new RegExp(`\\b${word}\\b`).test(combined);
+          }
+          return combined.includes(word);
+        });
       });
     }
     // Sort by make → model → storage for model family grouping
