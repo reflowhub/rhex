@@ -157,6 +157,16 @@ export default function EstimateResultPage({
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [bankAccountName, setBankAccountName] = useState("");
 
+  // Admin check (lightweight – no redirect)
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    fetch("/api/admin/auth/me")
+      .then((res) => {
+        if (res.ok) setIsAdmin(true);
+      })
+      .catch(() => {});
+  }, []);
+
   // Resolve dialog
   const [resolveOpen, setResolveOpen] = useState(false);
   const [resolveLineId, setResolveLineId] = useState<string | null>(null);
@@ -692,7 +702,7 @@ export default function EstimateResultPage({
                   <TableHead className="text-right">
                     Total ({currency})
                   </TableHead>
-                  {!isAccepted && <TableHead className="w-20" />}
+                  {!isAccepted && isAdmin && <TableHead className="w-20" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -736,7 +746,7 @@ export default function EstimateResultPage({
                           ? formatPrice(line.indicativePriceNZD)
                           : "\u2014"}
                       </TableCell>
-                      {!isAccepted && (
+                      {!isAccepted && isAdmin && (
                         <TableCell>
                           {(line.matchConfidence === "low" ||
                             !line.deviceId) && (
