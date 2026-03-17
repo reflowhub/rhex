@@ -287,15 +287,14 @@ export default function EstimatePage() {
     }
   };
 
-  // Build CSV from manual list
-  const buildManualCSV = (): string => {
-    const lines = ["Device,Quantity,Grade"];
-    for (const line of manualLines) {
-      const name = `${line.device.make} ${line.device.model} ${line.device.storage}`;
-      lines.push(`"${name}",${line.quantity},${line.grade}`);
-    }
-    return lines.join("\n");
-  };
+  // Build structured device lines from manual list (preserves device IDs)
+  const buildDeviceLines = () =>
+    manualLines.map((line) => ({
+      deviceId: line.device.id,
+      name: `${line.device.make} ${line.device.model} ${line.device.storage}`,
+      quantity: line.quantity,
+      grade: line.grade,
+    }));
 
   const totalManualDevices = manualLines.reduce(
     (sum, l) => sum + l.quantity,
@@ -401,23 +400,31 @@ export default function EstimatePage() {
 
   // Submit
   const handleSubmit = async () => {
-    const csv = inputMode === "upload" ? csvContent : buildManualCSV();
-    if (!csv) return;
+    if (inputMode === "upload" && !csvContent) return;
     if (inputMode === "manual" && manualLines.length === 0) return;
 
     setSubmitting(true);
     setError(null);
 
     try {
+      const payload: Record<string, unknown> = {
+        assumedGrade,
+        category: selectedCategory,
+        referralCode: getReferralCode(),
+      };
+
+      if (inputMode === "upload") {
+        payload.csv = csvContent;
+        payload.type = "manifest";
+      } else {
+        payload.deviceLines = buildDeviceLines();
+        payload.type = "build_list";
+      }
+
       const res = await fetch("/api/business/estimate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          csv,
-          assumedGrade,
-          category: selectedCategory,
-          referralCode: getReferralCode(),
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {

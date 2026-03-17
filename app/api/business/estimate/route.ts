@@ -83,11 +83,13 @@ function findColumnIndex(
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { csv, assumedGrade, businessName, contactEmail, referralCode, category: bodyCategory } = body;
+    const { csv, deviceLines, assumedGrade, businessName, contactEmail, referralCode, category: bodyCategory, type: bodyType } = body;
 
-    if (!csv || typeof csv !== "string") {
+    const isBuildList = bodyType === "build_list" && Array.isArray(deviceLines);
+
+    if (!isBuildList && (!csv || typeof csv !== "string")) {
       return NextResponse.json(
-        { error: "csv is required" },
+        { error: "csv or deviceLines is required" },
         { status: 400 }
       );
     }
@@ -108,33 +110,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parse CSV
-    const lines = csv
-      .replace(/^\uFEFF/, "")
-      .split(/\r?\n/)
-      .filter((l: string) => l.trim() !== "");
-    if (lines.length < 2) {
-      return NextResponse.json(
-        { error: "CSV must have at least a header row and one data row" },
-        { status: 400 }
-      );
-    }
-
-    const headers = parseCSVLine(lines[0]);
-
-    // Auto-detect columns
-    const deviceCol = findColumnIndex(headers, DEVICE_SYNONYMS);
-    const quantityCol = findColumnIndex(headers, QUANTITY_SYNONYMS);
-    const storageCol = findColumnIndex(headers, STORAGE_SYNONYMS);
-    const makeCol = findColumnIndex(headers, MAKE_SYNONYMS);
-    const gradeCol = findColumnIndex(headers, GRADE_SYNONYMS);
-
-    // If no device column found, use the first column
-    const effectiveDeviceCol = deviceCol >= 0 ? deviceCol : 0;
-
-    // Pre-load device library for matching
-    await loadDeviceLibrary();
-
     // Lookup active price list for this category
     const priceListId = await getActivePriceList(category);
     if (!priceListId) {
@@ -145,7 +120,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Process each row
-    interface DeviceLine {
+    interface ProcessedLine {
       rawInput: string;
       deviceId: string | null;
       deviceName: string | null;
@@ -160,7 +135,7 @@ export async function POST(request: NextRequest) {
     const businessEstimateDiscount =
       settingsDoc.data()?.businessEstimateDiscount ?? 0;
 
-    const deviceLines: DeviceLine[] = [];
+    const processedLines: ProcessedLine[] = [];
     let totalIndicativeNZD = 0;
     let totalPublicNZD = 0;
     let matchedCount = 0;
@@ -169,45 +144,19 @@ export async function POST(request: NextRequest) {
     // Fetch price list for pricing lookups (from cache)
     const priceMap = await getPrices(priceListId);
 
-    for (let i = 1; i < lines.length; i++) {
-      const values = parseCSVLine(lines[i]);
-      if (values.every((v) => !v.trim())) continue; // skip empty rows
+    if (isBuildList) {
+      // -----------------------------------------------------------------------
+      // Build list flow: device IDs are known, skip matching entirely
+      // -----------------------------------------------------------------------
+      for (const line of deviceLines as { deviceId: string; name: string; quantity: number; grade: string }[]) {
+        const rowGrade = validGrades.includes(line.grade?.toUpperCase())
+          ? line.grade.toUpperCase()
+          : grade;
+        const quantity = Math.max(1, parseInt(String(line.quantity), 10) || 1);
 
-      // Build raw input string
-      let rawInput = values[effectiveDeviceCol] || "";
-      if (makeCol >= 0 && values[makeCol]) {
-        rawInput = `${values[makeCol]} ${rawInput}`;
-      }
-      if (storageCol >= 0 && values[storageCol]) {
-        rawInput = `${rawInput} ${values[storageCol]}`;
-      }
-      rawInput = rawInput.trim();
-
-      if (!rawInput) continue;
-
-      // Parse quantity
-      let quantity = 1;
-      if (quantityCol >= 0 && values[quantityCol]) {
-        const parsed = parseInt(values[quantityCol], 10);
-        if (!isNaN(parsed) && parsed > 0) quantity = parsed;
-      }
-
-      // Parse per-row grade (fall back to global assumed grade)
-      let rowGrade = grade;
-      if (gradeCol >= 0 && values[gradeCol]) {
-        const g = values[gradeCol].trim().toUpperCase();
-        if (validGrades.includes(g)) {
-          rowGrade = g;
-        }
-      }
-
-      // Match device
-      const match = await matchDeviceString(rawInput);
-
-      let indicativePriceNZD = 0;
-      let publicPriceNZD = 0;
-      if (match.deviceId) {
-        const devicePrices = priceMap.get(match.deviceId);
+        let indicativePriceNZD = 0;
+        let publicPriceNZD = 0;
+        const devicePrices = priceMap.get(line.deviceId);
         const price = devicePrices?.[rowGrade];
         if (price !== undefined) {
           publicPriceNZD = price * quantity;
@@ -216,28 +165,124 @@ export async function POST(request: NextRequest) {
               ? calculatePartnerRate(price, businessEstimateDiscount) * quantity
               : publicPriceNZD;
         }
-        matchedCount++;
-      } else {
-        unmatchedCount++;
+
+        if (line.deviceId) {
+          matchedCount++;
+        } else {
+          unmatchedCount++;
+        }
+
+        totalIndicativeNZD += indicativePriceNZD;
+        totalPublicNZD += publicPriceNZD;
+
+        processedLines.push({
+          rawInput: line.name,
+          deviceId: line.deviceId,
+          deviceName: line.name,
+          matchConfidence: "high",
+          quantity,
+          assumedGrade: rowGrade,
+          indicativePriceNZD,
+        });
+      }
+    } else {
+      // -----------------------------------------------------------------------
+      // Manifest flow: parse CSV and match devices by string
+      // -----------------------------------------------------------------------
+      const lines = csv
+        .replace(/^\uFEFF/, "")
+        .split(/\r?\n/)
+        .filter((l: string) => l.trim() !== "");
+      if (lines.length < 2) {
+        return NextResponse.json(
+          { error: "CSV must have at least a header row and one data row" },
+          { status: 400 }
+        );
       }
 
-      totalIndicativeNZD += indicativePriceNZD;
-      totalPublicNZD += publicPriceNZD;
+      const headers = parseCSVLine(lines[0]);
 
-      deviceLines.push({
-        rawInput,
-        deviceId: match.deviceId,
-        deviceName: match.deviceName,
-        matchConfidence: match.matchConfidence,
-        quantity,
-        assumedGrade: rowGrade,
-        indicativePriceNZD,
-      });
+      // Auto-detect columns
+      const deviceCol = findColumnIndex(headers, DEVICE_SYNONYMS);
+      const quantityCol = findColumnIndex(headers, QUANTITY_SYNONYMS);
+      const storageCol = findColumnIndex(headers, STORAGE_SYNONYMS);
+      const makeCol = findColumnIndex(headers, MAKE_SYNONYMS);
+      const gradeCol = findColumnIndex(headers, GRADE_SYNONYMS);
+      const effectiveDeviceCol = deviceCol >= 0 ? deviceCol : 0;
+
+      // Pre-load device library for matching
+      await loadDeviceLibrary();
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = parseCSVLine(lines[i]);
+        if (values.every((v) => !v.trim())) continue; // skip empty rows
+
+        // Build raw input string
+        let rawInput = values[effectiveDeviceCol] || "";
+        if (makeCol >= 0 && values[makeCol]) {
+          rawInput = `${values[makeCol]} ${rawInput}`;
+        }
+        if (storageCol >= 0 && values[storageCol]) {
+          rawInput = `${rawInput} ${values[storageCol]}`;
+        }
+        rawInput = rawInput.trim();
+
+        if (!rawInput) continue;
+
+        // Parse quantity
+        let quantity = 1;
+        if (quantityCol >= 0 && values[quantityCol]) {
+          const parsed = parseInt(values[quantityCol], 10);
+          if (!isNaN(parsed) && parsed > 0) quantity = parsed;
+        }
+
+        // Parse per-row grade (fall back to global assumed grade)
+        let rowGrade = grade;
+        if (gradeCol >= 0 && values[gradeCol]) {
+          const g = values[gradeCol].trim().toUpperCase();
+          if (validGrades.includes(g)) {
+            rowGrade = g;
+          }
+        }
+
+        // Match device
+        const match = await matchDeviceString(rawInput);
+
+        let indicativePriceNZD = 0;
+        let publicPriceNZD = 0;
+        if (match.deviceId) {
+          const devicePrices = priceMap.get(match.deviceId);
+          const price = devicePrices?.[rowGrade];
+          if (price !== undefined) {
+            publicPriceNZD = price * quantity;
+            indicativePriceNZD =
+              businessEstimateDiscount > 0
+                ? calculatePartnerRate(price, businessEstimateDiscount) * quantity
+                : publicPriceNZD;
+          }
+          matchedCount++;
+        } else {
+          unmatchedCount++;
+        }
+
+        totalIndicativeNZD += indicativePriceNZD;
+        totalPublicNZD += publicPriceNZD;
+
+        processedLines.push({
+          rawInput,
+          deviceId: match.deviceId,
+          deviceName: match.deviceName,
+          matchConfidence: match.matchConfidence,
+          quantity,
+          assumedGrade: rowGrade,
+          indicativePriceNZD,
+        });
+      }
     }
 
-    if (deviceLines.length === 0) {
+    if (processedLines.length === 0) {
       return NextResponse.json(
-        { error: "No valid device rows found in CSV" },
+        { error: "No valid device rows found" },
         { status: 400 }
       );
     }
@@ -273,10 +318,10 @@ export async function POST(request: NextRequest) {
       contactName: null,
       contactEmail: contactEmail || null,
       contactPhone: null,
-      type: "manifest",
+      type: isBuildList ? "build_list" : "manifest",
       category,
       assumedGrade: grade,
-      totalDevices: deviceLines.reduce((sum, d) => sum + d.quantity, 0),
+      totalDevices: processedLines.reduce((sum, d) => sum + d.quantity, 0),
       totalIndicativeNZD,
       totalPublicNZD,
       businessEstimateDiscount,
@@ -305,9 +350,9 @@ export async function POST(request: NextRequest) {
 
     // Write device lines in batches of 200
     const BATCH_SIZE = 200;
-    for (let i = 0; i < deviceLines.length; i += BATCH_SIZE) {
+    for (let i = 0; i < processedLines.length; i += BATCH_SIZE) {
       const batch = adminDb.batch();
-      const chunk = deviceLines.slice(i, i + BATCH_SIZE);
+      const chunk = processedLines.slice(i, i + BATCH_SIZE);
       chunk.forEach((line) => {
         const lineRef = bulkQuoteRef.collection("devices").doc();
         batch.set(lineRef, {
@@ -333,7 +378,7 @@ export async function POST(request: NextRequest) {
         totalIndicativeNZD,
         matchedCount,
         unmatchedCount,
-        lineCount: deviceLines.length,
+        lineCount: processedLines.length,
       },
       { status: 201 }
     );

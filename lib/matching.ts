@@ -53,6 +53,17 @@ export async function loadDeviceLibrary(): Promise<LibraryDevice[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Word-boundary-aware substring check for model matching.
+// Prevents "Pixel 9" from matching "Pixel 9A" while still allowing
+// "Pixel 9" to match "Pixel 9 Pro" (space-separated qualifier).
+// ---------------------------------------------------------------------------
+
+function isWordBoundaryMatch(haystack: string, needle: string): boolean {
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${escaped}\\b`).test(haystack);
+}
+
+// ---------------------------------------------------------------------------
 // Match from structured fields (make/model/storage) — used by IMEI lookup
 // ---------------------------------------------------------------------------
 
@@ -111,8 +122,8 @@ export async function matchToLibrary(
     const dModel = d.model.toLowerCase();
     return (
       dModel === normalizedModel ||
-      dModel.includes(normalizedModel) ||
-      normalizedModel.includes(dModel)
+      isWordBoundaryMatch(dModel, normalizedModel) ||
+      isWordBoundaryMatch(normalizedModel, dModel)
     );
   });
 
@@ -136,6 +147,25 @@ export async function matchToLibrary(
         needsStorageSelection: false,
         needsManualSelection: true,
       };
+    }
+
+    // If storage was provided, narrow fuzzy matches by storage
+    if (storage && fuzzyMatches.length > 1) {
+      const normalizedStorage = storage.toLowerCase().replace(/\s/g, "");
+      const storageMatch = fuzzyMatches.find(
+        (d) => d.storage.toLowerCase().replace(/\s/g, "") === normalizedStorage
+      );
+      if (storageMatch) {
+        return {
+          deviceId: storageMatch.id,
+          deviceName: `${storageMatch.make} ${storageMatch.model} ${storageMatch.storage}`,
+          storage: storageMatch.storage,
+          matchConfidence: "medium",
+          storageOptions: null,
+          needsStorageSelection: false,
+          needsManualSelection: false,
+        };
+      }
     }
 
     const storageVariants = [
