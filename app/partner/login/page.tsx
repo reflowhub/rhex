@@ -168,120 +168,119 @@ export default function PartnerLoginPage() {
           </form>
         </div>
 
-        {/* Divider */}
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-border" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">
-              Not a partner yet?
-            </span>
-          </div>
-        </div>
+        {/* Expression of Interest Accordion */}
+        <details className="group rounded-md border border-border">
+          <summary className="flex cursor-pointer items-center justify-between px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+            Not a partner yet? Register your interest
+            <svg
+              className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M19.5 8.25l-7.5 7.5-7.5-7.5"
+              />
+            </svg>
+          </summary>
 
-        {/* Expression of Interest Form */}
-        <div className="space-y-4">
-          <div className="text-center">
-            <h2 className="text-lg font-semibold tracking-tight">
-              Become a Partner
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Register your interest and we&apos;ll be in touch
-            </p>
-          </div>
+          <div className="space-y-4 px-4 pb-4 pt-2">
+            {eoiStatus === "success" ? (
+              <div className="rounded-md bg-green-500/10 px-4 py-3 text-sm text-green-700 dark:text-green-400">
+                Thanks for your interest! We&apos;ll be in touch soon.
+              </div>
+            ) : (
+              <form onSubmit={handleEoiSubmit} className="space-y-3">
+                {eoiError && (
+                  <div className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {eoiError}
+                  </div>
+                )}
 
-          {eoiStatus === "success" ? (
-            <div className="rounded-md bg-green-500/10 px-4 py-3 text-sm text-green-700 dark:text-green-400">
-              Thanks for your interest! We&apos;ll be in touch soon.
-            </div>
-          ) : (
-            <form onSubmit={handleEoiSubmit} className="space-y-3">
-              {eoiError && (
-                <div className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                  {eoiError}
+                <div className="space-y-2">
+                  <Label htmlFor="eoi-business">Business name</Label>
+                  <Input
+                    id="eoi-business"
+                    placeholder="Acme Ltd"
+                    value={eoiData.businessName}
+                    onChange={(e) =>
+                      setEoiData({ ...eoiData, businessName: e.target.value })
+                    }
+                    required
+                  />
                 </div>
-              )}
 
-              <div className="space-y-2">
-                <Label htmlFor="eoi-business">Business name</Label>
-                <Input
-                  id="eoi-business"
-                  placeholder="Acme Ltd"
-                  value={eoiData.businessName}
-                  onChange={(e) =>
-                    setEoiData({ ...eoiData, businessName: e.target.value })
-                  }
-                  required
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="eoi-contact">Contact name</Label>
+                  <Input
+                    id="eoi-contact"
+                    placeholder="Jane Smith"
+                    value={eoiData.contactName}
+                    onChange={(e) =>
+                      setEoiData({ ...eoiData, contactName: e.target.value })
+                    }
+                    required
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="eoi-contact">Contact name</Label>
-                <Input
-                  id="eoi-contact"
-                  placeholder="Jane Smith"
-                  value={eoiData.contactName}
-                  onChange={(e) =>
-                    setEoiData({ ...eoiData, contactName: e.target.value })
-                  }
-                  required
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="eoi-email">Email</Label>
+                  <Input
+                    id="eoi-email"
+                    type="email"
+                    placeholder="jane@acme.com"
+                    value={eoiData.email}
+                    onChange={(e) =>
+                      setEoiData({ ...eoiData, email: e.target.value })
+                    }
+                    required
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="eoi-email">Email</Label>
-                <Input
-                  id="eoi-email"
-                  type="email"
-                  placeholder="jane@acme.com"
-                  value={eoiData.email}
-                  onChange={(e) =>
-                    setEoiData({ ...eoiData, email: e.target.value })
-                  }
-                  required
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="eoi-phone">Phone (optional)</Label>
+                  <Input
+                    id="eoi-phone"
+                    type="tel"
+                    placeholder="021 123 4567"
+                    value={eoiData.phone}
+                    onChange={(e) =>
+                      setEoiData({ ...eoiData, phone: e.target.value })
+                    }
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="eoi-phone">Phone (optional)</Label>
-                <Input
-                  id="eoi-phone"
-                  type="tel"
-                  placeholder="021 123 4567"
-                  value={eoiData.phone}
-                  onChange={(e) =>
-                    setEoiData({ ...eoiData, phone: e.target.value })
-                  }
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="eoi-message">
+                    Tell us about your business (optional)
+                  </Label>
+                  <Textarea
+                    id="eoi-message"
+                    placeholder="What devices do you typically handle? How many per month?"
+                    rows={3}
+                    value={eoiData.message}
+                    onChange={(e) =>
+                      setEoiData({ ...eoiData, message: e.target.value })
+                    }
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="eoi-message">
-                  Tell us about your business (optional)
-                </Label>
-                <Textarea
-                  id="eoi-message"
-                  placeholder="What devices do you typically handle? How many per month?"
-                  rows={3}
-                  value={eoiData.message}
-                  onChange={(e) =>
-                    setEoiData({ ...eoiData, message: e.target.value })
-                  }
-                />
-              </div>
-
-              <Button
-                type="submit"
-                variant="outline"
-                className="w-full"
-                disabled={eoiLoading}
-              >
-                {eoiLoading ? "Submitting..." : "Register interest"}
-              </Button>
-            </form>
-          )}
-        </div>
+                <Button
+                  type="submit"
+                  variant="outline"
+                  className="w-full"
+                  disabled={eoiLoading}
+                >
+                  {eoiLoading ? "Submitting..." : "Register interest"}
+                </Button>
+              </form>
+            )}
+          </div>
+        </details>
       </div>
     </div>
   );
