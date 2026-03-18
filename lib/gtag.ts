@@ -17,10 +17,11 @@ export function gtagEvent(eventName: string, params?: GtagEventParams) {
 
 export function gtagConversion(value?: number, currency?: string) {
   const adsId = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
+  const conversionLabel = process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL;
   if (!adsId) return;
   if (typeof window !== "undefined" && typeof window.gtag === "function") {
     window.gtag("event", "conversion", {
-      send_to: adsId,
+      send_to: conversionLabel ? `${adsId}/${conversionLabel}` : adsId,
       value,
       currency,
     });
