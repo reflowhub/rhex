@@ -170,7 +170,7 @@ export default function PartnerLoginPage() {
 
         {/* Expression of Interest Accordion */}
         <details className="group rounded-md border border-border">
-          <summary className="flex cursor-pointer items-center justify-between px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+          <summary className="flex cursor-pointer items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
             Not a partner yet? Register your interest
             <svg
               className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180"

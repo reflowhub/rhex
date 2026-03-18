@@ -34,6 +34,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  Mail,
+  Check,
+  X,
+  MessageSquare,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -55,6 +59,27 @@ interface Partner {
   partnerRateDiscount: number | null;
   createdAt: string | null;
 }
+
+interface EOI {
+  id: string;
+  businessName: string;
+  contactName: string;
+  email: string;
+  phone: string | null;
+  message: string | null;
+  status: string;
+  createdAt: string | null;
+}
+
+const EOI_STATUSES = ["all", "new", "contacted", "converted", "dismissed"] as const;
+type EOIStatusFilter = (typeof EOI_STATUSES)[number];
+
+const EOI_STATUS_COLORS: Record<string, string> = {
+  new: "border-transparent bg-blue-600 text-white hover:bg-blue-600/80",
+  contacted: "border-transparent bg-amber-600 text-white hover:bg-amber-600/80",
+  converted: "border-transparent bg-emerald-600 text-white hover:bg-emerald-600/80",
+  dismissed: "",
+};
 
 interface PartnerFormData {
   name: string;
@@ -111,8 +136,13 @@ const EMPTY_FORM: PartnerFormData = {
 // Component
 // ---------------------------------------------------------------------------
 
+type PageTab = "partners" | "eoi";
+
 export default function PartnersPage() {
   const router = useRouter();
+
+  // ---- top-level tab
+  const [activeTab, setActiveTab] = useState<PageTab>("partners");
 
   // ---- data state
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -122,6 +152,13 @@ export default function PartnersPage() {
   const [activeStatus, setActiveStatus] = useState<StatusFilter>("all");
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // ---- EOI state
+  const [eois, setEois] = useState<EOI[]>([]);
+  const [eoiLoading, setEoiLoading] = useState(true);
+  const [eoiStatusFilter, setEoiStatusFilter] = useState<EOIStatusFilter>("all");
+  const [eoiUpdating, setEoiUpdating] = useState<string | null>(null);
+  const [expandedEoi, setExpandedEoi] = useState<string | null>(null);
 
   // ---- pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -161,6 +198,43 @@ export default function PartnersPage() {
   useEffect(() => {
     fetchPartners();
   }, [fetchPartners]);
+
+  // ---- fetch EOIs
+  const fetchEois = useCallback(() => {
+    setEoiLoading(true);
+    const params = new URLSearchParams();
+    if (eoiStatusFilter !== "all") params.set("status", eoiStatusFilter);
+    const url = `/api/admin/eoi${params.toString() ? `?${params}` : ""}`;
+
+    fetch(url)
+      .then((res) => res.json())
+      .then((data: EOI[]) => {
+        if (Array.isArray(data)) setEois(data);
+      })
+      .finally(() => setEoiLoading(false));
+  }, [eoiStatusFilter]);
+
+  useEffect(() => {
+    if (activeTab === "eoi") fetchEois();
+  }, [activeTab, fetchEois]);
+
+  const updateEoiStatus = async (id: string, status: string) => {
+    setEoiUpdating(id);
+    try {
+      const res = await fetch(`/api/admin/eoi/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        setEois((prev) =>
+          prev.map((e) => (e.id === id ? { ...e, status } : e))
+        );
+      }
+    } finally {
+      setEoiUpdating(null);
+    }
+  };
 
   // ---- pagination
   const totalPages = Math.max(1, Math.ceil(partners.length / PAGE_SIZE));
@@ -250,160 +324,358 @@ export default function PartnersPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Partners</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {loading
-              ? "Loading partners..."
-              : `${partners.length} partner${partners.length !== 1 ? "s" : ""} found`}
+            {activeTab === "partners"
+              ? loading
+                ? "Loading partners..."
+                : `${partners.length} partner${partners.length !== 1 ? "s" : ""} found`
+              : eoiLoading
+                ? "Loading expressions of interest..."
+                : `${eois.length} expression${eois.length !== 1 ? "s" : ""} of interest`}
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setFormData(EMPTY_FORM);
-            setFormError(null);
-            setAddOpen(true);
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Partner
-        </Button>
-      </div>
-
-      {/* Status filter tabs */}
-      <div className="mt-6 flex flex-wrap gap-2">
-        {PARTNER_STATUSES.map((status) => {
-          const isActive = activeStatus === status;
-          return (
-            <button
-              key={status}
-              onClick={() => setActiveStatus(status)}
-              className={`rounded-full border px-3 py-1 text-xs font-semibold capitalize transition-colors ${
-                isActive
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground"
-              }`}
-            >
-              {status}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Search */}
-      <div className="mt-4 flex max-w-sm items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search by name, code, or email..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="mt-6 rounded-lg border border-border bg-card">
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-sm text-muted-foreground">
-              Loading partners...
-            </span>
-          </div>
-        ) : partners.length === 0 ? (
-          <div className="py-20 text-center text-sm text-muted-foreground">
-            {activeStatus !== "all" || debouncedSearch
-              ? "No partners match your filters."
-              : "No partners found. Create your first partner to get started."}
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Code</TableHead>
-                <TableHead>Mode(s)</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Created</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedPartners.map((partner) => (
-                <TableRow
-                  key={partner.id}
-                  className="cursor-pointer"
-                  onClick={() => router.push(`/admin/partners/${partner.id}`)}
-                >
-                  <TableCell className="font-medium">{partner.name}</TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {partner.code}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      {partner.modes.map((mode) => (
-                        <Badge key={mode} variant="outline" className="text-xs">
-                          {mode === "A" ? "Referral" : "Dealer"}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        partner.status === "active" ? "default" : "secondary"
-                      }
-                      className={
-                        partner.status === "active"
-                          ? "border-transparent bg-emerald-600 text-white hover:bg-emerald-600/80"
-                          : ""
-                      }
-                    >
-                      {partner.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {partner.contactEmail}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {formatDate(partner.createdAt)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        {activeTab === "partners" && (
+          <Button
+            onClick={() => {
+              setFormData(EMPTY_FORM);
+              setFormError(null);
+              setAddOpen(true);
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Partner
+          </Button>
         )}
       </div>
 
-      {/* Pagination */}
-      {!loading && partners.length > PAGE_SIZE && (
-        <div className="mt-4 flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Showing {(currentPage - 1) * PAGE_SIZE + 1}&ndash;
-            {Math.min(currentPage * PAGE_SIZE, partners.length)} of{" "}
-            {partners.length}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              disabled={currentPage <= 1}
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              Page {currentPage} of {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="icon"
-              disabled={currentPage >= totalPages}
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+      {/* Top-level tabs: Partners / EOI */}
+      <div className="mt-6 flex gap-1 border-b border-border">
+        <button
+          onClick={() => setActiveTab("partners")}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === "partners"
+              ? "border-b-2 border-primary text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Partners
+        </button>
+        <button
+          onClick={() => setActiveTab("eoi")}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === "eoi"
+              ? "border-b-2 border-primary text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Expressions of Interest
+        </button>
+      </div>
+
+      {activeTab === "partners" ? (
+        <>
+          {/* Status filter tabs */}
+          <div className="mt-6 flex flex-wrap gap-2">
+            {PARTNER_STATUSES.map((status) => {
+              const isActive = activeStatus === status;
+              return (
+                <button
+                  key={status}
+                  onClick={() => setActiveStatus(status)}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold capitalize transition-colors ${
+                    isActive
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                  }`}
+                >
+                  {status}
+                </button>
+              );
+            })}
           </div>
-        </div>
+
+          {/* Search */}
+          <div className="mt-4 flex max-w-sm items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, code, or email..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="mt-6 rounded-lg border border-border bg-card">
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">
+                  Loading partners...
+                </span>
+              </div>
+            ) : partners.length === 0 ? (
+              <div className="py-20 text-center text-sm text-muted-foreground">
+                {activeStatus !== "all" || debouncedSearch
+                  ? "No partners match your filters."
+                  : "No partners found. Create your first partner to get started."}
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Mode(s)</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Created</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedPartners.map((partner) => (
+                    <TableRow
+                      key={partner.id}
+                      className="cursor-pointer"
+                      onClick={() => router.push(`/admin/partners/${partner.id}`)}
+                    >
+                      <TableCell className="font-medium">
+                        {partner.name}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {partner.code}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          {partner.modes.map((mode) => (
+                            <Badge
+                              key={mode}
+                              variant="outline"
+                              className="text-xs"
+                            >
+                              {mode === "A" ? "Referral" : "Dealer"}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            partner.status === "active" ? "default" : "secondary"
+                          }
+                          className={
+                            partner.status === "active"
+                              ? "border-transparent bg-emerald-600 text-white hover:bg-emerald-600/80"
+                              : ""
+                          }
+                        >
+                          {partner.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {partner.contactEmail}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDate(partner.createdAt)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+
+          {/* Pagination */}
+          {!loading && partners.length > PAGE_SIZE && (
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Showing {(currentPage - 1) * PAGE_SIZE + 1}&ndash;
+                {Math.min(currentPage * PAGE_SIZE, partners.length)} of{" "}
+                {partners.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  disabled={currentPage >= totalPages}
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* EOI status filter */}
+          <div className="mt-6 flex flex-wrap gap-2">
+            {EOI_STATUSES.map((status) => {
+              const isActive = eoiStatusFilter === status;
+              return (
+                <button
+                  key={status}
+                  onClick={() => setEoiStatusFilter(status)}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold capitalize transition-colors ${
+                    isActive
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                  }`}
+                >
+                  {status}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* EOI Table */}
+          <div className="mt-6 rounded-lg border border-border bg-card">
+            {eoiLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">
+                  Loading expressions of interest...
+                </span>
+              </div>
+            ) : eois.length === 0 ? (
+              <div className="py-20 text-center text-sm text-muted-foreground">
+                No expressions of interest found.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Business</TableHead>
+                    <TableHead>Contact</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Submitted</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {eois.map((eoi) => (
+                    <React.Fragment key={eoi.id}>
+                      <TableRow
+                        className={eoi.message ? "cursor-pointer" : ""}
+                        onClick={() =>
+                          eoi.message &&
+                          setExpandedEoi(
+                            expandedEoi === eoi.id ? null : eoi.id
+                          )
+                        }
+                      >
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-1.5">
+                            {eoi.businessName}
+                            {eoi.message && (
+                              <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{eoi.contactName}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {eoi.email}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {eoi.phone || "\u2014"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              eoi.status === "dismissed"
+                                ? "secondary"
+                                : "default"
+                            }
+                            className={EOI_STATUS_COLORS[eoi.status] ?? ""}
+                          >
+                            {eoi.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatDate(eoi.createdAt)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div
+                            className="flex justify-end gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {eoi.status !== "contacted" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Mark as contacted"
+                                disabled={eoiUpdating === eoi.id}
+                                onClick={() =>
+                                  updateEoiStatus(eoi.id, "contacted")
+                                }
+                              >
+                                <Mail className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {eoi.status !== "converted" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Mark as converted"
+                                disabled={eoiUpdating === eoi.id}
+                                onClick={() =>
+                                  updateEoiStatus(eoi.id, "converted")
+                                }
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {eoi.status !== "dismissed" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Dismiss"
+                                disabled={eoiUpdating === eoi.id}
+                                onClick={() =>
+                                  updateEoiStatus(eoi.id, "dismissed")
+                                }
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                      {expandedEoi === eoi.id && eoi.message && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={7}
+                            className="bg-muted/50 text-sm"
+                          >
+                            <p className="whitespace-pre-wrap">
+                              {eoi.message}
+                            </p>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </>
       )}
 
       {/* Add Partner Dialog */}
