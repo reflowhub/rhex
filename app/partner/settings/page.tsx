@@ -44,7 +44,6 @@ export default function PartnerSettingsPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Editable form fields
-  const [name, setName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [bankBSB, setBankBSB] = useState("");
   const [bankAccountNumber, setBankAccountNumber] = useState("");
@@ -55,7 +54,6 @@ export default function PartnerSettingsPage() {
       .then((res) => res.json())
       .then((data: PartnerSettings) => {
         setSettings(data);
-        setName(data.name);
         setContactEmail(data.contactEmail);
         setBankBSB(data.bankBSB || "");
         setBankAccountNumber(data.bankAccountNumber || "");
@@ -75,7 +73,6 @@ export default function PartnerSettingsPage() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name,
           contactEmail,
           paymentMethod: "bank_transfer",
           bankBSB,
@@ -125,12 +122,8 @@ export default function PartnerSettingsPage() {
           <h2 className="mb-4 text-lg font-semibold">Contact Details</h2>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
+              <Label>Name</Label>
+              <Input value={settings.name} disabled />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="email">Contact Email</Label>
@@ -294,7 +287,7 @@ export default function PartnerSettingsPage() {
         <div className="flex items-center gap-3">
           <Button
             onClick={handleSave}
-            disabled={saving || !name.trim() || !contactEmail.trim()}
+            disabled={saving || !contactEmail.trim()}
           >
             {saving ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
