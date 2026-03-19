@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
       return a.storage.localeCompare(b.storage);
     });
 
-    return NextResponse.json({ devices, grades });
+    return NextResponse.json({ devices: devices.slice(0, 5), grades });
   } catch (error) {
     console.error("Error fetching partner prices:", error);
     return NextResponse.json(
