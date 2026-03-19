@@ -82,15 +82,11 @@ export async function PUT(request: NextRequest) {
       if (trimmed.length > 0) updateData.contactEmail = trimmed;
     }
 
-    // Editable payment fields
+    // Editable payment fields (bank transfer only)
     if (body.paymentMethod !== undefined) {
-      const valid = ["payid", "bank_transfer"];
-      if (valid.includes(body.paymentMethod)) {
-        updateData.paymentMethod = body.paymentMethod;
+      if (body.paymentMethod === "bank_transfer") {
+        updateData.paymentMethod = "bank_transfer";
       }
-    }
-    if (body.payIdPhone !== undefined) {
-      updateData.payIdPhone = body.payIdPhone || null;
     }
     if (body.bankBSB !== undefined) {
       updateData.bankBSB = body.bankBSB || null;

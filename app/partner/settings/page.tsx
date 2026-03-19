@@ -6,13 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Loader2, Check, Link2, Package } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -32,7 +25,6 @@ interface PartnerSettings {
   payoutFrequency: string | null;
   partnerRateDiscount: number | null;
   paymentMethod: string | null;
-  payIdPhone: string | null;
   bankBSB: string | null;
   bankAccountNumber: string | null;
   bankAccountName: string | null;
@@ -53,8 +45,6 @@ export default function PartnerSettingsPage() {
   // Editable form fields
   const [name, setName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<string>("");
-  const [payIdPhone, setPayIdPhone] = useState("");
   const [bankBSB, setBankBSB] = useState("");
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [bankAccountName, setBankAccountName] = useState("");
@@ -66,8 +56,6 @@ export default function PartnerSettingsPage() {
         setSettings(data);
         setName(data.name);
         setContactEmail(data.contactEmail);
-        setPaymentMethod(data.paymentMethod || "");
-        setPayIdPhone(data.payIdPhone || "");
         setBankBSB(data.bankBSB || "");
         setBankAccountNumber(data.bankAccountNumber || "");
         setBankAccountName(data.bankAccountName || "");
@@ -88,8 +76,7 @@ export default function PartnerSettingsPage() {
         body: JSON.stringify({
           name,
           contactEmail,
-          paymentMethod: paymentMethod || null,
-          payIdPhone,
+          paymentMethod: "bank_transfer",
           bankBSB,
           bankAccountNumber,
           bankAccountName,
@@ -166,68 +153,39 @@ export default function PartnerSettingsPage() {
         {/* Payment Details (editable) */}
         <div className="rounded-lg border bg-card p-6">
           <h2 className="mb-4 text-lg font-semibold">Payment Details</h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Bank transfer details for receiving payouts
+          </p>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label>Payment Method</Label>
-              <Select
-                value={paymentMethod}
-                onValueChange={setPaymentMethod}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select method..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="payid">PayID</SelectItem>
-                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="bank-name">Account Name</Label>
+              <Input
+                id="bank-name"
+                value={bankAccountName}
+                onChange={(e) => setBankAccountName(e.target.value)}
+              />
             </div>
-
-            {paymentMethod === "payid" && (
+            <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="payid-phone">PayID Phone</Label>
+                <Label htmlFor="bank-bsb">BSB</Label>
                 <Input
-                  id="payid-phone"
-                  value={payIdPhone}
-                  onChange={(e) => setPayIdPhone(e.target.value)}
-                  placeholder="e.g. 04xx xxx xxx"
+                  id="bank-bsb"
+                  value={bankBSB}
+                  onChange={(e) => setBankBSB(e.target.value)}
+                  placeholder="000-000"
+                  className="font-mono"
                 />
               </div>
-            )}
-
-            {paymentMethod === "bank_transfer" && (
-              <>
-                <div className="grid gap-2">
-                  <Label htmlFor="bank-name">Account Name</Label>
-                  <Input
-                    id="bank-name"
-                    value={bankAccountName}
-                    onChange={(e) => setBankAccountName(e.target.value)}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="bank-bsb">BSB</Label>
-                    <Input
-                      id="bank-bsb"
-                      value={bankBSB}
-                      onChange={(e) => setBankBSB(e.target.value)}
-                      placeholder="000-000"
-                      className="font-mono"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="bank-account">Account Number</Label>
-                    <Input
-                      id="bank-account"
-                      value={bankAccountNumber}
-                      onChange={(e) => setBankAccountNumber(e.target.value)}
-                      className="font-mono"
-                    />
-                  </div>
-                </div>
-              </>
-            )}
+              <div className="grid gap-2">
+                <Label htmlFor="bank-account">Account Number</Label>
+                <Input
+                  id="bank-account"
+                  value={bankAccountNumber}
+                  onChange={(e) => setBankAccountNumber(e.target.value)}
+                  className="font-mono"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
