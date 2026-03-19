@@ -148,7 +148,7 @@ function PartnerLayoutInner({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Navigation links */}
-        <nav className="flex-1 space-y-1 px-3 py-4">
+        <nav className="flex-1 min-h-0 overflow-y-auto space-y-1 px-3 py-4">
           {sidebarLinks.map((link) => {
             const isActive =
               pathname === link.href || pathname.startsWith(link.href + "/");
