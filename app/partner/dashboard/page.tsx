@@ -233,7 +233,7 @@ export default function PartnerDashboardPage() {
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-semibold">E</TableCell>
-                    <TableCell className="text-sm">Major or water damaged, no power</TableCell>
+                    <TableCell className="text-sm">Major or water damage, no power</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
