@@ -44,7 +44,6 @@ export default function PartnerSettingsPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Editable form fields
-  const [contactEmail, setContactEmail] = useState("");
   const [bankBSB, setBankBSB] = useState("");
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [bankAccountName, setBankAccountName] = useState("");
@@ -54,7 +53,6 @@ export default function PartnerSettingsPage() {
       .then((res) => res.json())
       .then((data: PartnerSettings) => {
         setSettings(data);
-        setContactEmail(data.contactEmail);
         setBankBSB(data.bankBSB || "");
         setBankAccountNumber(data.bankAccountNumber || "");
         setBankAccountName(data.bankAccountName || "");
@@ -73,7 +71,6 @@ export default function PartnerSettingsPage() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contactEmail,
           paymentMethod: "bank_transfer",
           bankBSB,
           bankAccountNumber,
@@ -126,13 +123,8 @@ export default function PartnerSettingsPage() {
               <Input value={settings.name} disabled />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="email">Contact Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={contactEmail}
-                onChange={(e) => setContactEmail(e.target.value)}
-              />
+              <Label>Contact Email</Label>
+              <Input value={settings.contactEmail} disabled />
             </div>
             <div className="grid gap-2">
               <Label>Partner Code</Label>
@@ -287,7 +279,7 @@ export default function PartnerSettingsPage() {
         <div className="flex items-center gap-3">
           <Button
             onClick={handleSave}
-            disabled={saving || !contactEmail.trim()}
+            disabled={saving}
           >
             {saving ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
