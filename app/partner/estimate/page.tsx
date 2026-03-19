@@ -24,11 +24,10 @@ import {
 import { cn } from "@/lib/utils";
 import {
   FileUp,
-  Upload,
   X,
   Loader2,
   AlertCircle,
-  Plus,
+  ArrowRight,
   Search,
   List,
   Trash2,
@@ -148,7 +147,6 @@ export default function PartnerEstimatePage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [manualLines, setManualLines] = useState<ManualLine[]>([]);
-  const [addQuantity, setAddQuantity] = useState("1");
   const [lineCounter, setLineCounter] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -234,15 +232,13 @@ export default function PartnerEstimatePage() {
   }, [highlightIndex]);
 
   const addDevice = (device: Device) => {
-    const qty = Math.max(1, parseInt(addQuantity) || 1);
     setManualLines((prev) => [
       ...prev,
-      { key: lineCounter, device, quantity: qty, grade: assumedGrade },
+      { key: lineCounter, device, quantity: 1, grade: assumedGrade },
     ]);
     setLineCounter((c) => c + 1);
     setSearchQuery("");
     setSearchOpen(false);
-    setAddQuantity("1");
     searchInputRef.current?.focus();
   };
 
@@ -426,26 +422,46 @@ export default function PartnerEstimatePage() {
           </div>
         )}
 
+        {/* Assumed grade */}
+        <div className="flex items-center gap-4">
+          <label className="text-sm font-medium">Assumed Grade</label>
+          <Select value={assumedGrade} onValueChange={setAssumedGrade}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {categoryGrades.map((g) => (
+                <SelectItem key={g.key} value={g.key}>
+                  {g.key} — {g.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="text-xs text-muted-foreground">
+            Used for indicative pricing. Actual prices determined after inspection.
+          </span>
+        </div>
+
         {/* Input mode tabs */}
         <div className="flex rounded-lg border bg-background p-1">
           <button
             onClick={() => setInputMode("upload")}
             className={cn(
-              "flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              "flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
               inputMode === "upload" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            <Upload className="mr-1.5 inline-block h-3.5 w-3.5" />
-            Upload CSV/XLSX
+            <FileUp className="h-4 w-4" />
+            Upload File
           </button>
           <button
             onClick={() => setInputMode("manual")}
             className={cn(
-              "flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              "flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
               inputMode === "manual" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            <List className="mr-1.5 inline-block h-3.5 w-3.5" />
+            <List className="h-4 w-4" />
             Build List
           </button>
         </div>
@@ -525,10 +541,10 @@ export default function PartnerEstimatePage() {
 
         {/* Manual mode */}
         {inputMode === "manual" && (
-          <div className="rounded-lg border bg-card p-4 space-y-4">
-            {/* Search + add */}
-            <div className="flex gap-2">
-              <div className="relative flex-1">
+          <div className="space-y-4">
+            {/* Search */}
+            <div className="rounded-lg border bg-card p-4">
+              <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   ref={searchInputRef}
@@ -537,127 +553,128 @@ export default function PartnerEstimatePage() {
                   onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
                   onFocus={() => searchQuery.trim() && setSearchOpen(true)}
                   onKeyDown={handleSearchKeyDown}
-                  placeholder={devicesLoading ? "Loading..." : "Search device..."}
+                  placeholder={devicesLoading ? "Loading devices..." : "Search e.g. iPhone 15 128GB"}
                   disabled={devicesLoading}
-                  className="flex h-10 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="flex h-10 w-full rounded-md border border-input bg-background pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   autoComplete="off"
                 />
-                {searchOpen && searchQuery.trim() && (
-                  <ul ref={listRef} className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
+                {devicesLoading && (
+                  <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                )}
+                {searchOpen && searchQuery.trim() && !devicesLoading && (
+                  <ul ref={listRef} className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
                     {filtered.length === 0 ? (
-                      <li className="px-3 py-4 text-center text-xs text-muted-foreground">No devices found</li>
+                      <li className="px-3 py-6 text-center text-sm text-muted-foreground">No devices found</li>
                     ) : (
                       filtered.map((d, i) => (
                         <li
                           key={d.id}
                           onMouseDown={(e) => { e.preventDefault(); addDevice(d); }}
                           onMouseEnter={() => setHighlightIndex(i)}
-                          className={cn("flex cursor-pointer items-center justify-between rounded-sm px-3 py-2 text-sm", i === highlightIndex && "bg-accent")}
+                          className={cn("flex cursor-pointer items-center justify-between rounded-sm px-3 py-2.5 text-sm", i === highlightIndex && "bg-accent text-accent-foreground")}
                         >
                           <span><span className="font-medium">{d.make}</span> {d.model}</span>
-                          <span className="ml-2 text-xs text-muted-foreground">{d.storage}</span>
+                          <span className="ml-2 shrink-0 text-xs text-muted-foreground">{d.storage}</span>
                         </li>
                       ))
                     )}
                   </ul>
                 )}
               </div>
-              <Input
-                type="number"
-                min="1"
-                value={addQuantity}
-                onChange={(e) => setAddQuantity(e.target.value)}
-                className="w-20"
-                placeholder="Qty"
-              />
             </div>
 
-            {/* Manual list table */}
-            {manualLines.length > 0 && (
-              <div className="rounded-md border overflow-x-auto">
+            {/* Device list */}
+            {manualLines.length > 0 ? (
+              <div className="rounded-lg border bg-card overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">#</TableHead>
                       <TableHead>Device</TableHead>
-                      <TableHead className="w-20">Qty</TableHead>
-                      <TableHead className="w-24">Grade</TableHead>
-                      <TableHead className="w-10" />
+                      <TableHead className="w-28">Storage</TableHead>
+                      <TableHead className="w-28">Grade</TableHead>
+                      <TableHead className="w-24 text-center">Qty</TableHead>
+                      <TableHead className="w-12" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {manualLines.map((line) => (
+                    {manualLines.map((line, i) => (
                       <TableRow key={line.key}>
-                        <TableCell className="text-sm">
-                          {line.device.make} {line.device.model}{" "}
-                          <span className="text-muted-foreground">{line.device.storage}</span>
+                        <TableCell className="text-muted-foreground">
+                          {i + 1}
                         </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={line.quantity}
-                            onChange={(e) => updateQuantity(line.key, e.target.value)}
-                            className="h-8 w-16 text-sm"
-                          />
+                        <TableCell className="font-medium">
+                          {line.device.make} {line.device.model}
                         </TableCell>
+                        <TableCell>{line.device.storage}</TableCell>
                         <TableCell>
                           <Select value={line.grade} onValueChange={(v) => updateGrade(line.key, v)}>
-                            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-8 w-24 text-xs"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {categoryGrades.map((g) => (
-                                <SelectItem key={g.key} value={g.key}>Grade {g.key}</SelectItem>
+                                <SelectItem key={g.key} value={g.key}>{g.key}</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeDevice(line.key)}>
-                            <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                          <Input
+                            type="number"
+                            min={1}
+                            value={line.quantity}
+                            onChange={(e) => updateQuantity(line.key, e.target.value)}
+                            className="h-8 w-20 text-center mx-auto"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => removeDevice(line.key)}
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-                <div className="border-t px-3 py-2 text-xs text-muted-foreground">
-                  {manualLines.length} line{manualLines.length !== 1 ? "s" : ""}, {totalManualDevices} device{totalManualDevices !== 1 ? "s" : ""}
+                <div className="border-t px-4 py-2.5 text-sm text-muted-foreground">
+                  {manualLines.length} line{manualLines.length !== 1 ? "s" : ""},{" "}
+                  {totalManualDevices} device{totalManualDevices !== 1 ? "s" : ""} total
                 </div>
               </div>
-            )}
-
-            {manualLines.length === 0 && (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                Search for a device above to add it to your list
-              </p>
+            ) : (
+              <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed px-6 py-12 text-center">
+                <Search className="mb-2 h-8 w-8 text-muted-foreground/50" />
+                <p className="text-sm text-muted-foreground">
+                  Search and add devices above to build your list
+                </p>
+              </div>
             )}
           </div>
         )}
 
-        {/* Grade + Submit */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Default Grade:</span>
-            <Select value={assumedGrade} onValueChange={setAssumedGrade}>
-              <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {categoryGrades.map((g) => (
-                  <SelectItem key={g.key} value={g.key}>Grade {g.key}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {/* Submit button */}
+        {canSubmit && (
+          <div className="flex justify-end">
+            <Button
+              onClick={handleSubmit}
+              disabled={submitting}
+              size="lg"
+            >
+              {submitting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowRight className="mr-2 h-4 w-4" />
+              )}
+              {submitting
+                ? "Generating estimate..."
+                : `Generate Estimate (${deviceCount} device${deviceCount !== 1 ? "s" : ""})`}
+            </Button>
           </div>
-          <div className="flex-1" />
-          {deviceCount > 0 && (
-            <Badge variant="secondary">{deviceCount} device{deviceCount !== 1 ? "s" : ""}</Badge>
-          )}
-          <Button onClick={handleSubmit} disabled={!canSubmit || submitting}>
-            {submitting ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
-            ) : (
-              <><Plus className="mr-2 h-4 w-4" />Get Estimate</>
-            )}
-          </Button>
-        </div>
+        )}
 
       </div>
     </div>
