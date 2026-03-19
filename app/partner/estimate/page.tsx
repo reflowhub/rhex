@@ -28,6 +28,7 @@ import {
   Loader2,
   AlertCircle,
   ArrowRight,
+  Download,
   Search,
   List,
   Trash2,
@@ -493,6 +494,15 @@ export default function PartnerEstimatePage() {
                   Browse files
                 </Button>
                 <p className="mt-2 text-xs text-muted-foreground">CSV or XLSX with a device/model column</p>
+                <a
+                  href="/bulk-estimate-template.csv"
+                  download
+                  onClick={(e) => e.stopPropagation()}
+                  className="mt-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download CSV template
+                </a>
                 <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileInput} />
               </div>
             ) : (
