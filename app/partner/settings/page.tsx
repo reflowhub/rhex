@@ -24,6 +24,7 @@ interface PartnerSettings {
   commissionTiers: { minQty: number; rate: number }[] | null;
   payoutFrequency: string | null;
   partnerRateDiscount: number | null;
+  currency: "AUD" | "NZD";
   paymentMethod: string | null;
   bankBSB: string | null;
   bankAccountNumber: string | null;
@@ -157,6 +158,10 @@ export default function PartnerSettingsPage() {
             Bank transfer details for receiving payouts
           </p>
           <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Currency</Label>
+              <Input value={settings.currency} disabled className="font-mono" />
+            </div>
             <div className="grid gap-2">
               <Label htmlFor="bank-name">Account Name</Label>
               <Input

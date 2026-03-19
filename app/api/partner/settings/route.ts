@@ -38,6 +38,8 @@ export async function GET(request: NextRequest) {
       payoutFrequency: data.payoutFrequency ?? "monthly",
       // Mode B config (read-only)
       partnerRateDiscount: data.partnerRateDiscount ?? null,
+      // Currency (read-only)
+      currency: data.currency ?? "AUD",
       // Payment (editable)
       paymentMethod: data.paymentMethod ?? null,
       payIdPhone: data.payIdPhone ?? null,
