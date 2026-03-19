@@ -203,6 +203,43 @@ export default function PartnerDashboardPage() {
             ))}
           </div>
 
+          {/* Grading Guide */}
+          <div className="mt-8">
+            <h2 className="text-lg font-semibold">Grading Guide</h2>
+            <div className="mt-3 overflow-x-auto rounded-lg border border-border bg-card">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-20">Grade</TableHead>
+                    <TableHead>Description</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell className="font-semibold">A</TableCell>
+                    <TableCell className="text-sm">Pristine</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-semibold">B</TableCell>
+                    <TableCell className="text-sm">Good cosmetics, fully functional</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-semibold">C</TableCell>
+                    <TableCell className="text-sm">Moderately used</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-semibold">D</TableCell>
+                    <TableCell className="text-sm">Significant wear or damage, cracked screen or functional issues</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-semibold">E</TableCell>
+                    <TableCell className="text-sm">Major or water damaged, no power</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
           {/* Price Lookup */}
           <div className="mt-8">
             <h2 className="text-lg font-semibold">Price Lookup</h2>
