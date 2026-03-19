@@ -1,6 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import {
+  reauthenticateWithCredential,
+  updatePassword,
+  EmailAuthProvider,
+} from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import { usePartner } from "@/lib/partner-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +54,14 @@ export default function PartnerSettingsPage() {
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [bankAccountName, setBankAccountName] = useState("");
 
+  // Password change
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwSaved, setPwSaved] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+
   useEffect(() => {
     fetch("/api/partner/settings")
       .then((res) => res.json())
@@ -92,6 +106,59 @@ export default function PartnerSettingsPage() {
     }
   };
 
+  const handlePasswordChange = async () => {
+    setPwError(null);
+    setPwSaved(false);
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPwError("All password fields are required");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPwError("New password must be at least 6 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError("New passwords do not match");
+      return;
+    }
+
+    setPwSaving(true);
+    try {
+      const user = auth.currentUser;
+      if (!user || !user.email) {
+        setPwError("Not authenticated. Please log in again.");
+        return;
+      }
+
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, newPassword);
+
+      setPwSaved(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => setPwSaved(false), 3000);
+    } catch (err: unknown) {
+      const firebaseErr = err as { code?: string; message?: string };
+      if (
+        firebaseErr.code === "auth/wrong-password" ||
+        firebaseErr.code === "auth/invalid-credential"
+      ) {
+        setPwError("Current password is incorrect");
+      } else if (firebaseErr.code === "auth/weak-password") {
+        setPwError("Password must be at least 6 characters");
+      } else if (firebaseErr.code === "auth/too-many-requests") {
+        setPwError("Too many attempts. Please try again later.");
+      } else {
+        setPwError(firebaseErr.message || "Failed to update password");
+      }
+    } finally {
+      setPwSaving(false);
+    }
+  };
+
   if (partnerLoading || !partner) return null;
 
   if (loading) {
@@ -133,6 +200,63 @@ export default function PartnerSettingsPage() {
                 Contact admin to change your partner code
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* Change Password */}
+        <div className="rounded-lg border bg-card p-6">
+          <h2 className="mb-4 text-lg font-semibold">Change Password</h2>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="current-password">Current Password</Label>
+              <Input
+                id="current-password"
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="confirm-password">Confirm New Password</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-3">
+            <Button
+              onClick={handlePasswordChange}
+              disabled={pwSaving}
+              variant="outline"
+            >
+              {pwSaving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : pwSaved ? (
+                <Check className="mr-2 h-4 w-4" />
+              ) : null}
+              {pwSaved ? "Updated" : "Update Password"}
+            </Button>
+            {pwError && (
+              <p className="text-sm text-destructive">{pwError}</p>
+            )}
+            {pwSaved && (
+              <p className="text-sm text-green-600">Password updated successfully</p>
+            )}
           </div>
         </div>
 
