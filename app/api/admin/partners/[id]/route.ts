@@ -192,6 +192,16 @@ export async function PUT(
     if (body.companyName !== undefined) updateData.companyName = body.companyName?.trim() || null;
     if (body.companyRegistrationNumber !== undefined) updateData.companyRegistrationNumber = body.companyRegistrationNumber?.trim() || null;
 
+    // If contactEmail changed, also update Firebase Auth email
+    if (updateData.contactEmail) {
+      const currentData = partnerDoc.data()!;
+      if (currentData.authUid) {
+        await admin.auth().updateUser(currentData.authUid, {
+          email: updateData.contactEmail as string,
+        });
+      }
+    }
+
     await partnerRef.update(updateData);
 
     // Return updated partner

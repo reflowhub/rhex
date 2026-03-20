@@ -100,6 +100,13 @@ export async function PUT(request: NextRequest) {
       updateData.bankAccountName = body.bankAccountName || null;
     }
 
+    // If contactEmail changed, also update Firebase Auth email
+    if (updateData.contactEmail && partner.authUid) {
+      await admin.auth().updateUser(partner.authUid, {
+        email: updateData.contactEmail as string,
+      });
+    }
+
     await adminDb.collection("partners").doc(partner.id).update(updateData);
 
     return NextResponse.json({ success: true });
