@@ -39,6 +39,9 @@ import {
   Package,
   CreditCard,
   User,
+  KeyRound,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useFX } from "@/lib/use-fx";
 
@@ -133,6 +136,13 @@ export default function PartnerDetailPage() {
   const [payoutReference, setPayoutReference] = useState("");
   const [payoutError, setPayoutError] = useState<string | null>(null);
 
+  // ---- reset password dialog
+  const [resetPwOpen, setResetPwOpen] = useState(false);
+  const [resetPwLoading, setResetPwLoading] = useState(false);
+  const [resetPwError, setResetPwError] = useState<string | null>(null);
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
   // ---- edit dialog
   const [editOpen, setEditOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
@@ -217,6 +227,35 @@ export default function PartnerDetailPage() {
     } finally {
       setPayoutLoading(false);
     }
+  };
+
+  // ---- reset password
+  const handleResetPassword = async () => {
+    setResetPwLoading(true);
+    setResetPwError(null);
+    try {
+      const res = await fetch(`/api/admin/partners/${id}/reset-password`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        setResetPwError(err.error || "Failed to reset password");
+        return;
+      }
+      const data = await res.json();
+      setGeneratedPassword(data.password);
+    } catch {
+      setResetPwError("Failed to reset password");
+    } finally {
+      setResetPwLoading(false);
+    }
+  };
+
+  const copyPassword = () => {
+    if (!generatedPassword) return;
+    navigator.clipboard.writeText(generatedPassword);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   // ---- open edit dialog with current values
@@ -359,10 +398,26 @@ export default function PartnerDetailPage() {
             {partner.status}
           </Badge>
         </div>
-        <Button variant="outline" onClick={openEdit}>
-          <Pencil className="mr-2 h-4 w-4" />
-          Edit
-        </Button>
+        <div className="flex gap-2">
+          {partner.authUid && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setGeneratedPassword(null);
+                setResetPwError(null);
+                setCopied(false);
+                setResetPwOpen(true);
+              }}
+            >
+              <KeyRound className="mr-2 h-4 w-4" />
+              Reset Password
+            </Button>
+          )}
+          <Button variant="outline" onClick={openEdit}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit
+          </Button>
+        </div>
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -759,6 +814,76 @@ export default function PartnerDetailPage() {
               )}
               Confirm Payout
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={resetPwOpen} onOpenChange={setResetPwOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset Partner Password</DialogTitle>
+            <DialogDescription>
+              {generatedPassword
+                ? "Password has been reset. Copy it and share it with the partner securely."
+                : `Generate a new temporary password for ${partner.name}.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            {resetPwError && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                {resetPwError}
+              </div>
+            )}
+
+            {generatedPassword && (
+              <div className="space-y-2">
+                <Label>Temporary Password</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={generatedPassword}
+                    className="font-mono text-base"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={copyPassword}
+                    className="shrink-0"
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4 text-emerald-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  The partner should change this password after logging in.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setResetPwOpen(false)}
+            >
+              {generatedPassword ? "Close" : "Cancel"}
+            </Button>
+            {!generatedPassword && (
+              <Button
+                onClick={handleResetPassword}
+                disabled={resetPwLoading}
+              >
+                {resetPwLoading && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Generate Password
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
