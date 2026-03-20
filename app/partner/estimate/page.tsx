@@ -354,18 +354,30 @@ export default function PartnerEstimatePage() {
   };
 
   const handleSubmit = async () => {
-    const csv = inputMode === "upload" ? csvContent : buildManualCSV();
-    if (!csv) return;
+    if (inputMode === "upload" && !csvContent) return;
     if (inputMode === "manual" && manualLines.length === 0) return;
 
     setSubmitting(true);
     setError(null);
 
     try {
+      const payload: Record<string, unknown> = { assumedGrade, category: selectedCategory };
+
+      if (inputMode === "manual") {
+        payload.devices = manualLines.map((l) => ({
+          deviceId: l.device.id,
+          deviceName: `${l.device.make} ${l.device.model} ${l.device.storage}`,
+          quantity: l.quantity,
+          grade: l.grade,
+        }));
+      } else {
+        payload.csv = csvContent;
+      }
+
       const res = await fetch("/api/partner/estimate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ csv, assumedGrade, category: selectedCategory }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {

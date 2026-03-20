@@ -83,11 +83,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { csv, assumedGrade, category: bodyCategory } = body;
+    const { csv, assumedGrade, category: bodyCategory, devices: directDevices } = body;
 
-    if (!csv || typeof csv !== "string") {
+    if (!csv && !directDevices) {
       return NextResponse.json(
-        { error: "csv is required" },
+        { error: "csv or devices is required" },
         { status: 400 }
       );
     }
@@ -109,29 +109,7 @@ export async function POST(request: NextRequest) {
     }
 
     const discount = partner.partnerRateDiscount ?? 10;
-
-    // Parse CSV
-    const lines = csv
-      .replace(/^\uFEFF/, "")
-      .split(/\r?\n/)
-      .filter((l: string) => l.trim() !== "");
-
-    if (lines.length < 2) {
-      return NextResponse.json(
-        { error: "CSV must have at least a header row and one data row" },
-        { status: 400 }
-      );
-    }
-
-    const headers = parseCSVLine(lines[0]);
-    const deviceCol = findColumnIndex(headers, DEVICE_SYNONYMS);
-    const quantityCol = findColumnIndex(headers, QUANTITY_SYNONYMS);
-    const storageCol = findColumnIndex(headers, STORAGE_SYNONYMS);
-    const makeCol = findColumnIndex(headers, MAKE_SYNONYMS);
-    const gradeCol = findColumnIndex(headers, GRADE_SYNONYMS);
-    const effectiveDeviceCol = deviceCol >= 0 ? deviceCol : 0;
-
-    await loadDeviceLibrary();
+    const isDirectDevices = Array.isArray(directDevices) && directDevices.length > 0;
 
     // Lookup active price list for this category
     const priceListId = await getActivePriceList(category);
@@ -146,7 +124,7 @@ export async function POST(request: NextRequest) {
       rawInput: string;
       deviceId: string | null;
       deviceName: string | null;
-      matchConfidence: "high" | "medium" | "low" | "manual";
+      matchConfidence: "high" | "medium" | "low" | "exact";
       quantity: number;
       assumedGrade: string;
       indicativePriceNZD: number;
@@ -168,69 +146,127 @@ export async function POST(request: NextRequest) {
       priceMap.set(doc.id, readGrades(doc.data()));
     });
 
-    for (let i = 1; i < lines.length; i++) {
-      const values = parseCSVLine(lines[i]);
-      if (values.every((v) => !v.trim())) continue;
+    if (isDirectDevices) {
+      // Build List mode — devices selected directly from library
+      for (const d of directDevices) {
+        const { deviceId, deviceName, quantity: rawQty, grade: rawGrade } = d;
+        if (!deviceId || !deviceName) continue;
 
-      let rawInput = values[effectiveDeviceCol] || "";
-      if (makeCol >= 0 && values[makeCol]) rawInput = `${values[makeCol]} ${rawInput}`;
-      if (storageCol >= 0 && values[storageCol]) rawInput = `${rawInput} ${values[storageCol]}`;
-      rawInput = rawInput.trim();
-      if (!rawInput) continue;
+        const quantity = Math.max(1, parseInt(rawQty, 10) || 1);
+        const rowGrade = (rawGrade || grade).toUpperCase();
 
-      let quantity = 1;
-      if (quantityCol >= 0 && values[quantityCol]) {
-        const parsed = parseInt(values[quantityCol], 10);
-        if (!isNaN(parsed) && parsed > 0) quantity = parsed;
-      }
-
-      let rowGrade = grade;
-      if (gradeCol >= 0 && values[gradeCol]) {
-        const g = values[gradeCol].trim().toUpperCase();
-        if (validGrades.includes(g)) rowGrade = g;
-      }
-
-      const match = await matchDeviceString(rawInput);
-
-      let publicPrice = 0;
-      let partnerPrice = 0;
-      if (match.deviceId) {
-        const devicePrices = priceMap.get(match.deviceId);
+        let publicPrice = 0;
+        let partnerPrice = 0;
+        const devicePrices = priceMap.get(deviceId);
         const price = devicePrices?.[rowGrade];
         if (price !== undefined) {
           publicPrice = price * quantity;
           partnerPrice = calculatePartnerRate(price, discount) * quantity;
         }
         matchedCount++;
-      } else {
-        unmatchedCount++;
+
+        totalIndicativeNZD += partnerPrice;
+        totalPublicNZD += publicPrice;
+
+        deviceLines.push({
+          rawInput: deviceName,
+          deviceId,
+          deviceName,
+          matchConfidence: "exact",
+          quantity,
+          assumedGrade: rowGrade,
+          indicativePriceNZD: partnerPrice,
+          publicPriceNZD: publicPrice,
+        });
+      }
+    } else {
+      // CSV/manifest mode — match device strings
+      const lines = csv
+        .replace(/^\uFEFF/, "")
+        .split(/\r?\n/)
+        .filter((l: string) => l.trim() !== "");
+
+      if (lines.length < 2) {
+        return NextResponse.json(
+          { error: "CSV must have at least a header row and one data row" },
+          { status: 400 }
+        );
       }
 
-      totalIndicativeNZD += partnerPrice;
-      totalPublicNZD += publicPrice;
+      const headers = parseCSVLine(lines[0]);
+      const deviceCol = findColumnIndex(headers, DEVICE_SYNONYMS);
+      const quantityCol = findColumnIndex(headers, QUANTITY_SYNONYMS);
+      const storageCol = findColumnIndex(headers, STORAGE_SYNONYMS);
+      const makeCol = findColumnIndex(headers, MAKE_SYNONYMS);
+      const gradeCol = findColumnIndex(headers, GRADE_SYNONYMS);
+      const effectiveDeviceCol = deviceCol >= 0 ? deviceCol : 0;
 
-      deviceLines.push({
-        rawInput,
-        deviceId: match.deviceId,
-        deviceName: match.deviceName,
-        matchConfidence: match.matchConfidence,
-        quantity,
-        assumedGrade: rowGrade,
-        indicativePriceNZD: partnerPrice,
-        publicPriceNZD: publicPrice,
-      });
+      await loadDeviceLibrary();
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = parseCSVLine(lines[i]);
+        if (values.every((v) => !v.trim())) continue;
+
+        let rawInput = values[effectiveDeviceCol] || "";
+        if (makeCol >= 0 && values[makeCol]) rawInput = `${values[makeCol]} ${rawInput}`;
+        if (storageCol >= 0 && values[storageCol]) rawInput = `${rawInput} ${values[storageCol]}`;
+        rawInput = rawInput.trim();
+        if (!rawInput) continue;
+
+        let quantity = 1;
+        if (quantityCol >= 0 && values[quantityCol]) {
+          const parsed = parseInt(values[quantityCol], 10);
+          if (!isNaN(parsed) && parsed > 0) quantity = parsed;
+        }
+
+        let rowGrade = grade;
+        if (gradeCol >= 0 && values[gradeCol]) {
+          const g = values[gradeCol].trim().toUpperCase();
+          if (validGrades.includes(g)) rowGrade = g;
+        }
+
+        const match = await matchDeviceString(rawInput);
+
+        let publicPrice = 0;
+        let partnerPrice = 0;
+        if (match.deviceId) {
+          const devicePrices = priceMap.get(match.deviceId);
+          const price = devicePrices?.[rowGrade];
+          if (price !== undefined) {
+            publicPrice = price * quantity;
+            partnerPrice = calculatePartnerRate(price, discount) * quantity;
+          }
+          matchedCount++;
+        } else {
+          unmatchedCount++;
+        }
+
+        totalIndicativeNZD += partnerPrice;
+        totalPublicNZD += publicPrice;
+
+        deviceLines.push({
+          rawInput,
+          deviceId: match.deviceId,
+          deviceName: match.deviceName,
+          matchConfidence: match.matchConfidence,
+          quantity,
+          assumedGrade: rowGrade,
+          indicativePriceNZD: partnerPrice,
+          publicPriceNZD: publicPrice,
+        });
+      }
     }
 
     if (deviceLines.length === 0) {
       return NextResponse.json(
-        { error: "No valid device rows found in CSV" },
+        { error: "No valid device rows found" },
         { status: 400 }
       );
     }
 
     // Create bulk quote document
     const bulkQuoteData: Record<string, unknown> = {
-      type: "manifest",
+      type: isDirectDevices ? "buildList" : "manifest",
       category,
       assumedGrade: grade,
       totalDevices: deviceLines.reduce((sum, d) => sum + d.quantity, 0),

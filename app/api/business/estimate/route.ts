@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
       rawInput: string;
       deviceId: string | null;
       deviceName: string | null;
-      matchConfidence: "high" | "medium" | "low" | "manual";
+      matchConfidence: "high" | "medium" | "low" | "exact" | "manual";
       quantity: number;
       assumedGrade: string;
       indicativePriceNZD: number;
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
           rawInput: line.name,
           deviceId: line.deviceId,
           deviceName: line.name,
-          matchConfidence: "high",
+          matchConfidence: "exact",
           quantity,
           assumedGrade: rowGrade,
           indicativePriceNZD,

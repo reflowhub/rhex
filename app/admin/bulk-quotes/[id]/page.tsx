@@ -725,14 +725,16 @@ export default function BulkQuoteDetailPage() {
                   <TableCell>
                     <Badge
                       variant={
-                        line.matchConfidence === "high"
+                        line.matchConfidence === "exact" || line.matchConfidence === "high"
                           ? "default"
                           : line.matchConfidence === "medium"
                           ? "secondary"
                           : "destructive"
                       }
                       className={
-                        line.matchConfidence === "high"
+                        line.matchConfidence === "exact"
+                          ? "border-transparent bg-blue-600 text-white hover:bg-blue-600/80"
+                          : line.matchConfidence === "high"
                           ? "border-transparent bg-emerald-600 text-white hover:bg-emerald-600/80"
                           : line.matchConfidence === "medium"
                           ? "bg-amber-100 text-amber-800 border-amber-200"

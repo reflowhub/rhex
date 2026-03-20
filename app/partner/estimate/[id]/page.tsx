@@ -134,6 +134,7 @@ export default function PartnerEstimateDetailPage({
 
   const confidenceBadge = (conf: string) => {
     const colors: Record<string, string> = {
+      exact: "border-transparent bg-blue-600 text-white",
       high: "border-transparent bg-emerald-600 text-white",
       medium: "border-transparent bg-amber-500 text-white",
       low: "border-transparent bg-orange-500 text-white",

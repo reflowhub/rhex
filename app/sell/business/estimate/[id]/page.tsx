@@ -102,6 +102,11 @@ const CONFIDENCE_BADGE: Record<
   string,
   { variant: "default" | "secondary" | "outline" | "destructive"; className?: string; label: string }
 > = {
+  exact: {
+    variant: "default",
+    className: "border-transparent bg-blue-600 text-white hover:bg-blue-600/80",
+    label: "Exact",
+  },
   high: {
     variant: "default",
     className: "border-transparent bg-emerald-600 text-white hover:bg-emerald-600/80",
