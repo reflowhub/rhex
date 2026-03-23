@@ -350,12 +350,6 @@ export default function Home() {
               Shop
             </Link>
             <Link
-              href="/sell/business"
-              className="hidden sm:inline text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Business
-            </Link>
-            <Link
               href="/partner/login"
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
