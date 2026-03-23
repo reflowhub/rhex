@@ -6,7 +6,7 @@ import { ArrowLeft } from "lucide-react";
 export const metadata: Metadata = {
   title: "Warranty & Returns Policy | Reflow Hub",
   description:
-    "Warranty coverage, returns, change-of-mind, and refund policy for Reflow Hub certified refurbished devices.",
+    "Warranty coverage, returns, and refund policy for Reflow Hub certified refurbished devices.",
 };
 
 export default function WarrantyReturnsPage() {
@@ -107,49 +107,7 @@ export default function WarrantyReturnsPage() {
 
         {/* ---------------------------------------------------------------- */}
         <section>
-          <h2 className="text-lg font-semibold">
-            3. Change-of-mind returns
-          </h2>
-          <p className="mt-2">
-            We offer a <strong>30-day change-of-mind return</strong> policy. If
-            you are not satisfied with your purchase for any reason, you may
-            return the device within 30 days of delivery, subject to the
-            following conditions:
-          </p>
-          <ul className="mt-2 list-disc space-y-1 pl-5">
-            <li>
-              The device must be in the <strong>same condition</strong> as when
-              it was received — no new damage, scratches, or marks.
-            </li>
-            <li>
-              The device must be returned with all original packaging and
-              accessories.
-            </li>
-            <li>
-              All personal data, accounts (including iCloud, Google, Samsung
-              accounts), and passwords must be removed. Factory reset must be
-              completed before return.
-            </li>
-            <li>The device must not be reported lost, stolen, or blacklisted.</li>
-          </ul>
-
-          <h3 className="mt-4 font-semibold">Restocking fee</h3>
-          <p className="mt-2">
-            A <strong>$30 restocking fee</strong> will be deducted from
-            change-of-mind refunds to cover inspection and repackaging costs.
-            This fee is <strong>waived</strong> if you choose to receive{" "}
-            <strong>store credit</strong> instead of a refund to your original
-            payment method.
-          </p>
-          <p className="mt-2">
-            If accessories are missing or damaged upon return, an additional
-            deduction of up to $50 may apply.
-          </p>
-        </section>
-
-        {/* ---------------------------------------------------------------- */}
-        <section>
-          <h2 className="text-lg font-semibold">4. Faulty device returns</h2>
+          <h2 className="text-lg font-semibold">3. Faulty device returns</h2>
           <p className="mt-2">
             If your device develops a fault covered by our warranty or the
             Australian Consumer Law guarantees, you are entitled to a remedy at
@@ -182,7 +140,7 @@ export default function WarrantyReturnsPage() {
 
         {/* ---------------------------------------------------------------- */}
         <section>
-          <h2 className="text-lg font-semibold">5. How to make a claim</h2>
+          <h2 className="text-lg font-semibold">4. How to make a claim</h2>
           <p className="mt-2">To initiate a return or warranty claim:</p>
           <ol className="mt-2 list-decimal space-y-2 pl-5">
             <li>
@@ -212,9 +170,7 @@ export default function WarrantyReturnsPage() {
             </li>
             <li>
               <strong>Ship the device</strong> — once your return is authorised,
-              we will provide a prepaid return shipping label (for warranty and
-              faulty-device claims). For change-of-mind returns, return shipping
-              is at the customer&apos;s expense.
+              we will provide a prepaid return shipping label.
             </li>
             <li>
               <strong>Inspection</strong> — upon receiving the device, we will
@@ -225,7 +181,7 @@ export default function WarrantyReturnsPage() {
 
         {/* ---------------------------------------------------------------- */}
         <section>
-          <h2 className="text-lg font-semibold">6. Refund process</h2>
+          <h2 className="text-lg font-semibold">5. Refund process</h2>
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>
               Refunds are processed to the <strong>original payment method</strong> used
@@ -237,13 +193,7 @@ export default function WarrantyReturnsPage() {
               your bank or card issuer.
             </li>
             <li>
-              If you opted for <strong>store credit</strong> (change-of-mind
-              returns), the credit will be issued within 2 business days of
-              inspection and can be used on any future purchase.
-            </li>
-            <li>
-              Original shipping costs are non-refundable for change-of-mind
-              returns. Shipping costs will be refunded for warranty or faulty-device claims.
+              Shipping costs will be refunded for warranty or faulty-device claims.
             </li>
           </ul>
         </section>
@@ -251,7 +201,7 @@ export default function WarrantyReturnsPage() {
         {/* ---------------------------------------------------------------- */}
         <section>
           <h2 className="text-lg font-semibold">
-            7. Devices not eligible for return
+            6. Devices not eligible for return
           </h2>
           <p className="mt-2">
             We cannot accept returns in the following circumstances:
@@ -273,17 +223,13 @@ export default function WarrantyReturnsPage() {
               The device has been modified, repaired, or tampered with by an
               unauthorised party.
             </li>
-            <li>
-              The 30-day change-of-mind window has passed (unless the claim is
-              under warranty or the Australian Consumer Law).
-            </li>
           </ul>
         </section>
 
         {/* ---------------------------------------------------------------- */}
         <section>
           <h2 className="text-lg font-semibold">
-            8. Invalid warranty claims
+            7. Invalid warranty claims
           </h2>
           <p className="mt-2">
             If we receive a device for a warranty claim and determine that the
@@ -295,7 +241,7 @@ export default function WarrantyReturnsPage() {
 
         {/* ---------------------------------------------------------------- */}
         <section>
-          <h2 className="text-lg font-semibold">9. Contact us</h2>
+          <h2 className="text-lg font-semibold">8. Contact us</h2>
           <p className="mt-2">
             For warranty claims, returns, or any questions about this policy:
           </p>

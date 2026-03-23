@@ -210,7 +210,7 @@ const faqSchema = {
       name: "What warranty do rhex devices come with?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Every certified refurbished device purchased from rhex comes with a 12-month warranty covering manufacturing defects and hardware failures. We also offer a 30-day change-of-mind return policy.",
+        text: "Every certified refurbished device purchased from rhex comes with a 12-month warranty covering manufacturing defects and hardware failures.",
       },
     },
     {
@@ -359,8 +359,7 @@ export default function AboutPage() {
               Every device listed on rhex is individually tested, graded for
               cosmetic condition, photographed, and verified for battery
               health before it reaches you. We back every purchase with a{" "}
-              <strong>12&#8209;month warranty</strong> and a{" "}
-              <strong>30&#8209;day change&#8209;of&#8209;mind return policy</strong>.
+              <strong>12&#8209;month warranty</strong>.
             </p>
           </section>
 
@@ -562,8 +561,7 @@ export default function AboutPage() {
                 <p className="mt-1 text-muted-foreground">
                   Every certified refurbished device purchased from rhex comes
                   with a 12-month warranty covering manufacturing defects and
-                  hardware failures. We also offer a 30-day
-                  change-of-mind return policy.
+                  hardware failures.
                 </p>
               </div>
               <div>

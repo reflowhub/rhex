@@ -119,7 +119,7 @@ export default function TermsPage() {
             6. Warranty, returns &amp; refunds
           </h2>
           <p className="mt-2">
-            Our warranty, returns, change-of-mind, and refund policies are set
+            Our warranty, returns, and refund policies are set
             out in our{" "}
             <Link href="/warranty" className="underline hover:text-foreground">
               Warranty &amp; Returns Policy
