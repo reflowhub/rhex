@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import { toModelSlug } from "@/lib/slugify";
+import { toModelSlug, toModelImagePath } from "@/lib/slugify";
 
 // ---------------------------------------------------------------------------
 // GET /api/buy/products/grouped — Products grouped by make+model
@@ -67,7 +67,6 @@ export async function GET(request: NextRequest) {
         unitCount: number;
         storages: Set<string>;
         grades: Set<string>;
-        heroImage: string | null;
         fallbackImage: string | null;
       }
     >();
@@ -83,7 +82,6 @@ export async function GET(request: NextRequest) {
       const priceAUD = (data.sellPriceAUD as number) ?? 0;
       const grade = (data.cosmeticGrade as string) ?? "";
       const images = (data.images as string[]) ?? [];
-      const deviceHeroImage = (device.heroImage as string) || null;
       const itemCategory = (data.category as string) ?? "Phone";
 
       const existing = groupMap.get(slug);
@@ -95,11 +93,6 @@ export async function GET(request: NextRequest) {
         }
         if (storage) existing.storages.add(storage);
         if (grade) existing.grades.add(grade);
-        // Use first hero image found
-        if (!existing.heroImage && deviceHeroImage) {
-          existing.heroImage = deviceHeroImage;
-        }
-        // Use first inventory image as fallback
         if (!existing.fallbackImage && images.length > 0) {
           existing.fallbackImage = images[0];
         }
@@ -113,13 +106,14 @@ export async function GET(request: NextRequest) {
           unitCount: 1,
           storages: new Set(storage ? [storage] : []),
           grades: new Set(grade ? [grade] : []),
-          heroImage: deviceHeroImage,
           fallbackImage: images.length > 0 ? images[0] : null,
         });
       }
     }
 
     // Convert to response array
+    // Hero image: static file from /public/devices/ derived from model name,
+    // falls back to first inventory photo
     const groups = Array.from(groupMap.values())
       .map((g) => ({
         slug: g.slug,
@@ -130,7 +124,8 @@ export async function GET(request: NextRequest) {
         unitCount: g.unitCount,
         storages: Array.from(g.storages).sort(),
         grades: Array.from(g.grades).sort(),
-        heroImage: g.heroImage ?? g.fallbackImage,
+        heroImage: toModelImagePath(g.model),
+        fallbackImage: g.fallbackImage,
       }))
       .sort((a, b) => {
         const makeCompare = a.make.localeCompare(b.make);

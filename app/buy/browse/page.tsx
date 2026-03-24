@@ -21,6 +21,7 @@ interface ProductGroup {
   storages: string[];
   grades: string[];
   heroImage: string | null;
+  fallbackImage: string | null;
 }
 
 interface CategoryInfo {
@@ -172,6 +173,18 @@ function BrowsePageInner() {
                         src={group.heroImage}
                         alt={`${group.make} ${group.model}`}
                         className="h-full w-full object-contain"
+                        onError={(e) => {
+                          const img = e.currentTarget;
+                          if (group.fallbackImage && img.src !== group.fallbackImage) {
+                            img.src = group.fallbackImage;
+                          } else {
+                            img.style.display = "none";
+                            img.parentElement?.classList.add("flex", "items-center", "justify-center");
+                            const icon = document.createElement("div");
+                            icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>';
+                            img.parentElement?.appendChild(icon);
+                          }
+                        }}
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center text-muted-foreground">

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import { toModelSlug } from "@/lib/slugify";
+import { toModelSlug, toModelImagePath } from "@/lib/slugify";
 
 // ---------------------------------------------------------------------------
 // GET /api/buy/products/by-model/[slug] — All listed units for a model
@@ -52,7 +52,6 @@ export async function GET(
     // Filter items matching the slug
     let make = "";
     let model = "";
-    let heroImage: string | null = null;
 
     const items = inventoryDocs
       .map(({ id, data }) => {
@@ -68,9 +67,6 @@ export async function GET(
         if (!make) {
           make = itemMake;
           model = itemModel;
-        }
-        if (!heroImage && device.heroImage) {
-          heroImage = device.heroImage as string;
         }
 
         return {
@@ -105,7 +101,7 @@ export async function GET(
     const response = NextResponse.json({
       make,
       model,
-      heroImage,
+      heroImage: toModelImagePath(model),
       items,
     });
 
