@@ -95,6 +95,29 @@ export default function CheckoutPage() {
     // Store email in sessionStorage for order confirmation page
     sessionStorage.setItem("checkout-email", email.trim());
 
+    // Pre-validate item availability (soft check — Firestore transaction is the safety net)
+    try {
+      const validateRes = await fetch("/api/buy/validate-cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map((item) => ({ inventoryId: item.inventoryId })),
+        }),
+      });
+      if (validateRes.ok) {
+        const { unavailable } = await validateRes.json();
+        if (unavailable.length > 0) {
+          setError(
+            "Some items in your cart are no longer available. Please return to your cart to review."
+          );
+          setSubmitting(false);
+          return;
+        }
+      }
+    } catch {
+      // Non-blocking: proceed to checkout if validation call fails
+    }
+
     try {
       const res = await fetch("/api/buy/checkout", {
         method: "POST",

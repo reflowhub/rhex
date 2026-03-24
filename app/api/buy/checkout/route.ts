@@ -245,6 +245,7 @@ export async function POST(request: NextRequest) {
         for (const ref of inventoryRefs) {
           transaction.update(ref, {
             status: "reserved",
+            reservedAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
         }
@@ -344,6 +345,7 @@ export async function POST(request: NextRequest) {
           line_items: lineItems,
           customer_email: customerEmail,
           metadata: { orderId },
+          expires_at: Math.floor(Date.now() / 1000) + 30 * 60, // 30 min TTL
           success_url: `${request.headers.get("origin") ?? ""}/shop/order/${orderId}?success=1`,
           cancel_url: `${request.headers.get("origin") ?? ""}/shop/cart?cancelled=1`,
         });

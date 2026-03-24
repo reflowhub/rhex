@@ -104,6 +104,53 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Handle expired Stripe checkout sessions — release reserved inventory
+    if (event.type === "checkout.session.expired") {
+      const session = event.data.object;
+      const orderId = session.metadata?.orderId;
+
+      if (!orderId) {
+        console.error("Webhook: no orderId in expired session metadata");
+        return NextResponse.json({ received: true });
+      }
+
+      const orderDoc = await adminDb.collection("orders").doc(orderId).get();
+      if (!orderDoc.exists) {
+        console.error(`Webhook: order ${orderId} not found for expired session`);
+        return NextResponse.json({ received: true });
+      }
+
+      const orderData = orderDoc.data()!;
+
+      // Only release if order is still pending (not already paid or cleaned up)
+      if (orderData.status === "pending") {
+        const batch = adminDb.batch();
+
+        batch.update(adminDb.collection("orders").doc(orderId), {
+          status: "expired",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        const items = (orderData.items as { inventoryId: string }[]) ?? [];
+        for (const item of items) {
+          batch.update(
+            adminDb.collection("inventory").doc(item.inventoryId),
+            {
+              status: "listed",
+              listed: true,
+              reservedAt: admin.firestore.FieldValue.delete(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }
+          );
+        }
+
+        await batch.commit();
+        console.log(
+          `Webhook: expired session released ${items.length} items for order ${orderId}`
+        );
+      }
+    }
+
     return NextResponse.json({ received: true });
   } catch (error) {
     console.error("Webhook error:", error);

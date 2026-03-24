@@ -15,6 +15,7 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   shipped: ["delivered"],
   delivered: [],
   cancelled: [],
+  expired: [],
 };
 
 const VALID_CARRIERS = ["NZ Post", "CourierPost", "AusPost", "Other"];
