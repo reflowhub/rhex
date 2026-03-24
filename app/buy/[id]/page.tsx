@@ -27,6 +27,8 @@ interface ProductDetail {
   images: string[];
   spinVideo: string | null;
   notes: string;
+  description: string | null;
+  features: string[] | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +282,30 @@ export default function ProductDetailPage() {
               </>
             )}
           </Button>
+
+          {/* About this device */}
+          {(product.description || (product.features && product.features.length > 0)) && (
+            <div className="mt-8">
+              <h2 className="text-sm font-medium text-muted-foreground">
+                About this device
+              </h2>
+              {product.description && (
+                <p className="mt-3 text-sm leading-relaxed text-foreground">
+                  {product.description}
+                </p>
+              )}
+              {product.features && product.features.length > 0 && (
+                <ul className="mt-3 space-y-2">
+                  {product.features.map((feature, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-sm text-muted-foreground">
+                      <Check className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-primary" />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           {/* Upsell products */}
           {upsells.length > 0 && (

@@ -32,7 +32,7 @@ export async function GET(
     }
 
     // Fetch device info
-    let device: { make: string; model: string; storage: string } | null = null;
+    let device: { make: string; model: string; storage: string; description: string | null; features: string[] | null } | null = null;
     if (data.deviceRef) {
       const deviceDoc = await adminDb
         .collection("devices")
@@ -44,6 +44,8 @@ export async function GET(
           make: (d.make as string) ?? "",
           model: (d.model as string) ?? "",
           storage: (d.storage as string) ?? "",
+          description: (d.description as string) ?? null,
+          features: (d.features as string[]) ?? null,
         };
       }
     }
@@ -61,6 +63,8 @@ export async function GET(
       images: (data.images as string[]) ?? [],
       spinVideo: data.spinVideo ?? null,
       notes: data.notes ?? "",
+      description: device?.description ?? null,
+      features: device?.features ?? null,
     });
 
     response.headers.set(
