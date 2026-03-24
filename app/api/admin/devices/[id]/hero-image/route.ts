@@ -37,7 +37,7 @@ async function uploadToFirebaseStorage(
         "Content-Type": contentType,
         "X-Goog-Meta-firebaseStorageDownloadTokens": downloadToken,
       },
-      body: buffer,
+      body: new Uint8Array(buffer),
     }
   );
 
