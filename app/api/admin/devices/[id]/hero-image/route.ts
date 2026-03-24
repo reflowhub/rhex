@@ -1,9 +1,66 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb, adminStorage } from "@/lib/firebase-admin";
+import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { invalidateDeviceCache } from "@/lib/device-cache";
 import { randomUUID } from "crypto";
+
+const STORAGE_BUCKET =
+  process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "";
+
+// ---------------------------------------------------------------------------
+// Firebase Storage REST API helpers
+// ---------------------------------------------------------------------------
+
+async function getAccessToken(): Promise<string> {
+  const credential = admin.app().options.credential;
+  if (!credential) throw new Error("No Firebase credential configured");
+  const token = await credential.getAccessToken();
+  return token.access_token;
+}
+
+async function uploadToFirebaseStorage(
+  storagePath: string,
+  buffer: Buffer,
+  contentType: string,
+  downloadToken: string
+): Promise<string> {
+  const accessToken = await getAccessToken();
+  const encodedPath = encodeURIComponent(storagePath);
+
+  const res = await fetch(
+    `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o?name=${encodedPath}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": contentType,
+        "X-Goog-Meta-firebaseStorageDownloadTokens": downloadToken,
+      },
+      body: buffer,
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Storage upload failed (${res.status}): ${err}`);
+  }
+
+  return `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o/${encodedPath}?alt=media&token=${downloadToken}`;
+}
+
+async function deleteFromFirebaseStorage(storagePath: string): Promise<void> {
+  const accessToken = await getAccessToken();
+  const encodedPath = encodeURIComponent(storagePath);
+
+  await fetch(
+    `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o/${encodedPath}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  );
+}
 
 // ---------------------------------------------------------------------------
 // POST /api/admin/devices/[id]/hero-image — Upload hero image (server-side)
@@ -50,7 +107,7 @@ export async function POST(
       try {
         const oldPath = extractStoragePath(existingData.heroImage);
         if (oldPath) {
-          await adminStorage.bucket().file(oldPath).delete();
+          await deleteFromFirebaseStorage(oldPath);
         }
       } catch {
         // Old file may already be deleted
@@ -61,23 +118,15 @@ export async function POST(
     const timestamp = Date.now();
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const storagePath = `devices/${id}/hero_${timestamp}_${safeName}`;
-    const bucket = adminStorage.bucket();
-    const gcsFile = bucket.file(storagePath);
-
     const buffer = Buffer.from(await file.arrayBuffer());
     const downloadToken = randomUUID();
 
-    await gcsFile.save(buffer, {
-      contentType: file.type,
-      metadata: {
-        firebaseStorageDownloadTokens: downloadToken,
-      },
-    });
-
-    // Build Firebase-style download URL
-    const bucketName = bucket.name;
-    const encodedPath = encodeURIComponent(storagePath);
-    const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media&token=${downloadToken}`;
+    const downloadUrl = await uploadToFirebaseStorage(
+      storagePath,
+      buffer,
+      file.type,
+      downloadToken
+    );
 
     // Save to Firestore
     await docRef.update({
@@ -90,9 +139,8 @@ export async function POST(
   } catch (error) {
     console.error("Hero image upload error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    const bucketName = adminStorage.bucket().name;
     return NextResponse.json(
-      { error: `Failed to upload hero image: ${message} (bucket: ${bucketName})` },
+      { error: `Failed to upload hero image: ${message}` },
       { status: 500 }
     );
   }
@@ -122,7 +170,7 @@ export async function DELETE(
       try {
         const path = extractStoragePath(data.heroImage);
         if (path) {
-          await adminStorage.bucket().file(path).delete();
+          await deleteFromFirebaseStorage(path);
         }
       } catch {
         // File may already be deleted

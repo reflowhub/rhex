@@ -20,7 +20,6 @@ if (!admin.apps.length) {
           clientEmail,
           privateKey,
         }),
-        storageBucket: `${projectId}.appspot.com`,
       });
       console.log('Firebase Admin initialized successfully');
     } catch (error) {
@@ -32,5 +31,4 @@ if (!admin.apps.length) {
 // Export admin services - these will throw if not initialized, which is what we want
 export const adminAuth = admin.auth();
 export const adminDb = admin.firestore();
-export const adminStorage = admin.storage();
 export default admin;
