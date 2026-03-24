@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
       make: d.make,
       model: d.model,
       storage: d.storage,
+      heroImage: d.heroImage ?? null,
     }));
 
     // Filter by category

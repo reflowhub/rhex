@@ -14,6 +14,7 @@ export interface CachedDevice {
   modelStorage?: string;
   active: boolean;
   category: string;
+  heroImage?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -41,6 +42,7 @@ export async function getDevices(): Promise<CachedDevice[]> {
       modelStorage: data.modelStorage as string | undefined,
       active: data.active !== false,
       category: (data.category as string) ?? "Phone",
+      heroImage: (data.heroImage as string) || undefined,
     };
   });
   deviceCacheTime = Date.now();

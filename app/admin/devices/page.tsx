@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,8 +32,18 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  ImagePlus,
+  X,
 } from "lucide-react";
 import { escapeCsvField, downloadCsv } from "@/lib/csv-export";
+import { auth, storage } from "@/lib/firebase";
+import {
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
+import { onAuthStateChanged } from "firebase/auth";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,6 +57,7 @@ interface Device {
   storage: string;
   active?: boolean;
   category?: string;
+  heroImage?: string | null;
 }
 
 interface DeviceFormData {
@@ -64,6 +75,24 @@ interface CategoryInfo {
 const EMPTY_FORM: DeviceFormData = { make: "", model: "", storage: "" };
 
 const PAGE_SIZE = 25;
+
+// ---------------------------------------------------------------------------
+// Auth helper
+// ---------------------------------------------------------------------------
+
+function waitForAuth(): Promise<import("firebase/auth").User> {
+  return new Promise((resolve, reject) => {
+    if (auth.currentUser) {
+      resolve(auth.currentUser);
+      return;
+    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe();
+      if (user) resolve(user);
+      else reject(new Error("Not authenticated with Firebase"));
+    });
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -94,6 +123,11 @@ export default function DeviceLibraryPage() {
 
   const [formData, setFormData] = useState<DeviceFormData>(EMPTY_FORM);
   const [activeDevice, setActiveDevice] = useState<Device | null>(null);
+
+  // ---- hero image state ---------------------------------------------------
+  const [uploadingHeroId, setUploadingHeroId] = useState<string | null>(null);
+  const heroInputRef = useRef<HTMLInputElement>(null);
+  const heroTargetDeviceRef = useRef<Device | null>(null);
 
   // ---- fetch categories on mount ------------------------------------------
   useEffect(() => {
@@ -289,6 +323,105 @@ export default function DeviceLibraryPage() {
     }
   };
 
+  // ---- hero image upload --------------------------------------------------
+  const triggerHeroUpload = (device: Device) => {
+    heroTargetDeviceRef.current = device;
+    heroInputRef.current?.click();
+  };
+
+  const handleHeroUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const device = heroTargetDeviceRef.current;
+    if (!device || !e.target.files?.length) return;
+    const file = e.target.files[0];
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      alert("Only JPEG, PNG, and WebP images are allowed.");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Image must be under 10 MB.");
+      e.target.value = "";
+      return;
+    }
+
+    setUploadingHeroId(device.id);
+
+    try {
+      await waitForAuth();
+
+      // Delete old hero image from storage if it exists
+      if (device.heroImage) {
+        try {
+          await deleteObject(ref(storage, device.heroImage));
+        } catch {
+          // Old file may already be deleted
+        }
+      }
+
+      const timestamp = Date.now();
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const storagePath = `devices/${device.id}/hero_${timestamp}_${safeName}`;
+      const storageRef = ref(storage, storagePath);
+
+      const url = await new Promise<string>((resolve, reject) => {
+        const task = uploadBytesResumable(storageRef, file);
+        task.on("state_changed", null, reject, async () => {
+          resolve(await getDownloadURL(task.snapshot.ref));
+        });
+      });
+
+      const res = await fetch(`/api/admin/devices/${device.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ heroImage: url }),
+      });
+
+      if (res.ok) {
+        setDevices((prev) =>
+          prev.map((d) => (d.id === device.id ? { ...d, heroImage: url } : d))
+        );
+      }
+    } catch (err) {
+      console.error("Hero image upload failed:", err);
+      alert("Upload failed. Please try again.");
+    } finally {
+      setUploadingHeroId(null);
+      e.target.value = "";
+    }
+  };
+
+  const handleHeroDelete = async (device: Device) => {
+    if (!device.heroImage) return;
+    if (!confirm("Remove hero image?")) return;
+
+    try {
+      try {
+        await waitForAuth();
+        await deleteObject(ref(storage, device.heroImage));
+      } catch {
+        // Storage object may already be deleted
+      }
+
+      const res = await fetch(`/api/admin/devices/${device.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ heroImage: null }),
+      });
+
+      if (res.ok) {
+        setDevices((prev) =>
+          prev.map((d) =>
+            d.id === device.id ? { ...d, heroImage: null } : d
+          )
+        );
+      }
+    } catch (err) {
+      console.error("Hero image delete failed:", err);
+    }
+  };
+
   // ---- export CSV ---------------------------------------------------------
   const handleExport = () => {
     const header = "DeviceID,Make,Model,Storage,Active";
@@ -303,6 +436,15 @@ export default function DeviceLibraryPage() {
   // ---- render -------------------------------------------------------------
   return (
     <div>
+      {/* Hidden file input for hero image uploads */}
+      <input
+        ref={heroInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handleHeroUpload}
+      />
+
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -379,6 +521,7 @@ export default function DeviceLibraryPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[60px]">Image</TableHead>
                   <TableHead className="w-[140px]">Device ID</TableHead>
                   <TableHead>Make</TableHead>
                   <TableHead>Model</TableHead>
@@ -392,6 +535,40 @@ export default function DeviceLibraryPage() {
               <TableBody>
                 {paginatedDevices.map((device) => (
                   <TableRow key={device.id}>
+                    <TableCell>
+                      <div className="relative h-8 w-8">
+                        {uploadingHeroId === device.id ? (
+                          <div className="flex h-8 w-8 items-center justify-center rounded border border-border bg-muted">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : device.heroImage ? (
+                          <div className="group relative">
+                            <img
+                              src={device.heroImage}
+                              alt=""
+                              className="h-8 w-8 cursor-pointer rounded border border-border object-contain"
+                              onClick={() => triggerHeroUpload(device)}
+                              title="Click to replace"
+                            />
+                            <button
+                              onClick={() => handleHeroDelete(device)}
+                              className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground group-hover:flex"
+                              title="Remove image"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => triggerHeroUpload(device)}
+                            className="flex h-8 w-8 items-center justify-center rounded border border-dashed border-border text-muted-foreground hover:border-foreground hover:text-foreground transition-colors"
+                            title="Upload hero image"
+                          >
+                            <ImagePlus className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {device.deviceId ?? device.id}
                     </TableCell>

@@ -84,6 +84,7 @@ export async function PUT(
     if (model !== undefined) updateData.model = model;
     if (storage !== undefined) updateData.storage = storage;
     if (category !== undefined) updateData.category = category;
+    if (body.heroImage !== undefined) updateData.heroImage = body.heroImage;
 
     await docRef.update(updateData);
     invalidateDeviceCache();

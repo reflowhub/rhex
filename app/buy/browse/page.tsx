@@ -3,8 +3,7 @@
 import { Suspense, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Smartphone, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Smartphone, Loader2 } from "lucide-react";
 import { useCurrency } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
 
@@ -12,28 +11,21 @@ import { cn } from "@/lib/utils";
 // Types
 // ---------------------------------------------------------------------------
 
-interface ShopProduct {
-  id: string;
+interface ProductGroup {
+  slug: string;
   make: string;
   model: string;
-  storage: string;
   category: string;
-  cosmeticGrade: string;
-  batteryHealth: number | null;
-  sellPriceAUD: number;
-  sellPriceNZD: number | null;
-  images: string[];
+  minPriceAUD: number;
+  unitCount: number;
+  storages: string[];
+  grades: string[];
+  heroImage: string | null;
 }
 
 interface CategoryInfo {
   name: string;
 }
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const PAGE_SIZE = 24;
 
 // ---------------------------------------------------------------------------
 // Component
@@ -59,17 +51,12 @@ function BrowsePageInner() {
   const initialCategory = searchParams.get("category") ?? "";
 
   // ---- data state ---------------------------------------------------------
-  const [products, setProducts] = useState<ShopProduct[]>([]);
-  const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
+  const [groups, setGroups] = useState<ProductGroup[]>([]);
   const [loading, setLoading] = useState(true);
 
   // ---- category state -----------------------------------------------------
   const [categories, setCategories] = useState<CategoryInfo[]>([]);
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
-
-  // ---- pagination state ---------------------------------------------------
-  const [currentPage, setCurrentPage] = useState(1);
 
   // ---- fetch categories on mount ------------------------------------------
   useEffect(() => {
@@ -84,36 +71,27 @@ function BrowsePageInner() {
       .catch(() => {});
   }, []);
 
-  // Reset page on filter change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedCategory]);
-
-  // ---- fetch products -----------------------------------------------------
-  const fetchProducts = useCallback(() => {
+  // ---- fetch grouped products ---------------------------------------------
+  const fetchGroups = useCallback(() => {
     setLoading(true);
     const params = new URLSearchParams();
     if (selectedCategory) params.set("category", selectedCategory);
-    params.set("page", String(currentPage));
-    params.set("limit", String(PAGE_SIZE));
 
-    const url = `/api/buy/products${params.toString() ? `?${params.toString()}` : ""}`;
+    const url = `/api/buy/products/grouped${params.toString() ? `?${params.toString()}` : ""}`;
 
     fetch(url)
       .then((res) => res.json())
       .then((data) => {
-        if (data.items) {
-          setProducts(data.items);
-          setTotal(data.total);
-          setTotalPages(data.totalPages);
+        if (data.groups) {
+          setGroups(data.groups);
         }
       })
       .finally(() => setLoading(false));
-  }, [selectedCategory, currentPage]);
+  }, [selectedCategory]);
 
   useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
+    fetchGroups();
+  }, [fetchGroups]);
 
   // ---- helpers ------------------------------------------------------------
   const formatPrice = (priceAUD: number) => {
@@ -175,7 +153,7 @@ function BrowsePageInner() {
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
-        ) : products.length === 0 ? (
+        ) : groups.length === 0 ? (
           <div className="py-20 text-center">
             <Smartphone className="mx-auto h-10 w-10 text-muted-foreground" />
             <p className="mt-4 text-sm text-muted-foreground">
@@ -184,15 +162,15 @@ function BrowsePageInner() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {products.map((product) => (
-              <Link key={product.id} href={`/buy/${product.id}`}>
+            {groups.map((group) => (
+              <Link key={group.slug} href={`/buy/model/${group.slug}`}>
                 <div className="group rounded-lg border border-border bg-card p-4 transition-colors hover:border-foreground/20">
                   {/* Image area */}
                   <div className="aspect-square w-full overflow-hidden rounded bg-background">
-                    {product.images.length > 0 ? (
+                    {group.heroImage ? (
                       <img
-                        src={product.images[0]}
-                        alt={`${product.make} ${product.model}`}
+                        src={group.heroImage}
+                        alt={`${group.make} ${group.model}`}
                         className="h-full w-full object-contain"
                       />
                     ) : (
@@ -205,17 +183,24 @@ function BrowsePageInner() {
                   {/* Info */}
                   <div className="mt-3 space-y-1">
                     <p className="text-xs text-muted-foreground">
-                      {product.make}
+                      {group.make}
                     </p>
                     <p className="font-medium text-foreground">
-                      {product.model} {product.storage}
+                      {group.model}
                     </p>
-                    <span className="inline-block rounded bg-background px-2 py-0.5 text-xs font-medium text-foreground">
-                      Grade {product.cosmeticGrade}
-                    </span>
-                    <p className="text-lg font-medium tabular-nums text-foreground">
-                      {formatPrice(product.sellPriceAUD)}
-                    </p>
+                    {group.storages.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {group.storages.join(" · ")}
+                      </p>
+                    )}
+                    <div className="flex items-baseline justify-between pt-1">
+                      <p className="text-lg font-medium tabular-nums text-foreground">
+                        from {formatPrice(group.minPriceAUD)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {group.unitCount} available
+                      </p>
+                    </div>
                   </div>
                 </div>
               </Link>
@@ -223,40 +208,6 @@ function BrowsePageInner() {
           </div>
         )}
       </div>
-
-      {/* Pagination */}
-      {!loading && totalPages > 1 && (
-        <div className="mt-8 flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            {total} device{total !== 1 ? "s" : ""}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              disabled={currentPage <= 1}
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              <span className="sr-only">Previous page</span>
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              Page {currentPage} of {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="icon"
-              disabled={currentPage >= totalPages}
-              onClick={() =>
-                setCurrentPage((p) => Math.min(totalPages, p + 1))
-              }
-            >
-              <ChevronRight className="h-4 w-4" />
-              <span className="sr-only">Next page</span>
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
