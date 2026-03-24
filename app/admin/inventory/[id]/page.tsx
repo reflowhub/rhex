@@ -171,7 +171,12 @@ function waitForAuth(): Promise<import("firebase/auth").User> {
       resolve(auth.currentUser);
       return;
     }
+    const timeout = setTimeout(() => {
+      unsubscribe();
+      reject(new Error("Firebase auth timed out"));
+    }, 10_000);
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      clearTimeout(timeout);
       unsubscribe();
       if (user) resolve(user);
       else reject(new Error("Not authenticated with Firebase"));
@@ -353,7 +358,11 @@ export default function InventoryDetailPage() {
             },
             reject,
             async () => {
-              resolve(await getDownloadURL(task.snapshot.ref));
+              try {
+                resolve(await getDownloadURL(task.snapshot.ref));
+              } catch (err) {
+                reject(err);
+              }
             }
           );
         });
