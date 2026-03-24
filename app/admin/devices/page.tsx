@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import { escapeCsvField, downloadCsv } from "@/lib/csv-export";
 import { auth, storage } from "@/lib/firebase";
-import { signInWithCustomToken } from "firebase/auth";
+import { signInWithCustomToken, onAuthStateChanged } from "firebase/auth";
 import {
   ref,
   uploadBytes,
@@ -313,13 +313,33 @@ export default function DeviceLibraryPage() {
 
   const ensureFirebaseAuth = async () => {
     if (auth.currentUser) return;
+
+    // Wait for Firebase to restore the session from login page (IndexedDB)
+    const restored = await new Promise<boolean>((resolve) => {
+      let done = false;
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+        if (!done) {
+          done = true;
+          unsubscribe();
+          resolve(!!user);
+        }
+      });
+      setTimeout(() => {
+        if (!done) {
+          done = true;
+          unsubscribe();
+          resolve(false);
+        }
+      }, 3000);
+    });
+
+    if (restored) return;
+
+    // No persisted session — sign in with custom token
     const res = await fetch("/api/admin/auth/firebase-token", { method: "POST" });
     if (!res.ok) throw new Error("Failed to get Firebase token");
     const { token } = await res.json();
     await signInWithCustomToken(auth, token);
-    // Wait for auth state to fully settle
-    await new Promise<void>((resolve) => setTimeout(resolve, 500));
-    if (!auth.currentUser) throw new Error("Firebase auth failed to initialize");
   };
 
   const handleHeroUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
