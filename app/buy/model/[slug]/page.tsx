@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, Smartphone, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useCurrency } from "@/lib/currency-context";
+import { GRADE_LABELS } from "@/lib/grades";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,18 +24,6 @@ interface ModelUnit {
   sellPriceNZD: number | null;
   images: string[];
 }
-
-// ---------------------------------------------------------------------------
-// Grade descriptions
-// ---------------------------------------------------------------------------
-
-const GRADE_LABELS: Record<string, string> = {
-  A: "Excellent",
-  B: "Good",
-  C: "Fair",
-  D: "Acceptable",
-  E: "Poor",
-};
 
 // ---------------------------------------------------------------------------
 // Component

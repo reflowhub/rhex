@@ -28,6 +28,7 @@ import {
 import { cn } from "@/lib/utils";
 import { gtagEvent, gtagConversion } from "@/lib/gtag";
 import { fbPixelEvent } from "@/lib/fbpixel";
+import { SELL_GRADE_LABELS as GRADE_LABELS, GRADE_COLORS } from "@/lib/grades";
 
 interface QuoteData {
   id: string;
@@ -59,22 +60,6 @@ interface CompetitorOffer {
   price: number;
   grade: string;
 }
-
-const GRADE_LABELS: Record<string, string> = {
-  A: "Excellent",
-  B: "Good",
-  C: "Fair",
-  D: "Screen Issues",
-  E: "No Power",
-};
-
-const GRADE_COLORS: Record<string, string> = {
-  A: "bg-green-100 text-green-800 border-green-200",
-  B: "bg-blue-100 text-blue-800 border-blue-200",
-  C: "bg-yellow-100 text-yellow-800 border-yellow-200",
-  D: "bg-orange-100 text-orange-800 border-orange-200",
-  E: "bg-red-100 text-red-800 border-red-200",
-};
 
 export default function QuoteResultPage({
   params,

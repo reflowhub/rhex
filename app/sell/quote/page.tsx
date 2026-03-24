@@ -80,13 +80,7 @@ const GRADING_STEPS: GradingStep[] = [
   },
 ];
 
-const GRADE_LABELS: Record<string, string> = {
-  A: "Excellent",
-  B: "Good",
-  C: "Fair",
-  D: "Screen Issues",
-  E: "No Power",
-};
+import { SELL_GRADE_LABELS as GRADE_LABELS } from "@/lib/grades";
 
 function QuotePageContent() {
   const router = useRouter();

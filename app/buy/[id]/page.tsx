@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useCurrency } from "@/lib/currency-context";
 import { useCart } from "@/lib/cart-context";
+import { GRADE_DESCRIPTIONS } from "@/lib/grades";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,18 +28,6 @@ interface ProductDetail {
   spinVideo: string | null;
   notes: string;
 }
-
-// ---------------------------------------------------------------------------
-// Grade descriptions
-// ---------------------------------------------------------------------------
-
-const GRADE_DESCRIPTIONS: Record<string, string> = {
-  A: "Excellent condition. No visible scratches or wear.",
-  B: "Good condition. Minor signs of use, barely noticeable.",
-  C: "Fair condition. Some visible scratches or light wear.",
-  D: "Acceptable condition. Noticeable wear and cosmetic marks.",
-  E: "Poor condition. Significant wear, fully functional.",
-};
 
 // ---------------------------------------------------------------------------
 // Component
