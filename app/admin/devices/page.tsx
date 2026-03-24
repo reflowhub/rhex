@@ -40,7 +40,7 @@ import { auth, storage } from "@/lib/firebase";
 import { signInWithCustomToken } from "firebase/auth";
 import {
   ref,
-  uploadBytesResumable,
+  uploadBytes,
   getDownloadURL,
   deleteObject,
 } from "firebase/storage";
@@ -317,6 +317,9 @@ export default function DeviceLibraryPage() {
     if (!res.ok) throw new Error("Failed to get Firebase token");
     const { token } = await res.json();
     await signInWithCustomToken(auth, token);
+    // Wait for auth state to fully settle
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
+    if (!auth.currentUser) throw new Error("Firebase auth failed to initialize");
   };
 
   const handleHeroUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -355,16 +358,9 @@ export default function DeviceLibraryPage() {
       const storagePath = `devices/${device.id}/hero_${timestamp}_${safeName}`;
       const storageRef = ref(storage, storagePath);
 
-      const url = await new Promise<string>((resolve, reject) => {
-        const task = uploadBytesResumable(storageRef, file);
-        task.on("state_changed", null, reject, async () => {
-          try {
-            resolve(await getDownloadURL(task.snapshot.ref));
-          } catch (err) {
-            reject(err);
-          }
-        });
-      });
+      // Use uploadBytes (promise-based) instead of uploadBytesResumable (event-based)
+      const snapshot = await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(snapshot.ref);
 
       // Save URL to device doc
       const res = await fetch(`/api/admin/devices/${device.id}`, {
@@ -377,6 +373,8 @@ export default function DeviceLibraryPage() {
         setDevices((prev) =>
           prev.map((d) => (d.id === device.id ? { ...d, heroImage: url } : d))
         );
+      } else {
+        throw new Error("Failed to save hero image URL");
       }
     } catch (err) {
       console.error("Hero image upload failed:", err);
