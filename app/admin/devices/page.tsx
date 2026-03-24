@@ -36,6 +36,14 @@ import {
   X,
 } from "lucide-react";
 import { escapeCsvField, downloadCsv } from "@/lib/csv-export";
+import { auth, storage } from "@/lib/firebase";
+import { signInWithCustomToken } from "firebase/auth";
+import {
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -303,31 +311,73 @@ export default function DeviceLibraryPage() {
     heroInputRef.current?.click();
   };
 
+  const ensureFirebaseAuth = async () => {
+    if (auth.currentUser) return;
+    const res = await fetch("/api/admin/auth/firebase-token", { method: "POST" });
+    if (!res.ok) throw new Error("Failed to get Firebase token");
+    const { token } = await res.json();
+    await signInWithCustomToken(auth, token);
+  };
+
   const handleHeroUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const device = heroTargetDeviceRef.current;
     if (!device || !e.target.files?.length) return;
     const file = e.target.files[0];
 
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      alert("Only JPEG, PNG, and WebP images are allowed.");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Image must be under 10 MB.");
+      e.target.value = "";
+      return;
+    }
+
     setUploadingHeroId(device.id);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      await ensureFirebaseAuth();
 
-      const res = await fetch(`/api/admin/devices/${device.id}/hero-image`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Upload failed");
+      // Delete old hero image if replacing
+      if (device.heroImage) {
+        try {
+          await deleteObject(ref(storage, device.heroImage));
+        } catch {
+          // Old file may already be deleted
+        }
       }
 
-      const { heroImage } = await res.json();
-      setDevices((prev) =>
-        prev.map((d) => (d.id === device.id ? { ...d, heroImage } : d))
-      );
+      const timestamp = Date.now();
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const storagePath = `devices/${device.id}/hero_${timestamp}_${safeName}`;
+      const storageRef = ref(storage, storagePath);
+
+      const url = await new Promise<string>((resolve, reject) => {
+        const task = uploadBytesResumable(storageRef, file);
+        task.on("state_changed", null, reject, async () => {
+          try {
+            resolve(await getDownloadURL(task.snapshot.ref));
+          } catch (err) {
+            reject(err);
+          }
+        });
+      });
+
+      // Save URL to device doc
+      const res = await fetch(`/api/admin/devices/${device.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ heroImage: url }),
+      });
+
+      if (res.ok) {
+        setDevices((prev) =>
+          prev.map((d) => (d.id === device.id ? { ...d, heroImage: url } : d))
+        );
+      }
     } catch (err) {
       console.error("Hero image upload failed:", err);
       alert(err instanceof Error ? err.message : "Upload failed. Please try again.");
@@ -342,8 +392,17 @@ export default function DeviceLibraryPage() {
     if (!confirm("Remove hero image?")) return;
 
     try {
-      const res = await fetch(`/api/admin/devices/${device.id}/hero-image`, {
-        method: "DELETE",
+      await ensureFirebaseAuth();
+      try {
+        await deleteObject(ref(storage, device.heroImage));
+      } catch {
+        // File may already be deleted
+      }
+
+      const res = await fetch(`/api/admin/devices/${device.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ heroImage: null }),
       });
 
       if (res.ok) {
