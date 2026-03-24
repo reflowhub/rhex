@@ -89,8 +89,9 @@ export async function POST(
     return NextResponse.json({ heroImage: downloadUrl });
   } catch (error) {
     console.error("Hero image upload error:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to upload hero image" },
+      { error: `Failed to upload hero image: ${message}` },
       { status: 500 }
     );
   }
