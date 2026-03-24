@@ -45,6 +45,7 @@ import {
   deleteObject,
 } from "firebase/storage";
 import { onAuthStateChanged } from "firebase/auth";
+import { compressImage } from "@/lib/compress-image";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -324,61 +325,45 @@ export default function InventoryDetailPage() {
       return;
     }
 
-    const oversizedFiles = files.filter((f) => f.size > 10 * 1024 * 1024);
-    if (oversizedFiles.length > 0) {
-      setUploadError("Each image must be under 10 MB.");
-      return;
-    }
-
     setUploadError(null);
     setUploading(true);
     setUploadProgress({});
 
     try {
-      await waitForAuth();
-      const newUrls: string[] = [];
-
+      // Compress images before upload
+      const compressed: File[] = [];
       for (const file of files) {
-        const timestamp = Date.now();
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const storagePath = `inventory/${item.id}/images/${timestamp}_${safeName}`;
-        const storageRef = ref(storage, storagePath);
-
-        const url = await new Promise<string>((resolve, reject) => {
-          const task = uploadBytesResumable(storageRef, file);
-          task.on(
-            "state_changed",
-            (snap) => {
-              setUploadProgress((prev) => ({
-                ...prev,
-                [file.name]: Math.round(
-                  (snap.bytesTransferred / snap.totalBytes) * 100
-                ),
-              }));
-            },
-            reject,
-            async () => {
-              try {
-                resolve(await getDownloadURL(task.snapshot.ref));
-              } catch (err) {
-                reject(err);
-              }
-            }
-          );
-        });
-        newUrls.push(url);
+        setUploadProgress((prev) => ({ ...prev, [file.name]: 10 }));
+        const result = await compressImage(file);
+        compressed.push(result);
+        setUploadProgress((prev) => ({ ...prev, [file.name]: 40 }));
       }
 
-      const updatedImages = [...item.images, ...newUrls];
-      const res = await fetch(`/api/admin/inventory/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images: updatedImages }),
+      // Upload via API
+      const formData = new FormData();
+      for (const file of compressed) {
+        formData.append("files", file);
+      }
+
+      // Show upload progress
+      for (const file of files) {
+        setUploadProgress((prev) => ({ ...prev, [file.name]: 60 }));
+      }
+
+      const res = await fetch(`/api/admin/inventory/${id}/images`, {
+        method: "POST",
+        body: formData,
       });
+
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Failed to save images");
+        throw new Error(data.error || "Failed to upload images");
       }
+
+      for (const file of files) {
+        setUploadProgress((prev) => ({ ...prev, [file.name]: 100 }));
+      }
+
       fetchItem();
     } catch (err) {
       console.error("Image upload failed:", err);
@@ -393,27 +378,40 @@ export default function InventoryDetailPage() {
   };
 
   // ---- delete image -------------------------------------------------------
-  const handleImageDelete = async (imageUrl: string, index: number) => {
+  const handleImageDelete = async (imageUrl: string, _index: number) => {
     if (!item) return;
     if (!confirm("Delete this image?")) return;
 
     try {
-      try {
-        await waitForAuth();
-        await deleteObject(ref(storage, imageUrl));
-      } catch {
-        // Storage object may already be deleted — still remove from Firestore
-      }
-
-      const updatedImages = item.images.filter((_, i) => i !== index);
-      const res = await fetch(`/api/admin/inventory/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images: updatedImages }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to remove image");
+      // For /api/images/ URLs, use the new delete endpoint
+      if (imageUrl.startsWith("/api/images/")) {
+        const res = await fetch(`/api/admin/inventory/${id}/images`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageUrl }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to remove image");
+        }
+      } else {
+        // Legacy Firebase Storage URLs — just remove from array
+        try {
+          await waitForAuth();
+          await deleteObject(ref(storage, imageUrl));
+        } catch {
+          // Storage object may already be deleted
+        }
+        const updatedImages = item.images.filter((url) => url !== imageUrl);
+        const res = await fetch(`/api/admin/inventory/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ images: updatedImages }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to remove image");
+        }
       }
       fetchItem();
     } catch (err) {
