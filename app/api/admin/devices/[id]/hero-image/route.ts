@@ -90,8 +90,9 @@ export async function POST(
   } catch (error) {
     console.error("Hero image upload error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
+    const bucketName = adminStorage.bucket().name;
     return NextResponse.json(
-      { error: `Failed to upload hero image: ${message}` },
+      { error: `Failed to upload hero image: ${message} (bucket: ${bucketName})` },
       { status: 500 }
     );
   }
