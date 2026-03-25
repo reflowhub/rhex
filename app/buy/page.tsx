@@ -143,7 +143,7 @@ export default function ShopHomePage() {
               href="/buy/quiz"
               className="inline-flex items-center justify-center gap-2 rounded-md border border-border px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-card"
             >
-              Help Me Choose
+              Need help deciding?
             </Link>
           </div>
         </div>

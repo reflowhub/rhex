@@ -121,7 +121,7 @@ function BrowsePageInner() {
           href="/buy/quiz"
           className="hidden items-center gap-1 whitespace-nowrap rounded-md border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground sm:inline-flex"
         >
-          Help me choose
+          Need help deciding?
           <ArrowRight className="h-3 w-3" />
         </Link>
       </div>
