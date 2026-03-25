@@ -140,10 +140,10 @@ export default function ShopHomePage() {
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
-              href="/sell"
+              href="/buy/quiz"
               className="inline-flex items-center justify-center gap-2 rounded-md border border-border px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-card"
             >
-              Trade In Your Device
+              Help Me Choose
             </Link>
           </div>
         </div>

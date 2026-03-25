@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Smartphone, Loader2 } from "lucide-react";
+import { Smartphone, Loader2, ArrowRight } from "lucide-react";
 import { useCurrency } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
 
@@ -110,11 +110,20 @@ function BrowsePageInner() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-medium tracking-tight">Browse Devices</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Certified refurbished devices, individually graded and photographed.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-medium tracking-tight">Browse Devices</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Certified refurbished devices, individually graded and photographed.
+          </p>
+        </div>
+        <Link
+          href="/buy/quiz"
+          className="hidden items-center gap-1 whitespace-nowrap rounded-md border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground sm:inline-flex"
+        >
+          Help me choose
+          <ArrowRight className="h-3 w-3" />
+        </Link>
       </div>
 
       {/* Category tabs */}
