@@ -28,7 +28,7 @@ export const SELL_GRADE_LABELS: Record<string, string> = {
   A: "Excellent",
   B: "Good",
   C: "Fair",
-  D: "Screen Issues",
+  D: "Faulty or Damaged",
   E: "No Power",
 };
 
