@@ -57,6 +57,7 @@ interface Partner {
   commissionTiers: { minQty: number; rate: number }[] | null;
   payoutFrequency: string | null;
   partnerRateDiscount: number | null;
+  lastLogin: string | null;
   createdAt: string | null;
 }
 
@@ -430,6 +431,7 @@ export default function PartnersPage() {
                     <TableHead>Mode(s)</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Email</TableHead>
+                    <TableHead>Last Login</TableHead>
                     <TableHead>Created</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -475,6 +477,9 @@ export default function PartnersPage() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {partner.contactEmail}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {partner.lastLogin ? formatDate(partner.lastLogin) : "Never"}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDate(partner.createdAt)}

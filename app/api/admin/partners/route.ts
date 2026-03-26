@@ -28,6 +28,30 @@ export async function GET(request: NextRequest) {
 
     const snapshot = await query.get();
 
+    // Collect authUids to batch-fetch last sign-in times
+    const authUids = snapshot.docs
+      .map((doc) => doc.data().authUid)
+      .filter((uid): uid is string => !!uid);
+
+    const lastSignInMap = new Map<string, string | null>();
+    if (authUids.length > 0) {
+      try {
+        const authResult = await adminAuth.getUsers(
+          authUids.map((uid) => ({ uid }))
+        );
+        for (const user of authResult.users) {
+          lastSignInMap.set(
+            user.uid,
+            user.metadata.lastSignInTime
+              ? new Date(user.metadata.lastSignInTime).toISOString()
+              : null
+          );
+        }
+      } catch {
+        // If auth lookup fails, continue without last login data
+      }
+    }
+
     let partners = snapshot.docs.map((doc) => {
       const data = doc.data();
       return {
@@ -44,6 +68,7 @@ export async function GET(request: NextRequest) {
         payoutFrequency: data.payoutFrequency ?? "monthly",
         partnerRateDiscount: data.partnerRateDiscount ?? null,
         currency: data.currency ?? "AUD",
+        lastLogin: data.authUid ? (lastSignInMap.get(data.authUid) ?? null) : null,
         createdAt: serializeTimestamp(data.createdAt),
         updatedAt: serializeTimestamp(data.updatedAt),
       };
