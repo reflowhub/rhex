@@ -175,11 +175,11 @@ export function TradeInEstimator({
     : [];
 
   return (
-    <div className="mt-6 rounded-lg border border-border overflow-hidden">
+    <div className={cn("mt-6 rounded-lg border border-border", !fullyOpen && "overflow-hidden")}>
       {/* Toggle header */}
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium hover:bg-muted/50 transition-colors"
+        className="flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm font-medium hover:bg-muted/50 transition-colors"
       >
         Offset by trading in an old device
         <ChevronDown
