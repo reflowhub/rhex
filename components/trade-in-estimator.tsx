@@ -45,6 +45,7 @@ export function TradeInEstimator({
 }: TradeInEstimatorProps) {
   // Panel state
   const [open, setOpen] = useState(false);
+  const [fullyOpen, setFullyOpen] = useState(false);
   const [devicesLoaded, setDevicesLoaded] = useState(false);
 
   // Device search
@@ -61,6 +62,16 @@ export function TradeInEstimator({
   const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
   const [gradePrices, setGradePrices] = useState<Record<string, GradePrice> | null>(null);
   const [fetchingPrices, setFetchingPrices] = useState(false);
+
+  // Track when open animation finishes so we can allow overflow
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => setFullyOpen(true), 220);
+      return () => clearTimeout(timer);
+    } else {
+      setFullyOpen(false);
+    }
+  }, [open]);
 
   // Lazy-load device list on first expand
   useEffect(() => {
@@ -186,7 +197,7 @@ export function TradeInEstimator({
           open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
         )}
       >
-        <div className="overflow-hidden">
+        <div className={fullyOpen ? "overflow-visible" : "overflow-hidden"}>
           <div className="px-4 pb-4 space-y-4">
             {/* Device search */}
             <div className="relative">
@@ -199,18 +210,10 @@ export function TradeInEstimator({
                   onChange={handleInputChange}
                   onFocus={() => query.trim() && setDropdownOpen(true)}
                   onKeyDown={handleKeyDown}
-                  placeholder={
-                    loadingDevices
-                      ? "Loading devices..."
-                      : "Search e.g. iPhone 11 128GB"
-                  }
-                  disabled={loadingDevices}
-                  className="flex h-10 w-full rounded-lg border border-input bg-background pl-10 pr-4 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Search e.g. iPhone 13 Pro 128GB"
+                  className="flex h-10 w-full rounded-lg border border-input bg-background pl-10 pr-4 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   autoComplete="off"
                 />
-                {loadingDevices && (
-                  <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-                )}
               </div>
 
               {/* Dropdown */}
