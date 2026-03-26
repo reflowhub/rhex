@@ -935,7 +935,7 @@ export default function Home() {
                 <a href="https://reflowhub.com" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Reflow Hub Pty Ltd</a>
               </div>
               <p className="text-[10px] text-muted-foreground/60">
-                Pawnbrokers and Second-hand Dealers Act 1996 Licence No: 2PS30640
+                SHD Licence: 2PS30640
               </p>
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
