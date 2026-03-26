@@ -151,7 +151,10 @@ export function TradeInEstimator({
   };
 
   // Effective price
-  const selectedPrice = selectedGrade && gradePrices?.[selectedGrade]?.priceAUD;
+  const selectedPrice =
+    selectedGrade && gradePrices?.[selectedGrade]
+      ? gradePrices[selectedGrade].priceAUD
+      : null;
   const effectivePriceAUD =
     selectedPrice != null ? Math.max(0, productPriceAUD - selectedPrice) : null;
 
