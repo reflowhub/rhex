@@ -923,15 +923,20 @@ export default function Home() {
       <footer className="border-t py-8">
         <div className="mx-auto max-w-5xl px-4">
           <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Image
-                src="/logo-rhex.svg"
-                alt="rhex"
-                width={16}
-                height={16}
-                className="h-4 w-4 opacity-50"
-              />
-              <a href="https://reflowhub.com" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Reflow Hub Pty Ltd</a>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Image
+                  src="/logo-rhex.svg"
+                  alt="rhex"
+                  width={16}
+                  height={16}
+                  className="h-4 w-4 opacity-50"
+                />
+                <a href="https://reflowhub.com" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Reflow Hub Pty Ltd</a>
+              </div>
+              <p className="text-[10px] text-muted-foreground/60">
+                Pawnbrokers and Second-hand Dealers Act 1996 Licence No: 2PS30640
+              </p>
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <Link href="/terms" className="hover:text-foreground transition-colors">

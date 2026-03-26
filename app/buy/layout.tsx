@@ -119,17 +119,22 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
       {/* Footer */}
       <footer className="border-t border-border">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-6">
-          <div className="flex items-center gap-2.5">
-            <Image
-              src="/logo-rhex.svg"
-              alt="rhex"
-              width={20}
-              height={20}
-              className="h-5 w-5 opacity-40"
-            />
-            <a href="https://reflowhub.com" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-              Reflow Hub Pty Ltd
-            </a>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2.5">
+              <Image
+                src="/logo-rhex.svg"
+                alt="rhex"
+                width={20}
+                height={20}
+                className="h-5 w-5 opacity-40"
+              />
+              <a href="https://reflowhub.com" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                Reflow Hub Pty Ltd
+              </a>
+            </div>
+            <p className="text-[10px] text-muted-foreground/60">
+              Pawnbrokers and Second-hand Dealers Act 1996 Licence No: 2PS30640
+            </p>
           </div>
           <div className="flex items-center gap-4">
             <Link
