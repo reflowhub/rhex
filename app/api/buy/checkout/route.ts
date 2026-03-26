@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
       customerPhone,
       shippingAddress,
       currency,
+      tradeInQuoteId: tradeInQuoteIdInput,
     } = body as {
       items: CheckoutItem[];
       upsellItems?: { upsellId: string; quantity: number }[];
@@ -55,6 +56,7 @@ export async function POST(request: NextRequest) {
       customerPhone?: string;
       shippingAddress: ShippingAddress;
       currency?: string;
+      tradeInQuoteId?: string;
     };
 
     // Validate required fields
@@ -134,6 +136,25 @@ export async function POST(request: NextRequest) {
           quantity: upsellItemsInput[i].quantity,
         });
       }
+    }
+
+    // Validate trade-in quote if provided
+    let validatedTradeInQuoteId: string | null = null;
+    if (tradeInQuoteIdInput && typeof tradeInQuoteIdInput === "string") {
+      const quoteDoc = await adminDb
+        .collection("quotes")
+        .doc(tradeInQuoteIdInput)
+        .get();
+      if (quoteDoc.exists) {
+        const quoteData = quoteDoc.data();
+        if (quoteData?.status === "accepted") {
+          const expiresAt = quoteData.expiresAt?.toDate?.();
+          if (!expiresAt || expiresAt >= new Date()) {
+            validatedTradeInQuoteId = tradeInQuoteIdInput;
+          }
+        }
+      }
+      // Non-blocking: if quote is invalid/expired, we still proceed without it
     }
 
     // Load shipping config
@@ -233,6 +254,7 @@ export async function POST(request: NextRequest) {
           totalAUD,
           gstAUD,
           displayCurrency: currency ?? "AUD",
+          tradeInQuoteId: validatedTradeInQuoteId,
           stripePaymentIntentId: null,
           stripeCheckoutSessionId: null,
           paymentStatus: "pending",

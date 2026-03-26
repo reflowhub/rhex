@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useCurrency } from "@/lib/currency-context";
 import { useCart } from "@/lib/cart-context";
 import { GRADE_DESCRIPTIONS } from "@/lib/grades";
+import { TradeInEstimator } from "@/components/trade-in-estimator";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -282,6 +283,12 @@ export default function ProductDetailPage() {
               </>
             )}
           </Button>
+
+          {/* Trade-in estimator */}
+          <TradeInEstimator
+            productPriceAUD={product.sellPriceAUD}
+            formatPrice={formatPrice}
+          />
 
           {/* About this device */}
           {(product.description || (product.features && product.features.length > 0)) && (

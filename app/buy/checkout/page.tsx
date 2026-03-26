@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Smartphone, Package } from "lucide-react";
+import { ArrowLeft, Loader2, Smartphone, Package, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,6 +42,13 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [shippingConfig, setShippingConfig] = useState<ShippingConfig | null>(null);
+  const [tradeInQuoteId, setTradeInQuoteId] = useState<string | null>(null);
+
+  // ---- read trade-in quote from sessionStorage ------------------------------
+  useEffect(() => {
+    const saved = sessionStorage.getItem("tradeInQuoteId");
+    if (saved) setTradeInQuoteId(saved);
+  }, []);
 
   // ---- fetch shipping config -----------------------------------------------
   useEffect(() => {
@@ -140,12 +147,14 @@ export default function CheckoutPage() {
             country,
           },
           currency,
+          tradeInQuoteId: tradeInQuoteId || undefined,
         }),
       });
 
       if (res.ok) {
         const data = await res.json();
         clearCart();
+        sessionStorage.removeItem("tradeInQuoteId");
         if (data.url) {
           // Stripe mode — redirect to Stripe Checkout
           window.location.href = data.url;
@@ -388,6 +397,14 @@ export default function CheckoutPage() {
                       </p>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Trade-in satchel indicator */}
+              {tradeInQuoteId && (
+                <div className="mt-3 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-400">
+                  <Check className="h-3.5 w-3.5 shrink-0" />
+                  Reply-paid trade-in satchel will be included
                 </div>
               )}
 
