@@ -14,10 +14,17 @@ import {
   Loader2,
   ChevronRight,
 } from "lucide-react";
+import { Inter } from "next/font/google";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-shop",
+});
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/lib/currency-context";
 import { getReferralCode } from "@/lib/referral";
@@ -260,7 +267,13 @@ function QuotePageContent() {
   const totalSteps = GRADING_STEPS.length;
 
   return (
-    <main className="min-h-screen bg-background">
+    <main
+      className={cn("min-h-screen bg-background", inter.variable)}
+      style={{
+        fontFamily:
+          "var(--font-shop), 'Helvetica Neue', Helvetica, Arial, sans-serif",
+      }}
+    >
       {/* Header */}
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">

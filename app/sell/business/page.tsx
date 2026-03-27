@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { Inter } from "next/font/google";
 import {
   Upload,
   Calculator,
@@ -17,11 +18,23 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useCurrency } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
 
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-shop",
+});
+
 export default function BusinessPage() {
   const { currency, setCurrency } = useCurrency();
 
   return (
-    <main className="min-h-screen bg-background">
+    <main
+      className={cn("min-h-screen bg-background", inter.variable)}
+      style={{
+        fontFamily:
+          "var(--font-shop), 'Helvetica Neue', Helvetica, Arial, sans-serif",
+      }}
+    >
       {/* Header */}
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">

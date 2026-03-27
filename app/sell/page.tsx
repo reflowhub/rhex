@@ -27,9 +27,16 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCurrency } from "@/lib/currency-context";
+import { Inter } from "next/font/google";
 import { captureReferral } from "@/lib/referral";
 import { cn } from "@/lib/utils";
 import { gtagEvent } from "@/lib/gtag";
+
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-shop",
+});
 
 interface Device {
   id: string;
@@ -326,7 +333,13 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-background">
+    <main
+      className={cn("min-h-screen bg-background", inter.variable)}
+      style={{
+        fontFamily:
+          "var(--font-shop), 'Helvetica Neue', Helvetica, Arial, sans-serif",
+      }}
+    >
       {/* Header */}
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
