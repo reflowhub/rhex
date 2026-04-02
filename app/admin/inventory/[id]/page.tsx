@@ -36,6 +36,8 @@ import {
   Video,
   Trash2,
   X,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { auth, storage } from "@/lib/firebase";
 import {
@@ -419,6 +421,31 @@ export default function InventoryDetailPage() {
       setUploadError(
         err instanceof Error ? err.message : "Failed to delete image."
       );
+    }
+  };
+
+  // ---- reorder images -----------------------------------------------------
+  const handleImageReorder = async (fromIndex: number, toIndex: number) => {
+    if (!item) return;
+    if (toIndex < 0 || toIndex >= item.images.length) return;
+    const reordered = [...item.images];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+    // Optimistic update
+    setItem({ ...item, images: reordered });
+    try {
+      const res = await fetch(`/api/admin/inventory/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images: reordered }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to reorder images");
+      }
+    } catch (err) {
+      console.error("Image reorder failed:", err);
+      fetchItem(); // Revert on failure
     }
   };
 
@@ -849,7 +876,7 @@ export default function InventoryDetailPage() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
             {item.images.map((imageUrl, index) => (
               <div
-                key={index}
+                key={imageUrl}
                 className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-background"
               >
                 <img
@@ -864,9 +891,33 @@ export default function InventoryDetailPage() {
                 >
                   <X className="h-4 w-4" />
                 </button>
-                <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
-                  {index + 1}
-                </span>
+                <div className="absolute bottom-1 left-1 flex items-center gap-0.5">
+                  <span className="rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
+                    {index + 1}
+                  </span>
+                  {item.images.length > 1 && (
+                    <>
+                      {index > 0 && (
+                        <button
+                          onClick={() => handleImageReorder(index, index - 1)}
+                          className="rounded bg-black/60 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/80"
+                          title="Move left"
+                        >
+                          <ChevronLeft className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {index < item.images.length - 1 && (
+                        <button
+                          onClick={() => handleImageReorder(index, index + 1)}
+                          className="rounded bg-black/60 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/80"
+                          title="Move right"
+                        >
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
