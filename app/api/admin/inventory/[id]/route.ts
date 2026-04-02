@@ -204,6 +204,78 @@ export async function PATCH(
 }
 
 // ---------------------------------------------------------------------------
+// DELETE /api/admin/inventory/[id] — Soft-delete an inventory item
+// Only allowed if item has never been sold, reserved, listed, or returned.
+// ---------------------------------------------------------------------------
+
+const SAFE_DELETE_STATUSES = new Set([
+  "received",
+  "inspecting",
+  "refurbishing",
+  "parts_only",
+]);
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const adminUser = await requireAdmin(request);
+    if (adminUser instanceof NextResponse) return adminUser;
+    const { id } = await params;
+
+    const docRef = adminDb.collection("inventory").doc(id);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      return NextResponse.json(
+        { error: "Inventory item not found" },
+        { status: 404 }
+      );
+    }
+
+    const data = doc.data()!;
+
+    // Block if status is not in the safe set
+    if (!SAFE_DELETE_STATUSES.has(data.status)) {
+      return NextResponse.json(
+        {
+          error: `Cannot delete an item with status "${data.status}". Only items with status received, inspecting, refurbishing, or parts_only can be deleted.`,
+        },
+        { status: 409 }
+      );
+    }
+
+    // Block if item is a return from an order
+    if (data.returnedFromOrderId) {
+      return NextResponse.json(
+        {
+          error:
+            "Cannot delete an item that was returned from an order.",
+        },
+        { status: 409 }
+      );
+    }
+
+    // Soft-delete: set status to "deleted" and delist
+    await docRef.update({
+      status: "deleted",
+      listed: false,
+      deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting inventory item:", error);
+    return NextResponse.json(
+      { error: "Failed to delete inventory item" },
+      { status: 500 }
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

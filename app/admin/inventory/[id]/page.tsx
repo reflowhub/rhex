@@ -200,6 +200,11 @@ export default function InventoryDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ---- delete state -------------------------------------------------------
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   // ---- edit dialog state --------------------------------------------------
   const [editOpen, setEditOpen] = useState(false);
   const [editData, setEditData] = useState({
@@ -302,6 +307,36 @@ export default function InventoryDetailPage() {
       }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // ---- delete item --------------------------------------------------------
+  const canDelete =
+    item &&
+    ["received", "inspecting", "refurbishing", "parts_only"].includes(
+      item.status
+    ) &&
+    !item.returnedFromOrderId;
+
+  const handleDelete = async () => {
+    if (!item) return;
+    setDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const res = await fetch(`/api/admin/inventory/${id}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        setDeleteOpen(false);
+        router.push("/admin/inventory");
+      } else {
+        const data = await res.json();
+        setDeleteError(data.error || "Failed to delete");
+      }
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -611,10 +646,25 @@ export default function InventoryDetailPage() {
             {formatStatus(item.status)}
           </Badge>
         </div>
-        <Button variant="outline" onClick={openEdit}>
-          <Pencil className="mr-2 h-4 w-4" />
-          Edit
-        </Button>
+        <div className="flex gap-2">
+          {canDelete && (
+            <Button
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => {
+                setDeleteError(null);
+                setDeleteOpen(true);
+              }}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+          )}
+          <Button variant="outline" onClick={openEdit}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit
+          </Button>
+        </div>
       </div>
 
       {/* Two-column grid */}
@@ -1215,6 +1265,47 @@ export default function InventoryDetailPage() {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Delete Confirmation Dialog                                          */}
+      {/* ------------------------------------------------------------------ */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Inventory Item</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete Inventory #{item.inventoryId}? This
+              will soft-delete the item and remove it from listings.
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteError && (
+            <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              {deleteError}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -41,6 +41,8 @@ export async function GET(request: NextRequest) {
 
     snapshot.docs.forEach((doc) => {
       const data = doc.data() as Record<string, unknown>;
+      // Hide soft-deleted items unless explicitly filtering for them
+      if (!statusFilter && data.status === "deleted") return;
       inventoryDocs.push({ id: doc.id, data });
       if (data.deviceRef && typeof data.deviceRef === "string") {
         deviceIdSet.add(data.deviceRef);
