@@ -1,10 +1,26 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -13,8 +29,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Search, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useFX } from "@/lib/use-fx";
+import { GRADES, SELL_GRADE_LABELS } from "@/lib/grades";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,6 +59,18 @@ interface Quote {
   acceptedAt: string | null;
   inspectionGrade: string | null;
   revisedPriceNZD: number | null;
+}
+
+interface Device {
+  id: string;
+  make: string;
+  model: string;
+  storage: string;
+}
+
+interface Partner {
+  id: string;
+  name: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -114,6 +143,26 @@ export default function QuotesPage() {
   // ---- pagination state ---------------------------------------------------
   const [currentPage, setCurrentPage] = useState(1);
 
+  // ---- create dialog state ------------------------------------------------
+  const [createOpen, setCreateOpen] = useState(false);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [deviceSearch, setDeviceSearch] = useState("");
+  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
+  const [selectedGrade, setSelectedGrade] = useState("");
+  const [selectedPartner, setSelectedPartner] = useState("");
+  const [imeiInput, setImeiInput] = useState("");
+  const [currency, setCurrency] = useState<"AUD" | "NZD">("AUD");
+  const [pricePreview, setPricePreview] = useState<{
+    quotePriceNZD: number;
+    quotePriceAUD: number;
+  } | null>(null);
+  const [priceLoading, setPriceLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [deviceDropdownOpen, setDeviceDropdownOpen] = useState(false);
+  const deviceSearchRef = useRef<HTMLInputElement>(null);
+
   // ---- debounce search input ----------------------------------------------
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -155,6 +204,103 @@ export default function QuotesPage() {
     fetchQuotes();
   }, [fetchQuotes]);
 
+  // ---- fetch devices & partners for create dialog -------------------------
+  useEffect(() => {
+    if (!createOpen) return;
+    fetch("/api/admin/devices")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) setDevices(data);
+      });
+    fetch("/api/admin/partners?status=active")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data))
+          setPartners(data.map((p: Record<string, unknown>) => ({ id: p.id as string, name: p.name as string })));
+      });
+  }, [createOpen]);
+
+  // ---- price lookup when device + grade selected --------------------------
+  useEffect(() => {
+    if (!selectedDevice || !selectedGrade) {
+      setPricePreview(null);
+      return;
+    }
+    setPriceLoading(true);
+    fetch(
+      `/api/admin/quotes/price?deviceId=${selectedDevice.id}&grade=${selectedGrade}`
+    )
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.quotePriceNZD !== undefined) {
+          setPricePreview({
+            quotePriceNZD: data.quotePriceNZD,
+            quotePriceAUD: data.quotePriceAUD,
+          });
+        } else {
+          setPricePreview(null);
+        }
+      })
+      .catch(() => setPricePreview(null))
+      .finally(() => setPriceLoading(false));
+  }, [selectedDevice, selectedGrade]);
+
+  // ---- create quote handler -----------------------------------------------
+  const resetCreateForm = () => {
+    setDeviceSearch("");
+    setSelectedDevice(null);
+    setSelectedGrade("");
+    setSelectedPartner("");
+    setImeiInput("");
+    setCurrency("AUD");
+    setPricePreview(null);
+    setFormError(null);
+    setDeviceDropdownOpen(false);
+  };
+
+  const handleCreate = async () => {
+    if (!selectedDevice || !selectedGrade) return;
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      const res = await fetch("/api/admin/quotes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceId: selectedDevice.id,
+          grade: selectedGrade,
+          imei: imeiInput || undefined,
+          partnerId: selectedPartner && selectedPartner !== "none" ? selectedPartner : undefined,
+          displayCurrency: currency,
+        }),
+      });
+      if (res.ok) {
+        setCreateOpen(false);
+        resetCreateForm();
+        fetchQuotes();
+      } else {
+        const data = await res.json();
+        setFormError(data.error || "Failed to create quote");
+      }
+    } catch {
+      setFormError("Failed to create quote");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ---- device search filtering --------------------------------------------
+  const filteredDevices = deviceSearch.trim()
+    ? devices.filter((d) => {
+        const combined =
+          `${d.make} ${d.model} ${d.storage}`.toLowerCase();
+        return deviceSearch
+          .toLowerCase()
+          .split(/\s+/)
+          .every((w) => combined.includes(w));
+      })
+    : devices;
+
   // ---- pagination ---------------------------------------------------------
   const totalPages = Math.max(1, Math.ceil(quotes.length / PAGE_SIZE));
   const paginatedQuotes = quotes.slice(
@@ -191,6 +337,15 @@ export default function QuotesPage() {
               : `${quotes.length} quote${quotes.length !== 1 ? "s" : ""} found`}
           </p>
         </div>
+        <Button
+          onClick={() => {
+            resetCreateForm();
+            setCreateOpen(true);
+          }}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Create Quote
+        </Button>
       </div>
 
       {/* Status filter tabs */}
@@ -352,6 +507,196 @@ export default function QuotesPage() {
           </div>
         </div>
       )}
+
+      {/* Create Quote Dialog */}
+      <Dialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) resetCreateForm();
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Create Quote</DialogTitle>
+            <DialogDescription>
+              Create a new trade-in quote for a device.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            {/* Device search */}
+            <div className="grid gap-2">
+              <Label>Device *</Label>
+              {selectedDevice ? (
+                <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                  <span className="text-sm">
+                    {selectedDevice.make} {selectedDevice.model}{" "}
+                    {selectedDevice.storage}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto px-2 py-1 text-xs"
+                    onClick={() => {
+                      setSelectedDevice(null);
+                      setDeviceSearch("");
+                      setPricePreview(null);
+                      setTimeout(() => deviceSearchRef.current?.focus(), 0);
+                    }}
+                  >
+                    Change
+                  </Button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Input
+                    ref={deviceSearchRef}
+                    placeholder="Search devices..."
+                    value={deviceSearch}
+                    onChange={(e) => {
+                      setDeviceSearch(e.target.value);
+                      setDeviceDropdownOpen(true);
+                    }}
+                    onFocus={() => setDeviceDropdownOpen(true)}
+                    onBlur={() =>
+                      setTimeout(() => setDeviceDropdownOpen(false), 200)
+                    }
+                  />
+                  {deviceDropdownOpen && filteredDevices.length > 0 && (
+                    <div className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-md border bg-popover shadow-md">
+                      {filteredDevices.slice(0, 50).map((d) => (
+                        <button
+                          key={d.id}
+                          className="flex w-full items-center px-3 py-2 text-left text-sm hover:bg-accent"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setSelectedDevice(d);
+                            setDeviceSearch("");
+                            setDeviceDropdownOpen(false);
+                          }}
+                        >
+                          {d.make} {d.model} {d.storage}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Grade */}
+            <div className="grid gap-2">
+              <Label>Grade *</Label>
+              <Select value={selectedGrade} onValueChange={setSelectedGrade}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select grade" />
+                </SelectTrigger>
+                <SelectContent>
+                  {GRADES.map((g) => (
+                    <SelectItem key={g} value={g}>
+                      {g} &mdash; {SELL_GRADE_LABELS[g]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Price preview */}
+            {(pricePreview || priceLoading) && (
+              <div className="rounded-md border bg-muted/50 px-3 py-2">
+                {priceLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Looking up price...
+                  </div>
+                ) : pricePreview ? (
+                  <div className="text-sm">
+                    <span className="font-medium">
+                      ${pricePreview.quotePriceAUD.toFixed(2)} AUD
+                    </span>
+                    <span className="ml-2 text-muted-foreground">
+                      (${pricePreview.quotePriceNZD.toFixed(2)} NZD)
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {/* IMEI */}
+            <div className="grid gap-2">
+              <Label>IMEI</Label>
+              <Input
+                placeholder="Optional — 15-digit IMEI"
+                value={imeiInput}
+                onChange={(e) => setImeiInput(e.target.value)}
+                maxLength={15}
+              />
+            </div>
+
+            {/* Partner */}
+            <div className="grid gap-2">
+              <Label>Partner</Label>
+              <Select value={selectedPartner} onValueChange={setSelectedPartner}>
+                <SelectTrigger>
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {partners.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Currency */}
+            <div className="grid gap-2">
+              <Label>Display Currency</Label>
+              <Select
+                value={currency}
+                onValueChange={(v) => setCurrency(v as "AUD" | "NZD")}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="AUD">AUD</SelectItem>
+                  <SelectItem value="NZD">NZD</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Error */}
+            {formError && (
+              <p className="text-sm text-destructive">{formError}</p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCreateOpen(false);
+                resetCreateForm();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreate}
+              disabled={!selectedDevice || !selectedGrade || submitting}
+            >
+              {submitting && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Create Quote
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
