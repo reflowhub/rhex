@@ -176,12 +176,12 @@ function BrowsePageInner() {
               <Link key={group.slug} href={`/buy/model/${group.slug}`}>
                 <div className="group rounded-lg border border-border bg-card p-4 transition-colors hover:border-foreground/20">
                   {/* Image area */}
-                  <div className="aspect-square w-full overflow-hidden rounded bg-background">
+                  <div className="flex aspect-[4/5] w-full items-center justify-center overflow-hidden rounded bg-background p-4">
                     {group.heroImage ? (
                       <img
                         src={group.heroImage}
                         alt={`${group.make} ${group.model}`}
-                        className="h-full w-full object-contain"
+                        className="max-h-full max-w-full object-contain"
                         onError={(e) => {
                           const img = e.currentTarget;
                           if (group.fallbackImage && img.src !== group.fallbackImage) {

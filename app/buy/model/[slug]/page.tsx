@@ -122,12 +122,12 @@ export default function ModelPage() {
           <Link key={unit.id} href={`/buy/${unit.id}`}>
             <div className="group rounded-lg border border-border bg-card p-4 transition-colors hover:border-foreground/20">
               {/* Image */}
-              <div className="aspect-square w-full overflow-hidden rounded bg-background">
+              <div className="flex aspect-[4/5] w-full items-center justify-center overflow-hidden rounded bg-background p-4">
                 {unit.images.length > 0 ? (
                   <img
                     src={unit.images[0]}
                     alt={`${unit.make} ${unit.model} ${unit.storage}`}
-                    className="h-full w-full object-contain"
+                    className="max-h-full max-w-full object-contain"
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center text-muted-foreground">
