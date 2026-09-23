@@ -208,8 +208,9 @@ function extractDeviceInfo(
     (result.manufacturer as string) ||
     null;
   const model =
-    (result.model as string) ||
     (result.model_name as string) ||
+    (result.name as string) ||
+    (result.model as string) ||
     (result.device as string) ||
     null;
   const storage = (result.storage as string) || null;
