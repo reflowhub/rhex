@@ -246,17 +246,14 @@ Receive devices, track status, set sell prices. No public storefront yet — jus
 - `GET /api/admin/inventory?status=&category=&search=` — list with filters, batch device lookup for joins
 - `POST /api/admin/inventory` — create item with duplicate serial check
 - `GET /api/admin/inventory/[id]` — detail with joined device + source quote
-- `PATCH /api/admin/inventory/[id]` — update grade, price, status, listing toggle, battery, location, notes
+- `PATCH /api/admin/inventory/[id]` — update grade, price, status, listing toggle, battery, location, notes, images, spinVideo
 - `POST /api/admin/inventory/receive` — receive from individual or bulk quote (auto-fills device, cost, grade)
 - `/admin/inventory` — list page with category tabs, status pill filters, debounced search, pagination (25/page)
 - `/admin/inventory/[id]` — detail page with device info, financials (margin calc), source card, condition card, edit dialog
+- `/admin/inventory/[id]` — image upload card: multi-file upload to Firebase Storage with progress bars, image grid with hover-delete, position indicators
+- `/admin/inventory/[id]` — 360° spin video card: upload/replace/delete video with progress bar, inline video player
 - `/admin/inventory/receive` — progressive disclosure: find quote → summary → intake form
 - Admin sidebar nav link (Box icon, after Bulk Quotes)
-
-**Not yet implemented (deferred to Phase 2+):**
-
-- Image upload UI (placeholder card shown on detail page)
-- 360° spin video capture/upload
 
 ### Phase 2 — Storefront + Checkout ✓ Complete
 
@@ -281,9 +278,8 @@ Public `/shop` pages with Dieter Rams aesthetic, Stripe Checkout (stubbed), orde
 - `orders/` Firestore collection with auto-incrementing `orderNumber` via `counters/orders` (starts at 1001)
 - `stripe` package installed, Firebase Storage image domain in `next.config.ts`
 
-**Not yet implemented (deferred to Phase 3+):**
+**Not yet implemented (deferred):**
 
-- Image upload UI (product images show placeholder)
 - Real Stripe Checkout (add `STRIPE_SECRET_KEY` to .env to activate)
 - Reserved-but-unpaid item release (checkout.session.expired webhook + TTL cron)
 

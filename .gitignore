@@ -47,3 +47,5 @@ firebase-credentials.json
 
 # generated codebase snapshot
 data/codebase-snapshot.json
+# local data exports
+/rhex-devices-export.csv
