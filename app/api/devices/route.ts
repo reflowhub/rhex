@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { getDevices } from "@/lib/device-cache";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 // GET /api/devices — Public endpoint to list devices for consumer quote flow
 // Supports optional ?make= filter and ?id= to fetch a single device
 export async function GET(request: NextRequest) {
+  const ip = getClientIp(request);
+  const rl = checkRateLimit(`ip:${ip}:/api/devices`, 20);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
+    );
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const make = searchParams.get("make")?.trim() ?? "";

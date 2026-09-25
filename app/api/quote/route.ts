@@ -5,9 +5,19 @@ import { getTodayFXRate, convertPrice } from "@/lib/fx";
 import { readGrades } from "@/lib/grades";
 import { getActivePriceList, getCategoryGrades } from "@/lib/categories";
 import { parsePlatform } from "@/lib/parse-platform";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 // POST /api/quote — Create a new quote
 export async function POST(request: NextRequest) {
+  const ip = getClientIp(request);
+  const rl = checkRateLimit(`ip:${ip}:/api/quote`, 10);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
+    );
+  }
+
   try {
     const body = await request.json();
     const { deviceId, grade, imei, displayCurrency, referralCode, source } = body;

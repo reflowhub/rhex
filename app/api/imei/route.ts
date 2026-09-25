@@ -3,9 +3,19 @@ import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { isValidIMEI, extractTAC } from "@/lib/imei";
 import { matchToLibrary } from "@/lib/matching";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 // POST /api/imei — Lookup device by IMEI
 export async function POST(request: NextRequest) {
+  const ip = getClientIp(request);
+  const rl = checkRateLimit(`ip:${ip}:/api/imei`, 10);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
+    );
+  }
+
   try {
     const body = await request.json();
     const { imei } = body;
