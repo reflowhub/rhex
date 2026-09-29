@@ -29,6 +29,7 @@ export default function PartnerReferralsPage() {
   const [stats, setStats] = useState<ReferralStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const { formatPrice: fxFormatPrice } = useFX();
 
   // Redirect if not Mode A
   useEffect(() => {
@@ -74,7 +75,6 @@ export default function PartnerReferralsPage() {
     }
   };
 
-  const { formatPrice: fxFormatPrice } = useFX();
   const formatPrice = (price: number) => fxFormatPrice(price, partner?.currency ?? "AUD");
 
   return (
