@@ -212,11 +212,17 @@ export default function QuotesPage() {
     const url = `/api/admin/quotes${params.toString() ? `?${params.toString()}` : ""}`;
 
     fetch(url)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch quotes");
+        return res.json();
+      })
       .then((data: Quote[]) => {
         if (Array.isArray(data)) {
           setQuotes(data);
         }
+      })
+      .catch(() => {
+        setQuotes([]);
       })
       .finally(() => setLoading(false));
   }, [activeStatus, debouncedSearch, includeSandbox]);
