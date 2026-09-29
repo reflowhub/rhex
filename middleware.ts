@@ -5,7 +5,9 @@ export function middleware(request: NextRequest) {
 
   // --- Partner routes ---
   if (pathname.startsWith("/partner")) {
-    if (pathname === "/partner/login") return NextResponse.next();
+    if (pathname === "/partner/login" || pathname === "/partner/forgot-password") {
+      return NextResponse.next();
+    }
 
     const sessionCookie = request.cookies.get("__session")?.value;
     if (!sessionCookie) {

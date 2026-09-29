@@ -230,8 +230,8 @@ export default function PartnerLayout({
 }) {
   const pathname = usePathname();
 
-  // Login page renders without the auth-guarded sidebar layout
-  if (pathname === "/partner/login") {
+  // Public pages render without the auth-guarded sidebar layout
+  if (pathname === "/partner/login" || pathname === "/partner/forgot-password") {
     return <>{children}</>;
   }
 
