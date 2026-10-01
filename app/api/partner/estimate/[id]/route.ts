@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requirePartner } from "@/lib/partner-auth";
 import { PartnerSession } from "@/lib/partner-auth";
+import { updateIfStatus } from "@/lib/status-transition";
 import { serializeTimestamp } from "@/lib/serialize";
 
 // ---------------------------------------------------------------------------
@@ -103,10 +104,16 @@ export async function PUT(
         );
       }
 
-      await docRef.update({
+      const accepted = await updateIfStatus(docRef, "estimated", {
         status: "accepted",
         acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      if (!accepted) {
+        return NextResponse.json(
+          { error: "Can only accept estimates in 'estimated' status" },
+          { status: 400 }
+        );
+      }
 
       return NextResponse.json({ status: "accepted" });
     }

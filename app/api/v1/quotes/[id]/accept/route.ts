@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requireApiKey, ApiKeyPartner, canAccess } from "@/lib/api-key-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { updateIfStatus } from "@/lib/status-transition";
 import { findOrCreateCustomer } from "@/lib/customer-link";
 import { sendEmail } from "@/lib/email";
 import QuoteAcceptedEmail from "@/emails/quote-accepted";
@@ -158,7 +159,13 @@ export async function PUT(
       updateData.imei = imei;
     }
 
-    await quoteRef.update(updateData);
+    // Only one concurrent request can accept the quote
+    if (!(await updateIfStatus(quoteRef, "quoted", updateData))) {
+      return NextResponse.json(
+        { error: "Quote has already been processed" },
+        { status: 400 }
+      );
+    }
 
     const isSandbox = existingData.sandbox === true;
 

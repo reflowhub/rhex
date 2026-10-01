@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requirePartner } from "@/lib/partner-auth";
 import { PartnerSession } from "@/lib/partner-auth";
+import { updateIfStatus } from "@/lib/status-transition";
 import { applyRevisionExpiry } from "@/lib/revision-expiry";
 import { serializeTimestamp } from "@/lib/serialize";
 
@@ -131,7 +132,11 @@ export async function PUT(
     const quoteRef = adminDb.collection("quotes").doc(id);
     const quoteDoc = await quoteRef.get();
 
-    if (!quoteDoc.exists || quoteDoc.data()!.partnerId !== partner.id) {
+    if (
+      !quoteDoc.exists ||
+      quoteDoc.data()!.partnerId !== partner.id ||
+      quoteDoc.data()!.sandbox === true
+    ) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -168,7 +173,13 @@ export async function PUT(
         admin.firestore.FieldValue.serverTimestamp();
     }
 
-    await quoteRef.update(updateData);
+    // Only one concurrent request can respond to the revision
+    if (!(await updateIfStatus(quoteRef, "revised", updateData))) {
+      return NextResponse.json(
+        { error: "Quote is not in revised status" },
+        { status: 400 }
+      );
+    }
 
     return NextResponse.json({
       id,
