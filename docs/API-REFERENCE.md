@@ -583,9 +583,11 @@ curl -X POST \
 
 **Notes:**
 - CSV mode uses fuzzy matching to identify devices from free-text descriptions
-- Device list mode uses exact device IDs (recommended for accuracy)
+- Device list mode uses exact device IDs (recommended for accuracy). IDs that aren't active devices in the requested `category` are counted as unmatched and priced at 0
+- An invalid per-device or per-row `grade` falls back to `assumedGrade`
 - `matchedCount` / `unmatchedCount` indicates how many rows were matched to known devices
 - `totalIndicative` is the estimated total payout in your display currency
+- Limits: up to 2,000 rows or devices per request, and a quantity of up to 10,000 per line. Larger requests return `400`
 
 ---
 
@@ -665,7 +667,41 @@ curl -H "X-API-Key: rhx_your_key" \
 
 ---
 
-### 9. Respond to Revised Bulk Quote
+### 9. Accept Bulk Quote
+
+Accept a bulk quote's indicative total so RHEX can arrange collection of the devices.
+
+```
+PUT /api/v1/bulk-quotes/{id}/accept
+```
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | string | Bulk quote ID |
+
+No request body is required.
+
+**Example Request:**
+
+```bash
+curl -X PUT \
+  -H "X-API-Key: rhx_your_key" \
+  "https://rhex.app/api/v1/bulk-quotes/bulk_abc123/accept"
+```
+
+**Example Response:**
+
+Returns the updated bulk quote in the same format as [Get Bulk Quote](#8-get-bulk-quote), with `status` set to `accepted` and `acceptedAt` set.
+
+**Validation Rules:**
+
+- Bulk quote must be in `estimated` status. Accepting a bulk quote that has already been accepted returns `400`.
+
+---
+
+### 10. Respond to Revised Bulk Quote
 
 When a bulk quote is revised after inspection, respond to accept or reject the new total.
 
@@ -731,4 +767,6 @@ For bulk operations (e.g. processing a manifest of devices from an IT refresh):
 
 1. **Create bulk quote** — `POST /api/v1/bulk-quotes` with CSV or device list
 2. **Review results** — `GET /api/v1/bulk-quotes/{id}` to see matched devices and pricing
-3. **Handle revisions** — If revised after inspection, call `PUT /api/v1/bulk-quotes/{id}/respond`
+3. **Accept** — `PUT /api/v1/bulk-quotes/{id}/accept` to go ahead with the trade-in
+4. **Track status** — `GET /api/v1/bulk-quotes/{id}` to poll for status updates
+5. **Handle revisions** — If revised after inspection, call `PUT /api/v1/bulk-quotes/{id}/respond`
