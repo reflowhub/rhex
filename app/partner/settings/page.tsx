@@ -53,6 +53,7 @@ export default function PartnerSettingsPage() {
   const [bankBSB, setBankBSB] = useState("");
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [bankAccountName, setBankAccountName] = useState("");
+  const [payoutPassword, setPayoutPassword] = useState("");
 
   // Password change
   const [currentPassword, setCurrentPassword] = useState("");
@@ -75,32 +76,77 @@ export default function PartnerSettingsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Payout details changes require confirming the current password
+  const payoutDirty =
+    !!settings &&
+    (bankBSB.trim() !== (settings.bankBSB ?? "").trim() ||
+      bankAccountNumber.trim() !== (settings.bankAccountNumber ?? "").trim() ||
+      bankAccountName.trim() !== (settings.bankAccountName ?? "").trim());
+
   const handleSave = async () => {
-    setSaving(true);
     setError(null);
     setSaved(false);
 
+    if (payoutDirty && !payoutPassword) {
+      setError("Enter your current password to change payout details");
+      return;
+    }
+
+    setSaving(true);
     try {
+      let idToken: string | undefined;
+      if (payoutDirty) {
+        const user = auth.currentUser;
+        if (!user || !user.email) {
+          setError("Not authenticated. Please log in again.");
+          return;
+        }
+        const credential = EmailAuthProvider.credential(user.email, payoutPassword);
+        await reauthenticateWithCredential(user, credential);
+        idToken = await user.getIdToken(true);
+      }
+
       const res = await fetch("/api/partner/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          paymentMethod: "bank_transfer",
           bankBSB,
           bankAccountNumber,
           bankAccountName,
+          idToken,
         }),
       });
 
       if (res.ok) {
+        setSettings((prev) =>
+          prev
+            ? {
+                ...prev,
+                bankBSB: bankBSB.trim() || null,
+                bankAccountNumber: bankAccountNumber.trim() || null,
+                bankAccountName: bankAccountName.trim() || null,
+              }
+            : prev
+        );
+        setPayoutPassword("");
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
       } else {
         const err = await res.json();
         setError(err.error || "Failed to save");
       }
-    } catch {
-      setError("Failed to save settings");
+    } catch (err: unknown) {
+      const firebaseErr = err as { code?: string };
+      if (
+        firebaseErr.code === "auth/wrong-password" ||
+        firebaseErr.code === "auth/invalid-credential"
+      ) {
+        setError("Current password is incorrect");
+      } else if (firebaseErr.code === "auth/too-many-requests") {
+        setError("Too many attempts. Please try again later.");
+      } else {
+        setError("Failed to save settings");
+      }
     } finally {
       setSaving(false);
     }
@@ -300,6 +346,22 @@ export default function PartnerSettingsPage() {
                 />
               </div>
             </div>
+            {payoutDirty && (
+              <div className="grid gap-2">
+                <Label htmlFor="payout-password">Current Password</Label>
+                <Input
+                  id="payout-password"
+                  type="password"
+                  value={payoutPassword}
+                  onChange={(e) => setPayoutPassword(e.target.value)}
+                  autoComplete="current-password"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Confirm your password to change payout details. We&apos;ll
+                  email your contact address when they change.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

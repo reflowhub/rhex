@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
+import { NextRequest, NextResponse, after } from "next/server";
+import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
+import { sendEmail } from "@/lib/email";
+import PartnerPayoutDetailsChangedEmail from "@/emails/partner-payout-details-changed";
 import { requirePartner } from "@/lib/partner-auth";
 import { PartnerSession } from "@/lib/partner-auth";
 
@@ -57,8 +59,34 @@ export async function GET(request: NextRequest) {
 }
 
 // ---------------------------------------------------------------------------
-// PUT /api/partner/settings — Update contact + payment details only
+// PUT /api/partner/settings — Update payout (bank transfer) details
 // ---------------------------------------------------------------------------
+// Name and login email are managed by admin. Changing payout details
+// requires a fresh ID token (the client re-authenticates with the current
+// password) and emails the partner's contact address.
+
+const REAUTH_MAX_AGE_S = 5 * 60;
+
+const BANK_FIELDS = [
+  { key: "bankAccountName", label: "Account name" },
+  { key: "bankBSB", label: "BSB" },
+  { key: "bankAccountNumber", label: "Account number" },
+] as const;
+
+function normalize(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function digitCount(value: string): number {
+  return value.replace(/\D/g, "").length;
+}
+
+function maskAccountNumber(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  return digits.length > 3 ? `••••${digits.slice(-3)}` : "•••";
+}
 
 export async function PUT(request: NextRequest) {
   const result = await requirePartner(request);
@@ -67,47 +95,111 @@ export async function PUT(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const updateData: Record<string, unknown> = {
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
 
-    // Editable contact fields
-    if (body.name !== undefined && typeof body.name === "string") {
-      const trimmed = body.name.trim();
-      if (trimmed.length > 0) updateData.name = trimmed;
+    const partnerRef = adminDb.collection("partners").doc(partner.id);
+    const partnerDoc = await partnerRef.get();
+    if (!partnerDoc.exists) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    const current = partnerDoc.data()!;
+
+    // Collect bank fields that actually change
+    const updateData: Record<string, unknown> = {};
+    for (const { key } of BANK_FIELDS) {
+      if (body[key] === undefined) continue;
+      const next = normalize(body[key]);
+      if (next !== normalize(current[key])) updateData[key] = next;
+    }
+
+    const bsb = updateData.bankBSB as string | null | undefined;
+    const accountNumber = updateData.bankAccountNumber as string | null | undefined;
+    const accountName = updateData.bankAccountName as string | null | undefined;
+
+    if (bsb && (!/^[\d\s-]+$/.test(bsb) || (partner.currency === "AUD" && digitCount(bsb) !== 6))) {
+      return NextResponse.json({ error: "BSB must be 6 digits" }, { status: 400 });
     }
     if (
-      body.contactEmail !== undefined &&
-      typeof body.contactEmail === "string"
+      accountNumber &&
+      (!/^[\d\s-]+$/.test(accountNumber) ||
+        digitCount(accountNumber) < 5 ||
+        digitCount(accountNumber) > 17)
     ) {
-      const trimmed = body.contactEmail.trim();
-      if (trimmed.length > 0) updateData.contactEmail = trimmed;
+      return NextResponse.json(
+        { error: "Account number must be 5–17 digits" },
+        { status: 400 }
+      );
+    }
+    if (accountName && accountName.length > 100) {
+      return NextResponse.json(
+        { error: "Account name is too long" },
+        { status: 400 }
+      );
     }
 
-    // Editable payment fields (bank transfer only)
-    if (body.paymentMethod !== undefined) {
-      if (body.paymentMethod === "bank_transfer") {
-        updateData.paymentMethod = "bank_transfer";
+    // Nothing changed — nothing to verify or save
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ success: true });
+    }
+
+    // Require a recent re-authentication by this partner's own login
+    const idToken = typeof body.idToken === "string" ? body.idToken : "";
+    let reauthenticated = false;
+    if (idToken) {
+      try {
+        const decoded = await adminAuth.verifyIdToken(idToken, true);
+        const authAge = Date.now() / 1000 - decoded.auth_time;
+        reauthenticated =
+          decoded.uid === partner.authUid && authAge <= REAUTH_MAX_AGE_S;
+      } catch {
+        reauthenticated = false;
       }
     }
-    if (body.bankBSB !== undefined) {
-      updateData.bankBSB = body.bankBSB || null;
-    }
-    if (body.bankAccountNumber !== undefined) {
-      updateData.bankAccountNumber = body.bankAccountNumber || null;
-    }
-    if (body.bankAccountName !== undefined) {
-      updateData.bankAccountName = body.bankAccountName || null;
-    }
-
-    // If contactEmail changed, also update Firebase Auth email
-    if (updateData.contactEmail && partner.authUid) {
-      await admin.auth().updateUser(partner.authUid, {
-        email: updateData.contactEmail as string,
-      });
+    if (!reauthenticated) {
+      return NextResponse.json(
+        {
+          error: "Please confirm your password to change payout details",
+          reauthRequired: true,
+        },
+        { status: 403 }
+      );
     }
 
-    await adminDb.collection("partners").doc(partner.id).update(updateData);
+    await partnerRef.update({
+      ...updateData,
+      paymentMethod: "bank_transfer",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Notify the partner's contact address of the new details
+    const contactEmail = current.contactEmail as string | undefined;
+    if (contactEmail) {
+      const merged = { ...current, ...updateData };
+      const changes = BANK_FIELDS.filter(({ key }) => key in updateData).map(
+        ({ key, label }) => {
+          const value = merged[key] as string | null;
+          if (!value) return { label, value: "(removed)" };
+          return {
+            label,
+            value: key === "bankAccountNumber" ? maskAccountNumber(value) : value,
+          };
+        }
+      );
+      after(() =>
+        sendEmail({
+          to: contactEmail,
+          subject: "Your rhex payout details were changed",
+          react: PartnerPayoutDetailsChangedEmail({
+            partnerName: current.contactPerson || current.name || "there",
+            changes,
+            changedAt: new Date().toLocaleString("en-AU", {
+              dateStyle: "medium",
+              timeStyle: "short",
+              timeZone: partner.currency === "NZD" ? "Pacific/Auckland" : "Australia/Sydney",
+            }),
+          }),
+        })
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
