@@ -53,7 +53,8 @@ export async function GET(request: NextRequest) {
           items.push({
             id: doc.id,
             type: "settlement",
-            quotePriceNZD: data.quotePriceNZD ?? 0,
+            // Settled at the revised price when inspection changed it
+            quotePriceNZD: data.revisedPriceNZD ?? data.quotePriceNZD ?? 0,
             grade: data.grade ?? null,
             deviceId: data.deviceId ?? null,
             createdAt: serializeTimestamp(data.createdAt),
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
           items.push({
             id: doc.id,
             type: "bulkSettlement",
-            totalIndicativeNZD: data.totalIndicativeNZD ?? 0,
+            totalIndicativeNZD: data.revisedTotalNZD ?? data.totalIndicativeNZD ?? 0,
             totalDevices: data.totalDevices ?? 0,
             createdAt: serializeTimestamp(data.createdAt),
           });
