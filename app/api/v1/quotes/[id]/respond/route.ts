@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requireApiKey, ApiKeyPartner, canAccess } from "@/lib/api-key-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { updateIfStatus } from "@/lib/status-transition";
 
 // ---------------------------------------------------------------------------
 // PUT /api/v1/quotes/[id]/respond — Accept or reject a revised quote
@@ -77,7 +78,13 @@ export async function PUT(
         admin.firestore.FieldValue.serverTimestamp();
     }
 
-    await quoteRef.update(updateData);
+    // Only one concurrent request can respond to the revision
+    if (!(await updateIfStatus(quoteRef, "revised", updateData))) {
+      return NextResponse.json(
+        { error: "Quote is not in revised status" },
+        { status: 400 }
+      );
+    }
 
     return NextResponse.json({
       id,
