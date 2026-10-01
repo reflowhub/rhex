@@ -1,9 +1,17 @@
 rules_version = '2';
 
+// All app data is read and written server-side via the Admin SDK, which
+// bypasses these rules. Client SDK access is denied except where an admin
+// page reads Firestore directly.
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Admin live visitors view (app/admin/visitors/page.tsx)
+    match /visitors/{visitorId} {
+      allow read: if request.auth != null && request.auth.token.admin == true;
+    }
+
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }
