@@ -7,7 +7,7 @@ import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 // Supports optional ?make= filter and ?id= to fetch a single device
 export async function GET(request: NextRequest) {
   const ip = getClientIp(request);
-  const rl = checkRateLimit(`ip:${ip}:/api/devices`, 20);
+  const rl = await checkRateLimit(`ip:${ip}:/api/devices`, 20);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: "Rate limit exceeded. Please try again later." },

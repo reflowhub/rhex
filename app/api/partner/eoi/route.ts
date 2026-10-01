@@ -1,12 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 // ---------------------------------------------------------------------------
 // POST /api/partner/eoi — Submit an expression of interest to become a partner
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
+  const ip = getClientIp(request);
+  const rl = await checkRateLimit(`ip:${ip}:/api/partner/eoi`, 5);
+  const dailyRl = rl.allowed
+    ? await checkRateLimit(`ip:${ip}:/api/partner/eoi:daily`, 20, 24 * 60 * 60_000)
+    : rl;
+  if (!dailyRl.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(dailyRl.retryAfter) } }
+    );
+  }
+
   try {
     const body = await request.json();
     const { businessName, contactName, email, phone, message } = body;

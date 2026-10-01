@@ -10,7 +10,7 @@ import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 // POST /api/quote — Create a new quote
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
-  const rl = checkRateLimit(`ip:${ip}:/api/quote`, 10);
+  const rl = await checkRateLimit(`ip:${ip}:/api/quote`, 10);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: "Rate limit exceeded. Please try again later." },

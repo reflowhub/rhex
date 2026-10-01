@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 // ---------------------------------------------------------------------------
 // GET /api/partner/referral/validate?code=X — Validate a referral code
@@ -7,6 +8,15 @@ import { adminDb } from "@/lib/firebase-admin";
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
+  const ip = getClientIp(request);
+  const rl = await checkRateLimit(`ip:${ip}:/api/partner/referral/validate`, 20);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
+    );
+  }
+
   try {
     const code = request.nextUrl.searchParams
       .get("code")

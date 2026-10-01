@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
   const partner: ApiKeyPartner = result;
 
   // Rate limit
-  const rl = checkRateLimit(partner.apiKeyId);
+  const rl = await checkRateLimit(partner.apiKeyId);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: "Rate limit exceeded" },

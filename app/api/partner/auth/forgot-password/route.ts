@@ -44,7 +44,7 @@ async function sendPartnerResetEmail(email: string) {
 
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
-  const rl = checkRateLimit(`ip:${ip}:/api/partner/auth/forgot-password`, 5);
+  const rl = await checkRateLimit(`ip:${ip}:/api/partner/auth/forgot-password`, 5);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: "Too many requests. Please try again later." },
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Cap emails per address so the form can't be used to flood an inbox
-    const emailRl = checkRateLimit(`email:${email}:forgot-password`, 3, 15 * 60_000);
+    const emailRl = await checkRateLimit(`email:${email}:forgot-password`, 3, 15 * 60_000);
     if (emailRl.allowed) {
       // Run after the response so timing doesn't reveal whether the account exists
       after(() => sendPartnerResetEmail(email));
