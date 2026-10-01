@@ -2,21 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { findOrCreateCustomer } from "@/lib/customer-link";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function serializeTimestamp(value: unknown): string | null {
-  if (!value) return null;
-  if (typeof value === "object" && value !== null && "toDate" in value) {
-    const ts = value as { toDate: () => Date };
-    return ts.toDate().toISOString();
-  }
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === "string") return value;
-  return null;
-}
+import { serializeTimestamp } from "@/lib/serialize";
 
 // ---------------------------------------------------------------------------
 // GET /api/business/estimate/[id] — Fetch bulk quote with all device lines

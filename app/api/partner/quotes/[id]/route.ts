@@ -4,6 +4,7 @@ import admin from "@/lib/firebase-admin";
 import { requirePartner } from "@/lib/partner-auth";
 import { PartnerSession } from "@/lib/partner-auth";
 import { applyRevisionExpiry } from "@/lib/revision-expiry";
+import { serializeTimestamp } from "@/lib/serialize";
 
 // ---------------------------------------------------------------------------
 // GET /api/partner/quotes/[id] — Get a single quote, verify ownership
@@ -180,19 +181,4 @@ export async function PUT(
       { status: 500 }
     );
   }
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function serializeTimestamp(value: unknown): string | null {
-  if (!value) return null;
-  if (typeof value === "object" && value !== null && "toDate" in value) {
-    const ts = value as { toDate: () => Date };
-    return ts.toDate().toISOString();
-  }
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === "string") return value;
-  return null;
 }

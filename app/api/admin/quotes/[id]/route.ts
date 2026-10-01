@@ -7,6 +7,7 @@ import { sendEmail } from "@/lib/email";
 import QuotePaidEmail from "@/emails/quote-paid";
 import QuoteRevisedEmail from "@/emails/quote-revised";
 import { checkRevisionExpiry } from "@/lib/revision-expiry";
+import { serializeTimestamp } from "@/lib/serialize";
 
 // ---------------------------------------------------------------------------
 // Valid status transitions
@@ -376,19 +377,4 @@ export async function PUT(
       { status: 500 }
     );
   }
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function serializeTimestamp(value: unknown): string | null {
-  if (!value) return null;
-  if (typeof value === "object" && value !== null && "toDate" in value) {
-    const ts = value as { toDate: () => Date };
-    return ts.toDate().toISOString();
-  }
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === "string") return value;
-  return null;
 }

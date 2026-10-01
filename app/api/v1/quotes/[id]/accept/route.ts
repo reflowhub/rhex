@@ -6,6 +6,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { findOrCreateCustomer } from "@/lib/customer-link";
 import { sendEmail } from "@/lib/email";
 import QuoteAcceptedEmail from "@/emails/quote-accepted";
+import { serializeTimestamp } from "@/lib/serialize";
 
 // ---------------------------------------------------------------------------
 // PUT /api/v1/quotes/[id]/accept — Accept quote with customer details
@@ -250,19 +251,4 @@ export async function PUT(
       { status: 500 }
     );
   }
-}
-
-// ---------------------------------------------------------------------------
-// Helper
-// ---------------------------------------------------------------------------
-
-function serializeTimestamp(value: unknown): string | null {
-  if (!value) return null;
-  if (typeof value === "object" && value !== null && "toDate" in value) {
-    const ts = value as { toDate: () => Date };
-    return ts.toDate().toISOString();
-  }
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === "string") return value;
-  return null;
 }
