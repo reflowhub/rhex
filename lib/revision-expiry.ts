@@ -2,9 +2,46 @@ import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 
 /**
- * Check if a quote's revision has expired.
+ * Apply revision expiry to an already-fetched quote or bulk quote.
  * If the status is "revised" and `revisionExpiresAt` is in the past,
  * auto-transition to "returning" and flag as auto-expired.
+ *
+ * Call this after any ownership check so callers can only trigger
+ * transitions on documents they're allowed to see.
+ *
+ * @returns the document data, reflecting the transition if one happened
+ */
+export async function applyRevisionExpiry(
+  doc: FirebaseFirestore.DocumentSnapshot
+): Promise<FirebaseFirestore.DocumentData | undefined> {
+  const data = doc.data();
+  if (!data || data.status !== "revised") return data;
+
+  const expiresAt = data.revisionExpiresAt;
+  if (!expiresAt) return data;
+
+  const expiryDate = expiresAt.toDate
+    ? expiresAt.toDate()
+    : new Date(expiresAt);
+  if (expiryDate > new Date()) return data;
+
+  // Expired — auto-transition to returning
+  await doc.ref.update({
+    status: "returning",
+    returningAt: admin.firestore.FieldValue.serverTimestamp(),
+    revisionAutoExpired: true,
+  });
+
+  return {
+    ...data,
+    status: "returning",
+    returningAt: admin.firestore.Timestamp.now(),
+    revisionAutoExpired: true,
+  };
+}
+
+/**
+ * Check if a quote's revision has expired, by collection + id.
  *
  * Call this from GET handlers that return quote data so expiry is
  * enforced lazily (no cron required).
@@ -15,27 +52,10 @@ export async function checkRevisionExpiry(
   collection: string,
   docId: string
 ): Promise<boolean> {
-  const ref = adminDb.collection(collection).doc(docId);
-  const doc = await ref.get();
+  const doc = await adminDb.collection(collection).doc(docId).get();
   if (!doc.exists) return false;
 
-  const data = doc.data()!;
-  if (data.status !== "revised") return false;
-
-  const expiresAt = data.revisionExpiresAt;
-  if (!expiresAt) return false;
-
-  const expiryDate = expiresAt.toDate
-    ? expiresAt.toDate()
-    : new Date(expiresAt);
-  if (expiryDate > new Date()) return false;
-
-  // Expired — auto-transition to returning
-  await ref.update({
-    status: "returning",
-    returningAt: admin.firestore.FieldValue.serverTimestamp(),
-    revisionAutoExpired: true,
-  });
-
-  return true;
+  const before = doc.data()!.status;
+  const after = await applyRevisionExpiry(doc);
+  return before !== after?.status;
 }

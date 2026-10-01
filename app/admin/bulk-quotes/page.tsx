@@ -34,6 +34,7 @@ interface BulkQuote {
   partnerId: string | null;
   partnerName: string | null;
   partnerMode: string | null;
+  sandbox: boolean;
   createdAt: string | null;
 }
 
@@ -98,6 +99,7 @@ export default function BulkQuotesPage() {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [includeSandbox, setIncludeSandbox] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -108,7 +110,7 @@ export default function BulkQuotesPage() {
   // Reset page on filter change
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeStatus, debouncedSearch]);
+  }, [activeStatus, debouncedSearch, includeSandbox]);
 
   // Fetch bulk quotes
   const fetchQuotes = useCallback(() => {
@@ -117,6 +119,7 @@ export default function BulkQuotesPage() {
     const params = new URLSearchParams();
     if (activeStatus !== "all") params.set("status", activeStatus);
     if (debouncedSearch) params.set("search", debouncedSearch);
+    if (includeSandbox) params.set("includeSandbox", "true");
 
     const url = `/api/admin/bulk-quotes${params.toString() ? `?${params.toString()}` : ""}`;
 
@@ -126,7 +129,7 @@ export default function BulkQuotesPage() {
         if (Array.isArray(data)) setQuotes(data);
       })
       .finally(() => setLoading(false));
-  }, [activeStatus, debouncedSearch]);
+  }, [activeStatus, debouncedSearch, includeSandbox]);
 
   useEffect(() => {
     fetchQuotes();
@@ -187,9 +190,9 @@ export default function BulkQuotesPage() {
         })}
       </div>
 
-      {/* Search */}
-      <div className="mt-4 flex max-w-sm items-center gap-2">
-        <div className="relative flex-1">
+      {/* Search input + sandbox toggle */}
+      <div className="mt-4 flex items-center gap-4">
+        <div className="relative max-w-sm flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search by business name or email..."
@@ -198,6 +201,15 @@ export default function BulkQuotesPage() {
             className="pl-9"
           />
         </div>
+        <label className="flex items-center gap-2 cursor-pointer shrink-0">
+          <input
+            type="checkbox"
+            checked={includeSandbox}
+            onChange={(e) => setIncludeSandbox(e.target.checked)}
+            className="h-4 w-4 rounded border-border"
+          />
+          <span className="text-sm text-muted-foreground">Include sandbox</span>
+        </label>
       </div>
 
       {/* Table */}
@@ -265,12 +277,22 @@ export default function BulkQuotesPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant={badgeProps.variant}
-                        className={badgeProps.className}
-                      >
-                        {q.status}
-                      </Badge>
+                      <div className="flex items-center gap-1">
+                        <Badge
+                          variant={badgeProps.variant}
+                          className={badgeProps.className}
+                        >
+                          {q.status}
+                        </Badge>
+                        {q.sandbox && (
+                          <Badge
+                            variant="outline"
+                            className="border-amber-500 text-amber-600 text-[10px]"
+                          >
+                            SANDBOX
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDate(q.createdAt)}

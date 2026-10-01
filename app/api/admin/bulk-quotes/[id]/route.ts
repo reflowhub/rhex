@@ -110,6 +110,7 @@ export async function GET(
       partnerId,
       partnerName,
       partnerMode: data.partnerMode ?? null,
+      sandbox: data.sandbox === true,
       paymentMethod: data.paymentMethod ?? null,
       payIdPhone: data.payIdPhone ?? null,
       bankBSB: data.bankBSB ?? null,
@@ -197,13 +198,15 @@ export async function PUT(
 
     await adminDb.collection("bulkQuotes").doc(id).update(updateData);
 
-    // Trigger commission if transitioning to "paid"
+    // Trigger commission if transitioning to "paid" — skip for sandbox
     if (status === "paid") {
       const freshDoc = await adminDb.collection("bulkQuotes").doc(id).get();
       const freshData = freshDoc.data() as Record<string, unknown>;
-      await onBulkQuotePaid(id, freshData).catch((err) =>
-        console.error("Commission trigger error:", err)
-      );
+      if (freshData.sandbox !== true) {
+        await onBulkQuotePaid(id, freshData).catch((err) =>
+          console.error("Commission trigger error:", err)
+        );
+      }
     }
 
     // Re-fetch to return updated data

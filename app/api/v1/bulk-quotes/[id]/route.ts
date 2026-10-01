@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import { requireApiKey, ApiKeyPartner } from "@/lib/api-key-auth";
+import { requireApiKey, ApiKeyPartner, canAccess } from "@/lib/api-key-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { checkRevisionExpiry } from "@/lib/revision-expiry";
+import { applyRevisionExpiry } from "@/lib/revision-expiry";
 
 // ---------------------------------------------------------------------------
 // GET /api/v1/bulk-quotes/[id] — Get bulk quote with line items
@@ -29,21 +29,15 @@ export async function GET(
   try {
     const { id } = await params;
 
-    // Check for revision expiry
-    await checkRevisionExpiry("bulkQuotes", id);
-
     const doc = await adminDb.collection("bulkQuotes").doc(id).get();
 
-    if (!doc.exists) {
+    // Ownership + sandbox check
+    if (!doc.exists || !canAccess(doc.data(), partner)) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const data = doc.data()!;
-
-    // Ownership check
-    if (data.partnerId !== partner.id) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
+    // Check for revision expiry
+    const data = (await applyRevisionExpiry(doc))!;
 
     // Fetch device lines
     const devicesSnapshot = await doc.ref.collection("devices").get();

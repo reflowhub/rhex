@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
 
     snapshot.docs.forEach((doc) => {
       const d = doc.data();
+      if (d.sandbox === true) return;
       const priceNZD = (d.quotePriceNZD as number) ?? 0;
       const partnerId = d.partnerId as string | undefined;
       const partnerMode = (d.partnerMode as string) ?? "";

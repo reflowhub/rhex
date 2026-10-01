@@ -105,6 +105,19 @@ export async function verifyApiKey(
 }
 
 // ---------------------------------------------------------------------------
+// canAccess — Whether an API key may see a quote/bulk quote document.
+// Sandbox keys only see sandbox docs; production keys only see production docs.
+// ---------------------------------------------------------------------------
+
+export function canAccess(
+  data: FirebaseFirestore.DocumentData | undefined,
+  partner: ApiKeyPartner
+): boolean {
+  if (!data || data.partnerId !== partner.id) return false;
+  return (data.sandbox === true) === partner.sandbox;
+}
+
+// ---------------------------------------------------------------------------
 // requireApiKey — Returns partner or 401 response
 // ---------------------------------------------------------------------------
 

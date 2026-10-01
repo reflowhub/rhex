@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
-import { requireApiKey, ApiKeyPartner } from "@/lib/api-key-auth";
+import { requireApiKey, ApiKeyPartner, canAccess } from "@/lib/api-key-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { findOrCreateCustomer } from "@/lib/customer-link";
 import { sendEmail } from "@/lib/email";
@@ -50,16 +50,12 @@ export async function PUT(
     const quoteRef = adminDb.collection("quotes").doc(id);
     const quoteDoc = await quoteRef.get();
 
-    if (!quoteDoc.exists) {
+    // Ownership + sandbox check
+    if (!quoteDoc.exists || !canAccess(quoteDoc.data(), partner)) {
       return NextResponse.json({ error: "Quote not found" }, { status: 404 });
     }
 
     const existingData = quoteDoc.data()!;
-
-    // Ownership check
-    if (existingData.partnerId !== partner.id) {
-      return NextResponse.json({ error: "Quote not found" }, { status: 404 });
-    }
 
     // Check status
     if (existingData.status !== "quoted") {

@@ -25,12 +25,16 @@ export async function GET(request: NextRequest) {
       .where("partnerId", "==", partner.id)
       .get();
 
+    // Sandbox quotes are excluded from the portal
+    const quoteDocs = quotesSnapshot.docs.filter((d) => d.data().sandbox !== true);
+    const bulkDocs = bulkSnapshot.docs.filter((d) => d.data().sandbox !== true);
+
     // Count quotes by status
     let totalQuotes = 0;
     let activeQuotes = 0;
     let paidQuotes = 0;
 
-    quotesSnapshot.docs.forEach((doc) => {
+    quoteDocs.forEach((doc) => {
       const data = doc.data();
       totalQuotes++;
       if (
@@ -45,7 +49,7 @@ export async function GET(request: NextRequest) {
       if (data.status === "paid") paidQuotes++;
     });
 
-    bulkSnapshot.docs.forEach((doc) => {
+    bulkDocs.forEach((doc) => {
       const data = doc.data();
       totalQuotes++;
       if (
@@ -82,7 +86,7 @@ export async function GET(request: NextRequest) {
     // Recent quotes (last 10) — combine quotes + bulkQuotes, sort by date
     const recentItems: Record<string, unknown>[] = [];
 
-    quotesSnapshot.docs.forEach((doc) => {
+    quoteDocs.forEach((doc) => {
       const data = doc.data();
       recentItems.push({
         id: doc.id,
@@ -96,7 +100,7 @@ export async function GET(request: NextRequest) {
       });
     });
 
-    bulkSnapshot.docs.forEach((doc) => {
+    bulkDocs.forEach((doc) => {
       const data = doc.data();
       recentItems.push({
         id: doc.id,

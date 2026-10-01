@@ -25,7 +25,7 @@ export async function GET(
     }
 
     const data = doc.data()!;
-    if (data.partnerId !== partner.id) {
+    if (data.partnerId !== partner.id || data.sandbox === true) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -90,7 +90,7 @@ export async function PUT(
     }
 
     const data = doc.data()!;
-    if (data.partnerId !== partner.id) {
+    if (data.partnerId !== partner.id || data.sandbox === true) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 

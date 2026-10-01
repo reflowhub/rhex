@@ -22,6 +22,7 @@ function serializeTimestamp(value: unknown): string | null {
 // Query params:
 //   ?status=   — filter by quote status
 //   ?search=   — search by business name or email
+//   ?includeSandbox=true — include sandbox (API test key) bulk quotes
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
     const statusFilter =
       searchParams.get("status")?.toLowerCase().trim() ?? "";
     const search = searchParams.get("search")?.toLowerCase().trim() ?? "";
+    const includeSandbox = searchParams.get("includeSandbox") === "true";
 
     let query: FirebaseFirestore.Query = adminDb.collection("bulkQuotes");
 
@@ -43,9 +45,14 @@ export async function GET(request: NextRequest) {
 
     const snapshot = await query.get();
 
+    // Filter out sandbox bulk quotes unless explicitly included
+    const docs = snapshot.docs.filter(
+      (doc) => includeSandbox || doc.data().sandbox !== true
+    );
+
     // Batch-fetch partner names
     const partnerIdSet = new Set<string>();
-    snapshot.docs.forEach((doc) => {
+    docs.forEach((doc) => {
       const pid = doc.data().partnerId;
       if (pid && typeof pid === "string") partnerIdSet.add(pid);
     });
@@ -65,7 +72,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    let quotes = snapshot.docs.map((doc) => {
+    let quotes = docs.map((doc) => {
       const data = doc.data();
       const partnerId = (data.partnerId as string) ?? null;
       return {
@@ -83,6 +90,7 @@ export async function GET(request: NextRequest) {
         partnerId,
         partnerName: partnerId ? (partnerMap.get(partnerId) ?? null) : null,
         partnerMode: data.partnerMode ?? null,
+        sandbox: data.sandbox === true,
         createdAt: serializeTimestamp(data.createdAt),
         acceptedAt: serializeTimestamp(data.acceptedAt),
       };
