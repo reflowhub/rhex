@@ -5,76 +5,7 @@ import { matchDeviceString, loadDeviceLibrary } from "@/lib/matching";
 import { calculatePartnerRate } from "@/lib/partner-pricing";
 import { getPrices } from "@/lib/device-cache";
 import { getActivePriceList, getCategoryGrades } from "@/lib/categories";
-
-// ---------------------------------------------------------------------------
-// CSV parser (handles quoted fields) — same pattern as admin device import
-// ---------------------------------------------------------------------------
-
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (inQuotes) {
-      if (char === '"' && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else if (char === '"') {
-        inQuotes = false;
-      } else {
-        current += char;
-      }
-    } else {
-      if (char === '"') {
-        inQuotes = true;
-      } else if (char === ",") {
-        result.push(current.trim());
-        current = "";
-      } else {
-        current += char;
-      }
-    }
-  }
-  result.push(current.trim());
-  return result;
-}
-
-// ---------------------------------------------------------------------------
-// Column synonyms for auto-detection
-// ---------------------------------------------------------------------------
-
-const DEVICE_SYNONYMS = [
-  "device",
-  "model",
-  "phone",
-  "handset",
-  "product",
-  "description",
-  "item",
-  "name",
-];
-const QUANTITY_SYNONYMS = ["quantity", "qty", "count", "units", "amount"];
-const STORAGE_SYNONYMS = ["storage", "capacity", "memory", "size", "gb"];
-const MAKE_SYNONYMS = ["make", "brand", "manufacturer", "oem"];
-const GRADE_SYNONYMS = ["grade", "condition", "quality", "tier"];
-
-function findColumnIndex(
-  headers: string[],
-  synonyms: string[]
-): number {
-  const lower = headers.map((h) => h.toLowerCase().trim());
-  for (const syn of synonyms) {
-    const idx = lower.indexOf(syn);
-    if (idx !== -1) return idx;
-  }
-  // Partial match
-  for (const syn of synonyms) {
-    const idx = lower.findIndex((h) => h.includes(syn));
-    if (idx !== -1) return idx;
-  }
-  return -1;
-}
+import { parseManifestRows } from "@/lib/manifest-csv";
 
 // ---------------------------------------------------------------------------
 // POST /api/business/estimate — Create a bulk estimate from manifest CSV
@@ -189,62 +120,18 @@ export async function POST(request: NextRequest) {
       // -----------------------------------------------------------------------
       // Manifest flow: parse CSV and match devices by string
       // -----------------------------------------------------------------------
-      const lines = csv
-        .replace(/^\uFEFF/, "")
-        .split(/\r?\n/)
-        .filter((l: string) => l.trim() !== "");
-      if (lines.length < 2) {
+      const rows = parseManifestRows(csv, validGrades, grade);
+      if (!rows) {
         return NextResponse.json(
           { error: "CSV must have at least a header row and one data row" },
           { status: 400 }
         );
       }
 
-      const headers = parseCSVLine(lines[0]);
-
-      // Auto-detect columns
-      const deviceCol = findColumnIndex(headers, DEVICE_SYNONYMS);
-      const quantityCol = findColumnIndex(headers, QUANTITY_SYNONYMS);
-      const storageCol = findColumnIndex(headers, STORAGE_SYNONYMS);
-      const makeCol = findColumnIndex(headers, MAKE_SYNONYMS);
-      const gradeCol = findColumnIndex(headers, GRADE_SYNONYMS);
-      const effectiveDeviceCol = deviceCol >= 0 ? deviceCol : 0;
-
       // Pre-load device library for matching
       await loadDeviceLibrary();
 
-      for (let i = 1; i < lines.length; i++) {
-        const values = parseCSVLine(lines[i]);
-        if (values.every((v) => !v.trim())) continue; // skip empty rows
-
-        // Build raw input string
-        let rawInput = values[effectiveDeviceCol] || "";
-        if (makeCol >= 0 && values[makeCol]) {
-          rawInput = `${values[makeCol]} ${rawInput}`;
-        }
-        if (storageCol >= 0 && values[storageCol]) {
-          rawInput = `${rawInput} ${values[storageCol]}`;
-        }
-        rawInput = rawInput.trim();
-
-        if (!rawInput) continue;
-
-        // Parse quantity
-        let quantity = 1;
-        if (quantityCol >= 0 && values[quantityCol]) {
-          const parsed = parseInt(values[quantityCol], 10);
-          if (!isNaN(parsed) && parsed > 0) quantity = parsed;
-        }
-
-        // Parse per-row grade (fall back to global assumed grade)
-        let rowGrade = grade;
-        if (gradeCol >= 0 && values[gradeCol]) {
-          const g = values[gradeCol].trim().toUpperCase();
-          if (validGrades.includes(g)) {
-            rowGrade = g;
-          }
-        }
-
+      for (const { rawInput, quantity, grade: rowGrade } of rows) {
         // Match device
         const match = await matchDeviceString(rawInput);
 
