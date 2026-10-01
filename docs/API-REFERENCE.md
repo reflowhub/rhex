@@ -41,7 +41,7 @@ Sandbox API keys let you test the full API lifecycle without affecting real trad
 }
 ```
 
-Sandbox quotes use real device data and pricing — the only difference is that no side effects occur and quotes expire quickly. Request a sandbox key from the RHEX admin team to get started.
+Sandbox quotes use real device data and pricing — the differences are that no side effects occur, quotes expire quickly, and they're kept separate from your production quotes. Request a sandbox key from the RHEX admin team to get started.
 
 ## Rate Limiting
 
@@ -66,7 +66,7 @@ All errors return JSON with an `error` field:
 |--------|---------|
 | 400 | Bad request — missing or invalid parameters |
 | 401 | Unauthorized — invalid or revoked API key |
-| 404 | Not found — resource doesn't exist or no pricing available |
+| 404 | Not found — resource doesn't exist, belongs to the other environment (sandbox vs production), or has no pricing available |
 | 429 | Rate limit exceeded — wait and retry |
 | 500 | Internal server error |
 
@@ -642,7 +642,7 @@ curl -H "X-API-Key: rhx_your_key" \
       "id": "line_001",
       "rawInput": "iPhone 15 Pro 256GB",
       "deviceId": "abc123",
-      "deviceName": "iPhone 15 Pro 256GB",
+      "deviceName": "Apple iPhone 15 Pro 256GB",
       "matchConfidence": "exact",
       "quantity": 5,
       "assumedGrade": "B",
@@ -693,7 +693,7 @@ curl -X PUT \
 
 **Example Response:**
 
-Returns the updated bulk quote in the same format as [Get Bulk Quote](#8-get-bulk-quote), with `status` set to `accepted` and `acceptedAt` set.
+Returns the updated bulk quote in the same format as Get Bulk Quote (endpoint 8), with `status` set to `accepted` and `acceptedAt` set.
 
 **Validation Rules:**
 
