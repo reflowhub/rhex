@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
+import { serializeTimestamp } from "@/lib/serialize";
 
 // ---------------------------------------------------------------------------
 // GET /api/shop/orders/[id] — Public order lookup
@@ -57,19 +58,4 @@ export async function GET(
       { status: 500 }
     );
   }
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function serializeTimestamp(value: unknown): string | null {
-  if (!value) return null;
-  if (typeof value === "object" && value !== null && "toDate" in value) {
-    const ts = value as { toDate: () => Date };
-    return ts.toDate().toISOString();
-  }
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === "string") return value;
-  return null;
 }
