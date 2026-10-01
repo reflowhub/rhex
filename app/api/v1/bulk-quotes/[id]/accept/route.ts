@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
+import admin from "@/lib/firebase-admin";
 import { requireApiKey, ApiKeyPartner, canAccess } from "@/lib/api-key-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { applyRevisionExpiry } from "@/lib/revision-expiry";
+import { updateIfStatus } from "@/lib/status-transition";
 import { serializeV1BulkQuote } from "@/lib/v1-bulk-quote";
 
 // ---------------------------------------------------------------------------
-// GET /api/v1/bulk-quotes/[id] — Get bulk quote with line items
+// PUT /api/v1/bulk-quotes/[id]/accept — Accept a bulk estimate
 // ---------------------------------------------------------------------------
 
-export async function GET(
+export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -29,22 +30,33 @@ export async function GET(
 
   try {
     const { id } = await params;
-
-    const doc = await adminDb.collection("bulkQuotes").doc(id).get();
+    const docRef = adminDb.collection("bulkQuotes").doc(id);
+    const doc = await docRef.get();
 
     // Ownership + sandbox check
     if (!doc.exists || !canAccess(doc.data(), partner)) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    // Check for revision expiry
-    const data = (await applyRevisionExpiry(doc))!;
+    const accepted = await updateIfStatus(docRef, "estimated", {
+      status: "accepted",
+      acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    if (!accepted) {
+      return NextResponse.json(
+        { error: "Can only accept bulk quotes in 'estimated' status" },
+        { status: 400 }
+      );
+    }
 
-    return NextResponse.json(await serializeV1BulkQuote(doc.ref, data));
-  } catch (error) {
-    console.error("Error fetching v1 bulk quote:", error);
+    const updatedDoc = await docRef.get();
     return NextResponse.json(
-      { error: "Failed to fetch bulk quote" },
+      await serializeV1BulkQuote(docRef, updatedDoc.data()!)
+    );
+  } catch (error) {
+    console.error("Error accepting v1 bulk quote:", error);
+    return NextResponse.json(
+      { error: "Failed to accept bulk quote" },
       { status: 500 }
     );
   }
