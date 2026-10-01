@@ -94,12 +94,12 @@ export async function GET(request: NextRequest) {
         items.push({
           id: doc.id,
           type: "bulkQuote",
-          deviceCount: data.items?.length ?? 0,
-          totalNZD: data.totalNZD ?? null,
+          deviceCount: data.totalDevices ?? 0,
+          totalNZD: data.revisedTotalNZD ?? data.totalIndicativeNZD ?? null,
           status: data.status,
           partnerMode: data.partnerMode ?? null,
-          customerName: data.customerName ?? data.businessName ?? null,
-          customerEmail: data.customerEmail ?? null,
+          customerName: data.contactName ?? data.businessName ?? null,
+          customerEmail: data.contactEmail ?? null,
           createdAt: serializeTimestamp(data.createdAt),
         });
       });

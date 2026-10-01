@@ -105,8 +105,8 @@ export async function GET(request: NextRequest) {
       recentItems.push({
         id: doc.id,
         type: "bulkQuote",
-        deviceCount: data.items?.length ?? 0,
-        totalNZD: data.totalNZD ?? null,
+        deviceCount: data.totalDevices ?? 0,
+        totalNZD: data.revisedTotalNZD ?? data.totalIndicativeNZD ?? null,
         status: data.status,
         partnerMode: data.partnerMode ?? null,
         createdAt: serializeTimestamp(data.createdAt),
