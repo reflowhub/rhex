@@ -3,7 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requirePartner } from "@/lib/partner-auth";
 import { PartnerSession } from "@/lib/partner-auth";
-import { checkRevisionExpiry } from "@/lib/revision-expiry";
+import { applyRevisionExpiry } from "@/lib/revision-expiry";
 
 // ---------------------------------------------------------------------------
 // GET /api/partner/quotes/[id] — Get a single quote, verify ownership
@@ -20,16 +20,17 @@ export async function GET(
   try {
     const { id } = await params;
 
-    // Check for revision expiry
-    await checkRevisionExpiry("quotes", id);
-
     // Try single quote first
     const quoteDoc = await adminDb.collection("quotes").doc(id).get();
     if (quoteDoc.exists) {
-      const data = quoteDoc.data()!;
-      if (data.partnerId !== partner.id) {
+      const raw = quoteDoc.data()!;
+      // Sandbox quotes are hidden from the partner portal
+      if (raw.partnerId !== partner.id || raw.sandbox === true) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
+
+      // Check for revision expiry
+      const data = (await applyRevisionExpiry(quoteDoc))!;
 
       // Fetch device info
       let device: Record<string, unknown> | null = null;
@@ -79,21 +80,16 @@ export async function GET(
     const bulkDoc = await adminDb.collection("bulkQuotes").doc(id).get();
     if (bulkDoc.exists) {
       const data = bulkDoc.data()!;
-      if (data.partnerId !== partner.id) {
+      if (data.partnerId !== partner.id || data.sandbox === true) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
 
+      // The portal redirects bulk quotes to /partner/estimate/[id], which
+      // loads the full detail from /api/partner/estimate/[id]
       return NextResponse.json({
         id: bulkDoc.id,
         type: "bulkQuote",
-        items: data.items ?? [],
-        totalNZD: data.totalNZD ?? null,
         status: data.status,
-        partnerMode: data.partnerMode ?? null,
-        customerName: data.customerName ?? data.businessName ?? null,
-        customerEmail: data.customerEmail ?? null,
-        createdAt: serializeTimestamp(data.createdAt),
-        acceptedAt: serializeTimestamp(data.acceptedAt),
       });
     }
 

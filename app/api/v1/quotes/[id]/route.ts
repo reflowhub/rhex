@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import { requireApiKey, ApiKeyPartner } from "@/lib/api-key-auth";
+import { requireApiKey, ApiKeyPartner, canAccess } from "@/lib/api-key-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { checkRevisionExpiry } from "@/lib/revision-expiry";
+import { applyRevisionExpiry } from "@/lib/revision-expiry";
 
 // ---------------------------------------------------------------------------
 // GET /api/v1/quotes/[id] — Get quote status with device info
@@ -29,21 +29,15 @@ export async function GET(
   try {
     const { id } = await params;
 
-    // Check for revision expiry
-    await checkRevisionExpiry("quotes", id);
-
     const quoteDoc = await adminDb.collection("quotes").doc(id).get();
 
-    if (!quoteDoc.exists) {
+    // Ownership + sandbox check
+    if (!quoteDoc.exists || !canAccess(quoteDoc.data(), partner)) {
       return NextResponse.json({ error: "Quote not found" }, { status: 404 });
     }
 
-    const quoteData = quoteDoc.data()!;
-
-    // Ownership check
-    if (quoteData.partnerId !== partner.id) {
-      return NextResponse.json({ error: "Quote not found" }, { status: 404 });
-    }
+    // Check for revision expiry
+    const quoteData = (await applyRevisionExpiry(quoteDoc))!;
 
     // Fetch device info
     let device = null;

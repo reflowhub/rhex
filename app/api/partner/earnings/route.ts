@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
 
       paidQuotes.docs.forEach((doc) => {
         const data = doc.data();
-        if (data.partnerMode === "B" && data.status === "paid") {
+        if (data.partnerMode === "B" && data.status === "paid" && data.sandbox !== true) {
           items.push({
             id: doc.id,
             type: "settlement",
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
 
       paidBulk.docs.forEach((doc) => {
         const data = doc.data();
-        if (data.partnerMode === "B" && data.status === "paid") {
+        if (data.partnerMode === "B" && data.status === "paid" && data.sandbox !== true) {
           items.push({
             id: doc.id,
             type: "bulkSettlement",

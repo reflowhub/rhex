@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
-import { requireApiKey, ApiKeyPartner } from "@/lib/api-key-auth";
+import { requireApiKey, ApiKeyPartner, canAccess } from "@/lib/api-key-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 // ---------------------------------------------------------------------------
@@ -41,7 +41,7 @@ export async function PUT(
     const quoteRef = adminDb.collection("quotes").doc(id);
     const quoteDoc = await quoteRef.get();
 
-    if (!quoteDoc.exists || quoteDoc.data()!.partnerId !== partner.id) {
+    if (!quoteDoc.exists || !canAccess(quoteDoc.data(), partner)) {
       return NextResponse.json({ error: "Quote not found" }, { status: 404 });
     }
 
