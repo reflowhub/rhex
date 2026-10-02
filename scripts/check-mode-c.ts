@@ -6,7 +6,9 @@
  * (502 → retried, 401 → failed, admin retry), exactly-once queuing under
  * concurrency, missing config, and which customer emails go out (co-branded
  * Mode C emails and the partner's switches; checked from the mailer's log,
- * so it needs RESEND_API_KEY unset). Creates its own data and deletes it
+ * so it needs RESEND_API_KEY unset), the public quote data behind the
+ * co-branded quote page, and the feedback raffle refusing partner quotes
+ * (Mode B and C). Creates its own data and deletes it
  * afterwards, restoring the trade-in counters.
  *
  * Usage: npx tsx scripts/check-mode-c.ts   (refuses to run unless .env.local
@@ -76,6 +78,22 @@ async function main() {
   const { TRADEIN_TERMS_VERSION } = await import("../lib/tradein-terms");
   const { v1QuoteStatus } = await import("../lib/v1-quote");
   const { sendRevisionReminder } = await import("../lib/revision-reminder");
+  const { returningReason } = await import("../lib/returning-reason");
+  const { NextRequest } = await import("next/server");
+  const quoteRoute = await import("../app/api/quote/[id]/route");
+  const feedbackRoute = await import("../app/api/feedback/[quoteId]/route");
+  /** GET /api/quote/{id}, as the customer's quote page loads it */
+  const publicQuote = async (id: string): Promise<Record<string, unknown>> =>
+    (await quoteRoute.GET(new NextRequest(`http://localhost/api/quote/${id}`), { params: Promise.resolve({ id }) })).json();
+  /** Status of the feedback raffle endpoint for a quote (POST with a valid rating) */
+  const feedbackStatus = async (quoteId: string, method: "GET" | "POST") => {
+    const req = new NextRequest(`http://localhost/api/feedback/${quoteId}`, {
+      method,
+      ...(method === "POST" && { body: JSON.stringify({ rating: 5 }) }),
+    });
+    const res = await feedbackRoute[method](req, { params: Promise.resolve({ quoteId }) });
+    return res.status;
+  };
   const adminUser = { uid: "mode-c-test", email: "mode-c-test@rhex.local" };
   const testEmail = "mode-c-e2e@example.com";
   const sandboxInbox = "mode-c-sandbox@example.com";
@@ -197,6 +215,24 @@ async function main() {
     check("settlement saved, no payout", d.settlement?.amount === 180 && d.settlement?.partnerId === partnerRef.id && !d.payout);
     check(`v1 reports "completed" (${v1QuoteStatus(d)})`, v1QuoteStatus(d) === "completed");
 
+    // --- Public quote page data and feedback raffle (2c) -----------------
+    await partnerRef.update({ emailBrand: { displayName: "E2E Brand", logoUrl: "https://example.com/logo.png" } });
+    const pub = await publicQuote(q.id);
+    check(
+      `public quote: partner brand (${JSON.stringify(pub.partner)})`,
+      JSON.stringify(pub.partner) ===
+        JSON.stringify({ mode: "C", name: "E2E Brand", logoUrl: "https://example.com/logo.png", supportEmail: "support@reflowhub.com", supportPhone: null })
+    );
+    check(
+      "public quote: no partner ID, pricing or payout details",
+      !["partnerId", "partnerMode", "publicPriceNZD", "settlement", "paymentMethod", "payIdPhone", "bankAccountNumber"].some((k) => k in pub)
+    );
+    check("feedback GET: 404 for Mode C", (await feedbackStatus(q.id, "GET")) === 404);
+    check("feedback POST: 404 for Mode C", (await feedbackStatus(q.id, "POST")) === 404);
+    const consumer = await mkQuote({ partnerId: null, partnerMode: null, source: "web", status: "paid" });
+    check("public quote: no partner for a consumer quote", !("partner" in (await publicQuote(consumer.id))));
+    check("feedback GET: still open to consumers", (await feedbackStatus(consumer.id, "GET")) === 200);
+
     // --- Sandbox Mode C: re-quote declined --------------------------------
     const s = await mkQuote({ sandbox: true });
     check("sandbox accept", (await transitionQuote(s.id, "accepted", { ...apiKey, payload: accept })).ok);
@@ -219,6 +255,7 @@ async function main() {
     check("partner can't answer the re-quote", !partnerAnswers.ok && partnerAnswers.code === "forbidden");
     check("customer declines", (await transitionQuote(s.id, "returning", { actor: "customer" })).ok);
     check("email: returning (declined)", sentTo(emailsSince(), "Your trade-in won't go ahead", sandboxInbox));
+    check("public quote: page shows declined", returningReason(await publicQuote(s.id)) === "declined");
     const declined = stub.received.filter((r) => r.quoteId === s.id);
     check(
       `sandbox result to staging: revised AUD price + grade, not accepted (${JSON.stringify(declined[0]?.body)})`,
@@ -233,6 +270,11 @@ async function main() {
     emailsSince();
     await transitionQuote(f.id, "returning", { ...admin, reason: "iCloud locked" });
     check("email: returning (rejected by RHEX)", sentTo(emailsSince(), "Your trade-in won't go ahead"));
+    const rejectedPub = await publicQuote(f.id);
+    check(
+      "public quote: page shows rejected, never the admin's reason",
+      returningReason(rejectedPub) === "rejected" && !JSON.stringify(rejectedPub).includes("iCloud locked")
+    );
     let [n] = await notificationsFor(f.id);
     let nd = n.data();
     check(`502 → pending with backoff (${nd.status}, attempts ${nd.attempts})`, nd.status === "pending" && nd.attempts === 1 && nd.lastStatusCode === 502);
@@ -300,6 +342,8 @@ async function main() {
     d = (await b.get()).data()!;
     check("Mode B: no customer record", !d.customerId);
     check("Mode B: no partner result", (await notificationsFor(b.id)).length === 0);
+    await b.update({ status: "paid" });
+    check("feedback GET: 404 for Mode B", (await feedbackStatus(b.id, "GET")) === 404);
   } finally {
     console.log = log;
     stub.close();

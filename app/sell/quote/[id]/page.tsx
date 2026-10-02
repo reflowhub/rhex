@@ -40,6 +40,7 @@ import {
   type AuAddressInput,
 } from "@/lib/au-address";
 import { TIMELINE_STEP_LABELS, type TimelineEntry } from "@/lib/quote-timeline";
+import { returningReason } from "@/lib/returning-reason";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -101,6 +102,18 @@ interface QuoteData {
   revisedDeviceStorage?: string;
   revisedAt?: string;
   revisionExpiresAt?: string;
+  revisionRejectedAt?: string;
+  revisionAutoExpired?: boolean;
+  /** Mode C only: the partner's brand. The partner refunds the customer. */
+  partner?: PartnerBrand;
+}
+
+interface PartnerBrand {
+  mode: "C";
+  name: string;
+  logoUrl: string | null;
+  supportEmail: string;
+  supportPhone: string | null;
 }
 
 interface CompetitorOffer {
@@ -168,6 +181,7 @@ export default function QuoteResultPage({
     if (
       !quote ||
       quote.status !== "quoted" ||
+      quote.partner ||
       quote.displayCurrency !== "AUD" ||
       !quote.device
     ) {
@@ -341,6 +355,10 @@ export default function QuoteResultPage({
     }
   };
 
+  // Mode C: co-branded; the partner accepts at checkout and refunds the
+  // customer, so no accept form, payout details or links to /sell
+  const partner = quote?.partner ?? null;
+
   // Only an open quote can be accepted
   const isQuoted = quote?.status === "quoted";
 
@@ -425,24 +443,28 @@ export default function QuoteResultPage({
       }}
     >
       {/* Header */}
-      <header className="border-b bg-card">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-          <Button variant="ghost" size="sm" onClick={() => router.push("/sell")}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-          <Link href="/sell" className="flex items-center gap-2">
-            <Image
-              src="/logo-rhex.svg"
-              alt="rhex"
-              width={24}
-              height={24}
-              className="h-6 w-6"
-            />
-            <span className="text-sm font-bold tracking-tight">rhex trade-in</span>
-          </Link>
-        </div>
-      </header>
+      {partner ? (
+        <PartnerHeader partner={partner} />
+      ) : (
+        <header className="border-b bg-card">
+          <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
+            <Button variant="ghost" size="sm" onClick={() => router.push("/sell")}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+            <Link href="/sell" className="flex items-center gap-2">
+              <Image
+                src="/logo-rhex.svg"
+                alt="rhex"
+                width={24}
+                height={24}
+                className="h-6 w-6"
+              />
+              <span className="text-sm font-bold tracking-tight">rhex trade-in</span>
+            </Link>
+          </div>
+        </header>
+      )}
 
       <div className="mx-auto max-w-lg px-4 py-8">
         {/* Accepted / posted: waiting for the device */}
@@ -550,15 +572,25 @@ export default function QuoteResultPage({
               </div>
             </div>
 
-            {quote.revisionExpiresAt && (
+            {partner ? (
               <p className="text-xs text-amber-600 mb-4">
-                Please respond by{" "}
-                {new Date(quote.revisionExpiresAt).toLocaleDateString(
-                  "en-NZ",
-                  { year: "numeric", month: "long", day: "numeric" }
-                )}
-                . If no response, your device will be returned.
+                If you accept, {partner.name} will refund $
+                {payableAmount(quote).amount.toFixed(2)}{" "}
+                {payableAmount(quote).currency} to your original payment
+                method once your trade-in is approved. If you decline
+                {quote.revisionExpiresAt
+                  ? `, or we don't hear from you by ${formatCustomerDate(quote.revisionExpiresAt)}`
+                  : ""}
+                , we&apos;ll post your device back to you at no cost and{" "}
+                {partner.name} won&apos;t refund a trade-in value.
               </p>
+            ) : (
+              quote.revisionExpiresAt && (
+                <p className="text-xs text-amber-600 mb-4">
+                  Please respond by {formatCustomerDate(quote.revisionExpiresAt)}
+                  . If no response, your device will be returned.
+                </p>
+              )
             )}
 
             <div className="flex gap-3">
@@ -572,7 +604,7 @@ export default function QuoteResultPage({
                 {revisionLoading ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
-                Accept Revised Offer
+                {partner ? "Accept revised offer" : "Accept Revised Offer"}
               </Button>
               <Button
                 variant="outline"
@@ -582,7 +614,7 @@ export default function QuoteResultPage({
                 }
                 disabled={revisionLoading}
               >
-                Reject &amp; Return Device
+                {partner ? "Decline and return my device" : "Reject & Return Device"}
               </Button>
             </div>
           </div>
@@ -592,14 +624,34 @@ export default function QuoteResultPage({
         {quote.status === "returning" && (
           <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4">
             <div className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-blue-600" />
+              <Package className="h-5 w-5 shrink-0 text-blue-600" />
               <div>
                 <p className="font-semibold text-blue-800">
                   Device Being Returned
                 </p>
                 <p className="text-sm text-blue-700 mt-1">
-                  Your device is being prepared for return. We will send it
-                  back to the shipping address on file.
+                  {partner ? (
+                    <>
+                      {
+                        {
+                          declined:
+                            "You declined the revised offer, so we're posting your device back to you at no cost.",
+                          expired:
+                            "We didn't hear back about the revised offer, so we're posting your device back to you at no cost.",
+                          rejected:
+                            "We're unable to accept your device for trade-in, so we're posting it back to you at no cost.",
+                        }[returningReason(quote)]
+                      }{" "}
+                      This trade-in won&apos;t go ahead, and {partner.name}{" "}
+                      won&apos;t refund a trade-in value for it. We&apos;ll
+                      email you the tracking number once it&apos;s on its way.
+                    </>
+                  ) : (
+                    <>
+                      Your device is being prepared for return. We will send
+                      it back to the shipping address on file.
+                    </>
+                  )}
                 </p>
               </div>
             </div>
@@ -614,7 +666,8 @@ export default function QuoteResultPage({
               We didn&apos;t receive your device in time, so this trade-in has
               been closed and its shipping label cancelled. Please don&apos;t
               use the label. If you&apos;ve already posted your device, contact
-              us with your postage receipt.
+              us{partner && <> at <SupportEmailLink partner={partner} /></>}{" "}
+              with your postage receipt.
             </p>
           </div>
         )}
@@ -638,23 +691,48 @@ export default function QuoteResultPage({
                 <p className="font-semibold">Trade-In Cancelled</p>
                 <p className="text-sm text-muted-foreground mt-1">
                   This trade-in has been cancelled. If you think this is a
-                  mistake, please contact us.
+                  mistake, please contact us
+                  {partner && <> at <SupportEmailLink partner={partner} /></>}.
                 </p>
               </div>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-3"
-              onClick={() => router.push("/sell")}
-            >
-              Get a New Quote
-            </Button>
+            {!partner && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-3"
+                onClick={() => router.push("/sell")}
+              >
+                Get a New Quote
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Mode C paid — terminal: approved, the partner refunds. Wording
+            agreed in docs/partners/OPPO.md (2b); never shows bonus amounts. */}
+        {quote.status === "paid" && partner && (
+          <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4">
+            <div className="flex items-center gap-2">
+              <Check className="h-5 w-5 shrink-0 text-green-600" />
+              <div>
+                <p className="font-semibold text-green-800">Approved</p>
+                <p className="text-sm text-green-700">
+                  Your trade-in value of ${payableAmount(quote).amount.toFixed(2)}{" "}
+                  {payableAmount(quote).currency} is approved.{" "}
+                  {partner.name} will refund $
+                  {payableAmount(quote).amount.toFixed(2)}{" "}
+                  {payableAmount(quote).currency} to your original payment
+                  method. Any {partner.name} bonus credit is applied by{" "}
+                  {partner.name} under its promotion terms.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
         {/* Paid — terminal */}
-        {quote.status === "paid" && (
+        {quote.status === "paid" && !partner && (
           <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4">
             <div className="flex items-center gap-2">
               <Check className="h-5 w-5 shrink-0 text-green-600" />
@@ -680,14 +758,15 @@ export default function QuoteResultPage({
         {quote.status === "inspected" && (
           <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4">
             <div className="flex items-center gap-2">
-              <Check className="h-5 w-5 text-green-600" />
+              <Check className="h-5 w-5 shrink-0 text-green-600" />
               <div>
                 <p className="font-semibold text-green-800">
                   Quote Confirmed
                 </p>
                 <p className="text-sm text-green-700">
-                  Your trade-in has been inspected and confirmed. Payment
-                  will be processed shortly.
+                  {partner
+                    ? "Your trade-in has been inspected and confirmed. We'll email you once it's approved."
+                    : "Your trade-in has been inspected and confirmed. Payment will be processed shortly."}
                 </p>
               </div>
             </div>
@@ -729,7 +808,13 @@ export default function QuoteResultPage({
             return (
               <div className="mb-6 rounded-lg bg-primary/5 p-6 text-center">
                 <p className="text-sm text-muted-foreground">
-                  {isFinal ? "Final Price" : "Your Quote"}
+                  {partner
+                    ? isFinal
+                      ? "Final Trade-In Value"
+                      : "Trade-In Value"
+                    : isFinal
+                      ? "Final Price"
+                      : "Your Quote"}
                 </p>
                 <p className="mt-1 text-4xl font-bold text-primary">
                   ${shown.amount.toFixed(2)}
@@ -778,8 +863,18 @@ export default function QuoteResultPage({
             </div>
           )}
 
+          {/* Mode C open quote: the partner accepts it at checkout */}
+          {partner && isQuoted && !isExpired && (
+            <div className="mb-6 rounded-lg border p-3">
+              <p className="text-sm text-muted-foreground">
+                This trade-in is confirmed when you complete your order with{" "}
+                {partner.name}.
+              </p>
+            </div>
+          )}
+
           {/* Expiry Notice */}
-          {isQuoted && !isExpired && (
+          {!partner && isQuoted && !isExpired && (
             <div className="mb-6 flex items-center gap-2 rounded-lg border p-3">
               <Clock className="h-4 w-4 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
@@ -791,7 +886,16 @@ export default function QuoteResultPage({
             </div>
           )}
 
-          {isExpired && (
+          {partner && isExpired && (
+            <div className="mb-6 rounded-lg border border-destructive/20 bg-destructive/5 p-4">
+              <p className="text-sm text-destructive font-medium">
+                This quote expired before your order with {partner.name} was
+                completed.
+              </p>
+            </div>
+          )}
+
+          {!partner && isExpired && (
             <div className="mb-6 rounded-lg border border-destructive/20 bg-destructive/5 p-4">
               <p className="text-sm text-destructive font-medium">
                 This quote has expired. Prices may have changed.
@@ -821,8 +925,8 @@ export default function QuoteResultPage({
             </div>
           )}
 
-          {/* Accept Button */}
-          {isQuoted && !isExpired && !showAcceptForm && (
+          {/* Accept Button (Mode C partners accept through the API) */}
+          {!partner && isQuoted && !isExpired && !showAcceptForm && (
             <Button
               className="w-full"
               size="lg"
@@ -834,7 +938,7 @@ export default function QuoteResultPage({
           )}
 
           {/* Accept Form */}
-          {showAcceptForm && isQuoted && (
+          {!partner && showAcceptForm && isQuoted && (
             <form onSubmit={handleAcceptQuote} className="space-y-4">
               <div className="mb-2 border-t pt-4">
                 <h3 className="font-semibold">Your Details</h3>
@@ -1126,7 +1230,9 @@ export default function QuoteResultPage({
                               : "text-muted-foreground"
                           )}
                         >
-                          {TIMELINE_STEP_LABELS[entry.step] ?? entry.step}
+                          {partner && entry.step === "paid"
+                            ? "Approved"
+                            : TIMELINE_STEP_LABELS[entry.step] ?? entry.step}
                         </span>
                         <span className="shrink-0 text-xs text-muted-foreground">
                           {formatCustomerDate(entry.at)}
@@ -1139,14 +1245,15 @@ export default function QuoteResultPage({
             )}
 
             {/* Google Review Prompt */}
-            {process.env.NEXT_PUBLIC_GOOGLE_PLACE_ID &&
+            {!partner &&
+              process.env.NEXT_PUBLIC_GOOGLE_PLACE_ID &&
               (isAwaitingDevice || quote.status === "paid") && (
               <div className="rounded-xl border bg-card p-6 shadow-sm text-center">
                 <p className="text-sm text-muted-foreground mb-1">
                   Had a good experience?
                 </p>
                 <p className="font-semibold mb-3">
-                  We'd love your feedback on Google!
+                  We&apos;d love your feedback on Google!
                 </p>
                 <a
                   href={`https://search.google.com/local/writereview?placeid=${process.env.NEXT_PUBLIC_GOOGLE_PLACE_ID}`}
@@ -1169,16 +1276,71 @@ export default function QuoteResultPage({
             )}
 
             {/* New Quote Button */}
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => router.push("/sell")}
-            >
-              Trade in another device
-            </Button>
+            {!partner && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => router.push("/sell")}
+              >
+                Trade in another device
+              </Button>
+            )}
           </div>
+        )}
+
+        {partner && (
+          <p className="mt-8 text-center text-sm text-muted-foreground">
+            Questions? Email <SupportEmailLink partner={partner} />
+            {partner.supportPhone && (
+              <>
+                {" "}or call{" "}
+                <a
+                  href={`tel:${partner.supportPhone.replace(/[^+0-9]/g, "")}`}
+                  className="underline underline-offset-4 hover:text-primary"
+                >
+                  {partner.supportPhone}
+                </a>
+              </>
+            )}
+            .
+          </p>
         )}
       </div>
     </main>
+  );
+}
+
+/** Mode C header: the partner's logo (or name), no links back to /sell. */
+function PartnerHeader({ partner }: { partner: PartnerBrand }) {
+  return (
+    <header className="border-b bg-card">
+      <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4">
+        {partner.logoUrl ? (
+          // Partner logos can be on any https host, outside next/image's remotePatterns
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={partner.logoUrl}
+            alt={partner.name}
+            className="h-7 w-auto max-w-[160px] object-contain"
+          />
+        ) : (
+          <span className="text-sm font-bold tracking-tight">{partner.name}</span>
+        )}
+        <span className="text-xs text-muted-foreground">
+          Trade-in powered by Reflow Hub
+        </span>
+      </div>
+    </header>
+  );
+}
+
+function SupportEmailLink({ partner }: { partner: PartnerBrand }) {
+  return (
+    <a
+      href={`mailto:${partner.supportEmail}`}
+      className="underline underline-offset-4 hover:text-primary"
+    >
+      {partner.supportEmail}
+    </a>
   );
 }

@@ -10,6 +10,7 @@ import {
 import { deviceLabel, sendQuoteEmail } from "@/lib/quote-email";
 import { formatCustomerDate } from "@/lib/label-deadlines";
 import { originalAmount, payableAmount } from "@/lib/quote-money";
+import { returningReason } from "@/lib/returning-reason";
 import { queueLabelRefund } from "@/lib/shipping-labels";
 import { getRevisionResponseDays } from "@/lib/tradein-settings";
 import QuoteAcceptedEmail from "@/emails/quote-accepted";
@@ -18,7 +19,7 @@ import QuoteExpiredEmail from "@/emails/quote-expired";
 import QuotePaidEmail from "@/emails/quote-paid";
 import QuoteReceivedEmail from "@/emails/quote-received";
 import QuoteReturnedEmail from "@/emails/quote-returned";
-import QuoteReturningEmail, { type ReturningReason } from "@/emails/quote-returning";
+import QuoteReturningEmail from "@/emails/quote-returning";
 import QuoteRevisedEmail from "@/emails/quote-revised";
 import {
   formatSandboxTradeInRef,
@@ -331,12 +332,7 @@ async function runSideEffects(
 
         case "returning_email": {
           if (!customerEmail) break;
-          const reason: ReturningReason =
-            quote.revisionAutoExpired === true
-              ? "expired"
-              : quote.revisionRejectedAt
-                ? "declined"
-                : "rejected";
+          const reason = returningReason(quote);
           const revisionEnd = toDate(quote.revisionExpiresAt);
           await sendQuoteEmail(quote, "returning", async (brand) => ({
             to: customerEmail,

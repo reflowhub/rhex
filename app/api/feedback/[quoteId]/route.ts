@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { isModeB, isModeC } from "@/lib/quote-transitions";
+
+/**
+ * Paid quotes can be rated and enter the raffle, except partner quotes in
+ * Mode B or C: RHEX doesn't run the raffle for partners' customers.
+ */
+function canGiveFeedback(data: FirebaseFirestore.DocumentData): boolean {
+  return data.status === "paid" && !isModeB(data) && !isModeC(data);
+}
 
 // GET /api/feedback/[quoteId] — Check feedback status + load quote context
 export async function GET(
@@ -11,7 +20,7 @@ export async function GET(
     const { quoteId } = await params;
 
     const quoteDoc = await adminDb.collection("quotes").doc(quoteId).get();
-    if (!quoteDoc.exists || quoteDoc.data()?.status !== "paid") {
+    if (!quoteDoc.exists || !canGiveFeedback(quoteDoc.data()!)) {
       return NextResponse.json({ error: "Quote not found" }, { status: 404 });
     }
 
@@ -86,9 +95,9 @@ export async function POST(
       );
     }
 
-    // Verify quote exists and is paid
+    // Verify quote exists, is paid and can enter
     const quoteDoc = await adminDb.collection("quotes").doc(quoteId).get();
-    if (!quoteDoc.exists || quoteDoc.data()?.status !== "paid") {
+    if (!quoteDoc.exists || !canGiveFeedback(quoteDoc.data()!)) {
       return NextResponse.json({ error: "Quote not found" }, { status: 404 });
     }
 
