@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
+import { emailBrandFor } from "@/lib/partner-config";
 import { checkQuoteExpiry } from "@/lib/quote-expiry";
 import { maskTail } from "@/lib/quote-money";
+import { isModeC } from "@/lib/quote-transitions";
 import { customerTimeline } from "@/lib/quote-timeline";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { serializeTimestamp } from "@/lib/serialize";
@@ -12,7 +14,8 @@ import { transitionQuote, transitionErrorStatus } from "@/lib/transition-quote";
 // ---------------------------------------------------------------------------
 // Anyone with the quote ID can call these endpoints, so responses only carry
 // the fields the customer pages need. Never spread the raw document: it holds
-// contact details, payout details, geo data and partner pricing.
+// contact details, payout details, geo data and partner pricing. Mode C
+// quotes add `partner` (mode and brand) and never carry payout details.
 
 const PUBLIC_FIELDS = [
   "deviceId",
@@ -69,10 +72,23 @@ async function getDeviceSummary(deviceId: unknown) {
   };
 }
 
+/**
+ * Mode C: the partner's brand for the co-branded quote page, from the same
+ * settings as its emails. Never the partner ID or pricing.
+ */
+async function getPublicPartner(partnerId: unknown) {
+  const partner =
+    typeof partnerId === "string" && partnerId
+      ? (await adminDb.collection("partners").doc(partnerId).get()).data()
+      : undefined;
+  return { mode: "C" as const, ...emailBrandFor(partner) };
+}
+
 async function toPublicQuote(
   id: string,
   data: FirebaseFirestore.DocumentData
 ): Promise<Record<string, unknown>> {
+  const modeC = isModeC(data);
   const quote: Record<string, unknown> = { id };
   for (const field of PUBLIC_FIELDS) {
     if (data[field] !== undefined) quote[field] = data[field];
@@ -80,9 +96,15 @@ async function toPublicQuote(
   for (const field of PUBLIC_TIMESTAMP_FIELDS) {
     if (data[field]) quote[field] = serializeTimestamp(data[field]);
   }
-  if (data.payIdPhone) quote.payIdPhone = maskTail(data.payIdPhone);
-  if (data.bankAccountNumber) {
-    quote.bankAccountNumber = maskTail(data.bankAccountNumber);
+  if (modeC) {
+    // The partner refunds the customer: no payout details, even stray ones
+    delete quote.paymentMethod;
+    quote.partner = await getPublicPartner(data.partnerId);
+  } else {
+    if (data.payIdPhone) quote.payIdPhone = maskTail(data.payIdPhone);
+    if (data.bankAccountNumber) {
+      quote.bankAccountNumber = maskTail(data.bankAccountNumber);
+    }
   }
   quote.hasLabel =
     typeof data.labelId === "string" &&

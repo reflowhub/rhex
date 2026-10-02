@@ -1,9 +1,7 @@
 import { Text } from "@react-email/components";
 import type { EmailBrand } from "@/lib/partner-config";
+import type { ReturningReason } from "@/lib/returning-reason";
 import TradeInLayout, { styles } from "./trade-in-layout";
-
-/** Why the device is going back: the customer's answer, no answer, or RHEX's. */
-export type ReturningReason = "declined" | "expired" | "rejected";
 
 interface QuoteReturningEmailProps {
   customerName: string;
