@@ -184,8 +184,8 @@ Cancellations send no customer email. Analytics and funnel metrics leave out `no
 ### Phase 3: expiry & reminders (findings 5, 10, 11, 16; D1, D2, D3)
 
 1. **Validity by source:** public/embed `expiresAt` = 24h; partner, v1 and admin quotes stay at 14 days.
-2. **Revision window:** move it to admin settings (7 days) and remove `REVISION_EXPIRY_DAYS` (check its current value in production first). The revised email uses the stored `revisionExpiresAt`.
-3. **Cron** `/api/cron/quote-expiry` (hourly, `CRON_SECRET`, pages of about 200, every move through the module):
+2. **Revision window:** move it to admin settings (7 days) and remove `REVISION_EXPIRY_DAYS`. It isn't set in Vercel (checked 2026-10-02), so production currently uses the 14-day code default. The revised email uses the stored `revisionExpiresAt`.
+3. **Cron** `/api/cron/quote-expiry` (hourly, `CRON_SECRET`, pages of about 200, every move through the module). It must export **`GET`**, because Vercel Cron sends GET requests; the existing cleanup cron exports only POST and returns 405 on every run.
    - `quoted` past `expiresAt` → `expired`
    - `accepted` with label, past `postByAt` + 30d → `expired` (closing email, refund queue)
    - `revised` past `revisionExpiresAt` → `returning` (`revisionAutoExpired`)
@@ -235,6 +235,13 @@ Cancellations send no customer email. Analytics and funnel metrics leave out `no
 | 5 | 2–4 | Terms change waits for legal sign-off |
 
 ## 5. Verification
+
+**Preview deployments use production services** (checked 2026-10-02). The Firebase, Resend and Stripe secret-key variables each have a single entry shared by Development, Preview and Production. GA, Clarity and Google Ads IDs are set for Preview too. So testing on a preview:
+- writes real Firestore data
+- sends real emails
+- fires analytics and ad conversion events
+
+`CRON_SECRET` is production-only, and Vercel crons only run on production. Until Preview gets its own Firebase project (e.g. rhw-dev) and its own Resend key, test with sandbox data and your own email address, and accept that test acceptances record ad conversions.
 
 - **vitest:** the transition table and guards (Phase 1).
 - **Concurrency script** against dev Firestore: the same transition called twice at once → exactly one succeeds, one email, one commission entry.
