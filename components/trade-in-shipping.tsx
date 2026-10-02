@@ -11,7 +11,13 @@ const PACKING_STEPS = [
 ];
 
 /** Post-acceptance shipping card shown on the quote page and the embed. */
-export function TradeInShippingInstructions({ quoteId }: { quoteId: string }) {
+export function TradeInShippingInstructions({
+  quoteId,
+  tradeInRef,
+}: {
+  quoteId: string;
+  tradeInRef?: string;
+}) {
   return (
     <>
       <div className="rounded-xl border bg-card p-6 shadow-sm">
@@ -30,9 +36,9 @@ export function TradeInShippingInstructions({ quoteId }: { quoteId: string }) {
             ))}
           </ul>
           <p>
-            Please include your quote reference number{" "}
+            Please include your {tradeInRef ? "trade-in" : "quote"} reference{" "}
             <span className="font-medium font-mono text-foreground">
-              {quoteId.slice(0, 8)}...
+              {tradeInRef ?? `${quoteId.slice(0, 8)}...`}
             </span>{" "}
             written on a piece of paper inside the package.
           </p>

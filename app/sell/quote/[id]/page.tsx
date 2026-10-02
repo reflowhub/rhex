@@ -688,8 +688,8 @@ export default function QuoteResultPage({
           </div>
         )}
 
-        {/* Quote Result Card */}
-        <div className="rounded-xl border bg-card p-6 shadow-sm">
+        {/* Quote Result Card (the last block has no bottom margin) */}
+        <div className="rounded-xl border bg-card p-6 shadow-sm [&>*:last-child]:mb-0">
           {/* Device Info */}
           {quote.device && (
             <div className="mb-6 flex items-center gap-3">
@@ -1093,7 +1093,10 @@ export default function QuoteResultPage({
               />
             )}
             {isAwaitingDevice && !quote.hasLabel && (
-              <TradeInShippingInstructions quoteId={quote.id} />
+              <TradeInShippingInstructions
+                quoteId={quote.id}
+                tradeInRef={quote.tradeInRef}
+              />
             )}
 
             {/* Timeline (statusHistory, as {step, at} only) */}
