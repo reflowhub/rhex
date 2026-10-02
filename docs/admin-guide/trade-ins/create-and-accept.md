@@ -19,11 +19,12 @@ The new quote appears at the top of the list as **Quoted**. Quotes created in ad
 Do this once the customer has agreed to the price and given you their details.
 
 1. Open the quote and click **Mark Accepted**.
-2. Fill in the customer's name, email, phone and shipping address.
-3. Choose a **Payment method**:
+2. Fill in the customer's name, email and phone.
+3. Fill in their address: street, apartment or unit (if any), suburb, state and a 4-digit postcode. Trade-ins are Australia only. If the quote already had a one-line address, it's shown under the fields as "On file" so you can copy it across.
+4. Choose a **Payment method**:
    - **PayID**: enter their PayID phone number.
    - **Bank Transfer**: enter the BSB, account number and account name.
-4. Click **Accept Quote**.
+5. Click **Accept Quote**.
 
 The quote moves to **Accepted** and gets a TI- reference. It also appears in the **Awaiting label** queue.
 
@@ -32,4 +33,4 @@ The quote moves to **Accepted** and gets a TI- reference. It also appears in the
 ## If something goes wrong
 
 - **Mark Accepted isn't there.** The quote has expired or is already past this step. Create a new quote.
-- **An error lists required fields.** Every field is needed, including the payout details for the chosen method.
+- **An error lists required fields.** Every field is needed except apartment or unit, including the payout details for the chosen method.

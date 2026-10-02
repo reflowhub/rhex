@@ -268,6 +268,10 @@ export async function PUT(
       }
     }
 
+    // The customer record holds one address line, so a quote's separate
+    // address fields would be out of date; it falls back to the line
+    if ("shippingAddress" in quoteUpdate) quoteUpdate.shippingAddressParts = null;
+
     // Payout details on a finished quote record where it was (or would have
     // been) paid, so they're left alone
     const finishedQuoteUpdate = { ...quoteUpdate };

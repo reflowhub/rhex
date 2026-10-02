@@ -43,6 +43,7 @@ const PLAIN_FIELDS = [
   "customerEmail",
   "customerPhone",
   "shippingAddress",
+  "shippingAddressParts",
   "paymentMethod",
   "payIdPhone",
   "bankBSB",

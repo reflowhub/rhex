@@ -57,6 +57,7 @@ const CUSTOMER_DETAILS = {
   customerEmail: "sam@example.com",
   customerPhone: "0400000000",
   shippingAddress: "1 Test St, Sydney NSW 2000",
+  shippingAddressParts: { line1: "1 Test St", suburb: "Sydney", state: "NSW", postcode: "2000" },
   paymentMethod: "payid",
   payIdPhone: "0400000123",
 };
@@ -101,6 +102,7 @@ function validCase(
   switch (key) {
     case "quoted>accepted":
       payload.termsAccepted = true;
+      payload.shippingAddressParts = CUSTOMER_DETAILS.shippingAddressParts;
       break;
     case "accepted>received":
     case "shipped>received":
@@ -883,5 +885,57 @@ describe("returning → returned", () => {
     const plan = planTransition(quote("returning"), "returned", ctx("admin"));
     if (!plan.ok) throw new Error(plan.message);
     expect(plan.update.returnTrackingNumber).toBeNull();
+  });
+});
+
+describe("acceptance address", () => {
+  const { shippingAddress: _line, shippingAddressParts: _parts, ...contact } = CUSTOMER_DETAILS;
+  const accept = (actor: "customer" | "admin" | "apiKey", payload: Record<string, unknown>) =>
+    planTransition(
+      quote("quoted"),
+      "accepted",
+      ctx(actor, { payload: { ...contact, termsAccepted: true, ...payload } })
+    );
+
+  it("stores the parts and the one-line address", () => {
+    const plan = accept("customer", {
+      shippingAddressParts: {
+        line1: " 12  Smith St ",
+        line2: "Unit 2",
+        suburb: "Sydney",
+        state: "nsw",
+        postcode: "2000",
+      },
+    });
+    if (!plan.ok) throw new Error(plan.message);
+    expect(plan.update.shippingAddressParts).toEqual({
+      line1: "12 Smith St",
+      line2: "Unit 2",
+      suburb: "Sydney",
+      state: "NSW",
+      postcode: "2000",
+    });
+    expect(plan.update.shippingAddress).toBe("12 Smith St, Unit 2, Sydney NSW 2000");
+  });
+
+  it("rejects incomplete addresses", () => {
+    const base = { line1: "12 Smith St", suburb: "Sydney", state: "NSW", postcode: "2000" };
+    for (const [change, message] of [
+      [{ suburb: "" }, "Enter your suburb"],
+      [{ state: "XX" }, "Choose your state"],
+      [{ postcode: "200" }, "Enter a 4-digit postcode"],
+    ] as const) {
+      const plan = accept("customer", { shippingAddressParts: { ...base, ...change } });
+      expect(plan.ok ? null : plan.message).toBe(message);
+    }
+  });
+
+  it("requires the parts from customers but not from the v1 API", () => {
+    const customer = accept("customer", { shippingAddress: "1 Test St, Sydney NSW 2000" });
+    expect(customer.ok ? null : customer.message).toBe("Enter your shipping address");
+    const api = accept("apiKey", { shippingAddress: "1 Test St, Sydney NSW 2000" });
+    if (!api.ok) throw new Error(api.message);
+    expect(api.update.shippingAddress).toBe("1 Test St, Sydney NSW 2000");
+    expect(api.update.shippingAddressParts).toBeUndefined();
   });
 });

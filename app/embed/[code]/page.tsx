@@ -38,6 +38,12 @@ import { formatTimeLeft } from "@/lib/quote-validity";
 import { SELL_GRADE_LABELS as GRADE_LABELS } from "@/lib/grades";
 import { hexToHSL } from "@/lib/color-utils";
 import { TradeInShippingInstructions } from "@/components/trade-in-shipping";
+import AuAddressFields from "@/components/au-address-fields";
+import {
+  EMPTY_AU_ADDRESS,
+  isAuAddressComplete,
+  type AuAddressInput,
+} from "@/lib/au-address";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -218,7 +224,7 @@ export default function EmbedWidgetPage({
   const [bankBSB, setBankBSB] = useState("");
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [bankAccountName, setBankAccountName] = useState("");
-  const [shippingAddress, setShippingAddress] = useState("");
+  const [shippingAddress, setShippingAddress] = useState<AuAddressInput>(EMPTY_AU_ADDRESS);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   // ---- Fetch partner config on mount
@@ -466,11 +472,11 @@ export default function EmbedWidgetPage({
     setSubmitting(true);
     setError(null);
 
-    const body: Record<string, string | boolean> = {
+    const body: Record<string, unknown> = {
       customerName,
       customerEmail,
       customerPhone,
-      shippingAddress,
+      shippingAddressParts: shippingAddress,
       paymentMethod,
       termsAccepted,
     };
@@ -541,7 +547,7 @@ export default function EmbedWidgetPage({
     setBankBSB("");
     setBankAccountNumber("");
     setBankAccountName("");
-    setShippingAddress("");
+    setShippingAddress(EMPTY_AU_ADDRESS);
     setTermsAccepted(false);
   };
 
@@ -1182,21 +1188,12 @@ export default function EmbedWidgetPage({
                       />
                     </div>
 
-                    <div>
-                      <Label htmlFor="w-address">Shipping Address</Label>
-                      <Input
-                        id="w-address"
-                        value={shippingAddress}
-                        onChange={(e) => setShippingAddress(e.target.value)}
-                        placeholder="123 Main St, Sydney NSW 2000"
-                        required
-                        className="mt-1"
-                      />
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Used for your shipping label and any return of your
-                        device.
-                      </p>
-                    </div>
+                    <AuAddressFields
+                      idPrefix="w-address"
+                      value={shippingAddress}
+                      onChange={setShippingAddress}
+                      hint="Australia only. Used for your shipping label and any return of your device."
+                    />
 
                     <div>
                       <Label>Payment Method</Label>
@@ -1324,7 +1321,12 @@ export default function EmbedWidgetPage({
                       <Button
                         type="submit"
                         className="flex-1"
-                        disabled={submitting || !paymentMethod || !termsAccepted}
+                        disabled={
+                          submitting ||
+                          !paymentMethod ||
+                          !termsAccepted ||
+                          !isAuAddressComplete(shippingAddress)
+                        }
                       >
                         {submitting ? (
                           <>

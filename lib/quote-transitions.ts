@@ -21,6 +21,7 @@ import {
   toQuoteCurrency,
 } from "@/lib/quote-money";
 import { TRADEIN_TERMS_VERSION } from "@/lib/tradein-terms";
+import { formatAuAddress, parseAuAddress, type AuAddress } from "@/lib/au-address";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -228,8 +229,22 @@ function applyAccept(q: QuoteData, ctx: TransitionContext): ApplyResult {
   const customerName = resolve("customerName");
   const customerEmail = resolve("customerEmail");
   const customerPhone = resolve("customerPhone");
-  const shippingAddress = resolve("shippingAddress");
   const paymentMethod = resolve("paymentMethod");
+
+  // The website and admin send an Australian address in parts; the v1 API
+  // still sends one line (Mode A/B review)
+  let shippingAddress: string | null;
+  let shippingAddressParts: AuAddress | null = null;
+  if (p.shippingAddressParts !== undefined) {
+    const parsed = parseAuAddress(p.shippingAddressParts);
+    if (!parsed.ok) return { error: parsed.error };
+    shippingAddressParts = parsed.address;
+    shippingAddress = formatAuAddress(parsed.address);
+  } else if (ctx.actor === "customer") {
+    return { error: "Enter your shipping address" };
+  } else {
+    shippingAddress = resolve("shippingAddress");
+  }
 
   if (
     !customerName ||
@@ -251,6 +266,7 @@ function applyAccept(q: QuoteData, ctx: TransitionContext): ApplyResult {
     customerPhone,
     shippingAddress,
   };
+  if (shippingAddressParts) fields.shippingAddressParts = shippingAddressParts;
 
   // Payment method is optional for Mode B (RHEX pays the partner)
   if (paymentMethod) {

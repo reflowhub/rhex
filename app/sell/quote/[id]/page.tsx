@@ -33,6 +33,12 @@ import { cn } from "@/lib/utils";
 import { originalAmount, payableAmount } from "@/lib/quote-money";
 import { formatTimeLeft } from "@/lib/quote-validity";
 import { formatCustomerDate } from "@/lib/label-deadlines";
+import AuAddressFields from "@/components/au-address-fields";
+import {
+  EMPTY_AU_ADDRESS,
+  isAuAddressComplete,
+  type AuAddressInput,
+} from "@/lib/au-address";
 import { TIMELINE_STEP_LABELS, type TimelineEntry } from "@/lib/quote-timeline";
 
 const inter = Inter({
@@ -131,7 +137,7 @@ export default function QuoteResultPage({
   const [bankBSB, setBankBSB] = useState("");
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [bankAccountName, setBankAccountName] = useState("");
-  const [shippingAddress, setShippingAddress] = useState("");
+  const [shippingAddress, setShippingAddress] = useState<AuAddressInput>(EMPTY_AU_ADDRESS);
   const [imeiInput, setImeiInput] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
 
@@ -197,11 +203,11 @@ export default function QuoteResultPage({
       payment_method: paymentMethod,
     });
 
-    const body: Record<string, string | boolean> = {
+    const body: Record<string, unknown> = {
       customerName,
       customerEmail,
       customerPhone,
-      shippingAddress,
+      shippingAddressParts: shippingAddress,
       paymentMethod,
       termsAccepted,
     };
@@ -895,20 +901,12 @@ export default function QuoteResultPage({
                 </div>
               )}
 
-              <div>
-                <Label htmlFor="address">Shipping Address</Label>
-                <Input
-                  id="address"
-                  value={shippingAddress}
-                  onChange={(e) => setShippingAddress(e.target.value)}
-                  placeholder="123 Main St, Sydney NSW 2000"
-                  required
-                  className="mt-1"
-                />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Used for your shipping label and any return of your device.
-                </p>
-              </div>
+              <AuAddressFields
+                idPrefix="address"
+                value={shippingAddress}
+                onChange={setShippingAddress}
+                hint="Australia only. Used for your shipping label and any return of your device."
+              />
 
               <div>
                 <Label>Payment Method</Label>
@@ -1032,7 +1030,12 @@ export default function QuoteResultPage({
                 <Button
                   type="submit"
                   className="flex-1"
-                  disabled={submitting || !paymentMethod || !termsAccepted}
+                  disabled={
+                    submitting ||
+                    !paymentMethod ||
+                    !termsAccepted ||
+                    !isAuAddressComplete(shippingAddress)
+                  }
                 >
                   {submitting ? (
                     <>

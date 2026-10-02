@@ -10,7 +10,7 @@ If a row looks fake (bot, test or nonsense details), [clear it out](clear-not-ge
 
 ## Send the label
 
-1. Create the label in the Australia Post portal using the customer's name and address from the quote. Download it as a PDF.
+1. Create the label in the Australia Post portal using the customer's name and address from the quote. The **Customer Details** box shows the address one line at a time (street, unit, then suburb, state and postcode), in the same order the portal asks for it. Download the label as a PDF.
 2. In **Awaiting label**, click the row to open the quote.
 3. In the **Shipping Label** box:
    - **Label PDF**: choose the PDF (must be under 900 KB).

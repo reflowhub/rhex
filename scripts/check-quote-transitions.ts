@@ -39,7 +39,7 @@ async function main() {
     created.push(ref.id);
     return ref;
   };
-  const details = { customerName: "Phase1 Test", customerEmail: "phase1-test@example.com", customerPhone: "0400000000", shippingAddress: "1 Test St", paymentMethod: "payid", payIdPhone: "0400000123", termsAccepted: true };
+  const details = { customerName: "Phase1 Test", customerEmail: "phase1-test@example.com", customerPhone: "0400000000", shippingAddressParts: { line1: "1 Test St", suburb: "Sydney", state: "NSW", postcode: "2000" }, paymentMethod: "payid", payIdPhone: "0400000123", termsAccepted: true };
 
   try {
     const q = await mkQuote();

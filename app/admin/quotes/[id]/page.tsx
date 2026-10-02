@@ -47,6 +47,14 @@ import {
   toQuoteCurrency,
 } from "@/lib/quote-money";
 import HelpLink from "@/components/admin/help-link";
+import AuAddressFields from "@/components/au-address-fields";
+import {
+  isAuAddressComplete,
+  toAuAddressInput,
+  EMPTY_AU_ADDRESS,
+  type AuAddress,
+  type AuAddressInput,
+} from "@/lib/au-address";
 import DeviceSearchSelect, {
   SelectedDevice,
 } from "@/components/admin/device-search-select";
@@ -101,6 +109,7 @@ interface Quote {
   customerEmail?: string;
   customerPhone?: string;
   shippingAddress?: string;
+  shippingAddressParts?: AuAddress | null;
   paymentMethod?: "payid" | "bank_transfer";
   payIdPhone?: string;
   bankBSB?: string;
@@ -354,11 +363,11 @@ export default function QuoteDetailPage() {
 
   // ---- accept dialog state ------------------------------------------------
   const [acceptOpen, setAcceptOpen] = useState(false);
+  const [acceptAddress, setAcceptAddress] = useState<AuAddressInput>(EMPTY_AU_ADDRESS);
   const [acceptForm, setAcceptForm] = useState({
     customerName: "",
     customerEmail: "",
     customerPhone: "",
-    shippingAddress: "",
     paymentMethod: "",
     payIdPhone: "",
     bankBSB: "",
@@ -493,13 +502,13 @@ export default function QuoteDetailPage() {
       customerName: quote.customerName ?? "",
       customerEmail: quote.customerEmail ?? "",
       customerPhone: quote.customerPhone ?? "",
-      shippingAddress: quote.shippingAddress ?? "",
       paymentMethod: quote.paymentMethod ?? "",
       payIdPhone: quote.payIdPhone ?? "",
       bankBSB: quote.bankBSB ?? "",
       bankAccountNumber: quote.bankAccountNumber ?? "",
       bankAccountName: quote.bankAccountName ?? "",
     });
+    setAcceptAddress(toAuAddressInput(quote.shippingAddressParts));
     setActionError(null);
     setAcceptOpen(true);
   };
@@ -539,7 +548,10 @@ export default function QuoteDetailPage() {
   };
 
   const handleAccept = async () => {
-    const ok = await transition("accepted", acceptForm);
+    const ok = await transition("accepted", {
+      ...acceptForm,
+      shippingAddressParts: acceptAddress,
+    });
     if (ok) setAcceptOpen(false);
   };
 
@@ -849,7 +861,23 @@ export default function QuoteDetailPage() {
               {quote.shippingAddress && (
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">Address</dt>
-                  <dd className="text-right">{quote.shippingAddress}</dd>
+                  <dd className="text-right">
+                    {quote.shippingAddressParts ? (
+                      <>
+                        <span className="block">{quote.shippingAddressParts.line1}</span>
+                        {quote.shippingAddressParts.line2 && (
+                          <span className="block">{quote.shippingAddressParts.line2}</span>
+                        )}
+                        <span className="block">
+                          {quote.shippingAddressParts.suburb}{" "}
+                          {quote.shippingAddressParts.state}{" "}
+                          {quote.shippingAddressParts.postcode}
+                        </span>
+                      </>
+                    ) : (
+                      quote.shippingAddress
+                    )}
+                  </dd>
                 </div>
               )}
 
@@ -1757,7 +1785,6 @@ export default function QuoteDetailPage() {
                 ["customerName", "Name"],
                 ["customerEmail", "Email"],
                 ["customerPhone", "Phone"],
-                ["shippingAddress", "Shipping address"],
               ] as const
             ).map(([field, label]) => (
               <div key={field} className="grid gap-1.5">
@@ -1771,6 +1798,16 @@ export default function QuoteDetailPage() {
                 />
               </div>
             ))}
+            <AuAddressFields
+              idPrefix="accept-address"
+              value={acceptAddress}
+              onChange={setAcceptAddress}
+              hint={
+                !quote.shippingAddressParts && quote.shippingAddress
+                  ? `On file: ${quote.shippingAddress}`
+                  : undefined
+              }
+            />
             <div className="grid gap-1.5">
               <Label>
                 Payment method
@@ -1834,7 +1871,10 @@ export default function QuoteDetailPage() {
             >
               Cancel
             </Button>
-            <Button onClick={handleAccept} disabled={actionLoading}>
+            <Button
+              onClick={handleAccept}
+              disabled={actionLoading || !isAuAddressComplete(acceptAddress)}
+            >
               {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Accept Quote
             </Button>
