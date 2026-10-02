@@ -3,18 +3,30 @@ import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 
 // ---------------------------------------------------------------------------
-// POST /api/cron/cleanup-reservations — Release stale reserved inventory
+// GET|POST /api/cron/cleanup-reservations — Release stale reserved inventory
 //
 // Finds inventory items that have been "reserved" for longer than the TTL
-// (30 minutes) and re-lists them. Associated pending orders are marked as
-// "expired". Called by Vercel Cron every 10 minutes.
+// and re-lists them. Associated pending orders are marked as "expired".
+// Called by Vercel Cron every 10 minutes (Vercel Cron sends GET; POST is
+// kept for manual runs).
 //
 // Auth: Bearer token matching CRON_SECRET env var.
 // ---------------------------------------------------------------------------
 
-const RESERVATION_TTL_MS = 30 * 60 * 1000; // 30 minutes
+// Stripe checkout sessions expire after 30 minutes (see buy/checkout). Wait
+// a little longer so an item is never released while its session can
+// still be paid.
+const RESERVATION_TTL_MS = 35 * 60 * 1000; // 35 minutes
+
+export async function GET(request: NextRequest) {
+  return cleanupReservations(request);
+}
 
 export async function POST(request: NextRequest) {
+  return cleanupReservations(request);
+}
+
+async function cleanupReservations(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
