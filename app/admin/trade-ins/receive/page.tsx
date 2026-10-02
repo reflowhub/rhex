@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { compressImage } from "@/lib/compress-image";
+import HelpLink from "@/components/admin/help-link";
 import { QUOTE_STATUS_LABELS, isQuoteStatus } from "@/lib/quote-status";
 
 // ---------------------------------------------------------------------------
@@ -247,7 +248,8 @@ export default function ReceiveParcelPage() {
       <h1 className="text-3xl font-bold tracking-tight">Receive Parcel</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         Scan the label barcode, or type a tracking number, TI- reference,
-        IMEI, or customer name or email.
+        IMEI, or customer name or email.{" "}
+        <HelpLink page="trade-ins/receive-parcel" />
       </p>
 
       {success && (
@@ -284,7 +286,7 @@ export default function ReceiveParcelPage() {
             <div className="rounded-lg border border-border bg-card p-6 text-center">
               <PackageX className="mx-auto h-8 w-8 text-muted-foreground" />
               <p className="mt-2 text-sm text-muted-foreground">
-                No accepted or shipped trade-in matches{" "}
+                No accepted, shipped or expired trade-in matches{" "}
                 <span className="font-mono text-foreground">{searched}</span>.
               </p>
               <Button
@@ -384,7 +386,10 @@ export default function ReceiveParcelPage() {
           onSubmit={handleLogUnmatched}
           className="mt-6 grid gap-3 rounded-lg border border-border bg-card p-6"
         >
-          <h2 className="text-lg font-semibold">Log Unmatched Parcel</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Log Unmatched Parcel</h2>
+            <HelpLink page="trade-ins/unmatched-parcel" />
+          </div>
           <p className="text-sm text-muted-foreground">
             Scan: <span className="font-mono">{searched ?? scan}</span>
           </p>
@@ -432,7 +437,10 @@ export default function ReceiveParcelPage() {
       {/* Open unmatched parcels */}
       {parcels.length > 0 && (
         <div className="mt-10">
-          <h2 className="text-lg font-semibold">Open Unmatched Parcels</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Open Unmatched Parcels</h2>
+            <HelpLink page="trade-ins/unmatched-parcel" label="Resolving parcels" />
+          </div>
           <div className="mt-3 space-y-3">
             {parcels.map((p) => (
               <div

@@ -46,6 +46,7 @@ import {
   payableAmount,
   toQuoteCurrency,
 } from "@/lib/quote-money";
+import HelpLink from "@/components/admin/help-link";
 import DeviceSearchSelect, {
   SelectedDevice,
 } from "@/components/admin/device-search-select";
@@ -131,6 +132,7 @@ interface Quote {
   heldFrom?: QuoteStatus | null;
   holdReason?: string | null;
   returnReason?: string | null;
+  returnTrackingNumber?: string | null;
   cancelReason?: CancelReason | null;
   cancelNote?: string | null;
   platform?: string;
@@ -186,7 +188,7 @@ type ReasonDialogKind = "hold" | "release" | "return" | "force";
 
 const REASON_DIALOGS: Record<
   ReasonDialogKind,
-  { title: string; description: string; label: string; submit: string }
+  { title: string; description: string; label: string; submit: string; help: string }
 > = {
   hold: {
     title: "Put Quote On Hold",
@@ -194,12 +196,14 @@ const REASON_DIALOGS: Record<
       "Use for ownership, blacklist or fraud checks (terms §3). Payment is blocked while the quote is on hold.",
     label: "Reason",
     submit: "Put On Hold",
+    help: "trade-ins/on-hold",
   },
   release: {
     title: "Release Hold",
     description: "The quote goes back to the status it was held from.",
     label: "Release note",
     submit: "Release Hold",
+    help: "trade-ins/on-hold",
   },
   return: {
     title: "Return Device",
@@ -207,6 +211,7 @@ const REASON_DIALOGS: Record<
       "The quote moves to Returning and the device is sent back to the customer.",
     label: "Reason",
     submit: "Return Device",
+    help: "trade-ins/return-device",
   },
   force: {
     title: "Accept Revision on Customer's Behalf",
@@ -214,6 +219,7 @@ const REASON_DIALOGS: Record<
       "Moves the quote to Inspected at the revised price. Record why you're accepting for the customer.",
     label: "Reason",
     submit: "Accept Revision",
+    help: "trade-ins/revised-offer",
   },
 };
 
@@ -370,6 +376,10 @@ export default function QuoteDetailPage() {
 
   // ---- mark paid dialog state ---------------------------------------------
   const [payOpen, setPayOpen] = useState(false);
+
+  // ---- mark returned dialog state -----------------------------------------
+  const [returnedOpen, setReturnedOpen] = useState(false);
+  const [returnTracking, setReturnTracking] = useState("");
 
   // ---- inspection dialog state --------------------------------------------
   const [inspectionOpen, setInspectionOpen] = useState(false);
@@ -953,6 +963,7 @@ export default function QuoteDetailPage() {
           <div className="mb-4 flex items-center gap-2">
             <Truck className="h-5 w-5 text-muted-foreground" />
             <h2 className="text-lg font-semibold">Shipping Label</h2>
+            <HelpLink page="trade-ins/send-label" className="ml-auto" />
           </div>
 
           {quote.labelId ? (
@@ -1076,6 +1087,7 @@ export default function QuoteDetailPage() {
         <div className="mb-4 flex items-center gap-2">
           <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
           <h2 className="text-lg font-semibold">Workflow</h2>
+          <HelpLink page="trade-ins" label="What each status means" className="ml-auto" />
         </div>
 
         {/* Progress stepper */}
@@ -1218,6 +1230,11 @@ export default function QuoteDetailPage() {
             <div className="flex items-center gap-2 text-muted-foreground">
               <Package className="h-4 w-4" />
               Device has been returned to customer.
+              {quote.returnTrackingNumber && (
+                <span className="font-mono text-xs">
+                  Tracking {quote.returnTrackingNumber}
+                </span>
+              )}
             </div>
           )}
           {quote.status === "expired" && (
@@ -1283,10 +1300,12 @@ export default function QuoteDetailPage() {
           )}
           {can("returned") && (
             <Button
-              onClick={() => transition("returned")}
-              disabled={actionLoading}
+              onClick={() => {
+                setReturnTracking("");
+                setActionError(null);
+                setReturnedOpen(true);
+              }}
             >
-              {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Mark Returned
             </Button>
           )}
@@ -1370,7 +1389,8 @@ export default function QuoteDetailPage() {
               Inspect the device and assign a grade. If it&apos;s worth less
               than quoted, send a revised offer for the customer/partner to
               accept. If it&apos;s as good or better, we pay the original
-              quote.
+              quote.{" "}
+              <HelpLink page="trade-ins/inspect-device" />
             </DialogDescription>
           </DialogHeader>
 
@@ -1387,9 +1407,12 @@ export default function QuoteDetailPage() {
             {/* Late arrival decision (D2, terms §5) */}
             {needsLateDecision && (
               <div className="grid gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:bg-amber-950/30">
-                <p className="font-medium text-amber-800 dark:text-amber-300">
-                  Late arrival
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="font-medium text-amber-800 dark:text-amber-300">
+                    Late arrival
+                  </p>
+                  <HelpLink page="trade-ins/late-arrival" label="How to decide" />
+                </div>
                 <p className="text-xs text-muted-foreground">
                   Post by {formatDate(quote.postByAt)}. Check the first scan
                   {quote.trackingNumber ? (
@@ -1595,7 +1618,8 @@ export default function QuoteDetailPage() {
             <DialogTitle>Confirm Payment</DialogTitle>
             <DialogDescription>
               Send the payment first, then mark the quote paid. The customer
-              gets a payment email.
+              gets a payment email.{" "}
+              <HelpLink page="trade-ins/pay-customer" />
             </DialogDescription>
           </DialogHeader>
           {(() => {
@@ -1657,6 +1681,64 @@ export default function QuoteDetailPage() {
       </Dialog>
 
       {/* ---------------------------------------------------------------- */}
+      {/* Mark Returned Dialog                                              */}
+      {/* ---------------------------------------------------------------- */}
+      <Dialog open={returnedOpen} onOpenChange={setReturnedOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark Returned</DialogTitle>
+            <DialogDescription>
+              Post the device back first. The customer is emailed that
+              it&apos;s on its way, with the tracking number if you add one.{" "}
+              <HelpLink page="trade-ins/return-device" />
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            {quote.shippingAddress && (
+              <div className="rounded-md border border-border bg-muted/50 p-3 text-sm">
+                <p className="text-muted-foreground">Return to</p>
+                <p className="mt-1">{quote.shippingAddress}</p>
+              </div>
+            )}
+            <div className="grid gap-1.5">
+              <Label htmlFor="return-tracking">Return tracking number</Label>
+              <Input
+                id="return-tracking"
+                placeholder="Optional"
+                className="font-mono"
+                value={returnTracking}
+                onChange={(e) => setReturnTracking(e.target.value)}
+              />
+            </div>
+            {actionError && (
+              <p className="text-sm text-destructive">{actionError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setReturnedOpen(false)}
+              disabled={actionLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                const ok = await transition("returned", {
+                  returnTrackingNumber: returnTracking.trim() || undefined,
+                });
+                if (ok) setReturnedOpen(false);
+              }}
+              disabled={actionLoading}
+            >
+              {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Mark Returned
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ---------------------------------------------------------------- */}
       {/* Accept Dialog                                                     */}
       {/* ---------------------------------------------------------------- */}
       <Dialog open={acceptOpen} onOpenChange={setAcceptOpen}>
@@ -1665,7 +1747,8 @@ export default function QuoteDetailPage() {
             <DialogTitle>Accept Quote</DialogTitle>
             <DialogDescription>
               Confirm the customer&apos;s contact and payout details. No email
-              is sent for admin acceptances.
+              is sent for admin acceptances.{" "}
+              <HelpLink page="trade-ins/create-and-accept" />
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-2">
@@ -1770,7 +1853,8 @@ export default function QuoteDetailPage() {
           <DialogHeader>
             <DialogTitle>Receive Device</DialogTitle>
             <DialogDescription>
-              Enter the IMEI or serial number of the device in the parcel.
+              Enter the IMEI or serial number of the device in the parcel.{" "}
+              <HelpLink page="trade-ins/receive-parcel" />
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-2">
@@ -1847,7 +1931,8 @@ export default function QuoteDetailPage() {
             <DialogHeader>
               <DialogTitle>{REASON_DIALOGS[reasonDialog.kind].title}</DialogTitle>
               <DialogDescription>
-                {REASON_DIALOGS[reasonDialog.kind].description}
+                {REASON_DIALOGS[reasonDialog.kind].description}{" "}
+                <HelpLink page={REASON_DIALOGS[reasonDialog.kind].help} />
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-2 py-2">
@@ -1893,7 +1978,8 @@ export default function QuoteDetailPage() {
             <DialogDescription>
               Cancel this quote for{" "}
               <span className="font-semibold">{deviceSummary}</span>? This
-              can&apos;t be undone and no email is sent to the customer.
+              can&apos;t be undone and no email is sent to the customer.{" "}
+              <HelpLink page="trade-ins/cancel" />
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-2">

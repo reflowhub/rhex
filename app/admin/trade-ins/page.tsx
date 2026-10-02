@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { Loader2, ScanLine, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import HelpLink from "@/components/admin/help-link";
 import { QUOTE_STATUS_LABELS, isQuoteStatus } from "@/lib/quote-status";
 import { REFUND_URGENT_DAYS } from "@/lib/label-deadlines";
 
@@ -63,6 +64,13 @@ interface Queues {
 }
 
 type Tab = "awaiting" | "overdue" | "refunds";
+
+/** Help page for each queue (docs/admin-guide/trade-ins) */
+const TAB_HELP: Record<Tab, string> = {
+  awaiting: "trade-ins/send-label",
+  overdue: "trade-ins/overdue-parcel",
+  refunds: "trade-ins/refund-labels",
+};
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -199,7 +207,8 @@ export default function TradeInOpsPage() {
             Labels to send, parcels running late and labels to refund.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <HelpLink page={TAB_HELP[tab]} className="mr-2" />
           <Button variant="outline" onClick={load} disabled={loading}>
             <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />
             Refresh
@@ -247,7 +256,8 @@ export default function TradeInOpsPage() {
               <div className="flex items-center justify-between border-b px-4 py-3">
                 <p className="text-sm text-muted-foreground">
                   Oldest first. Create the label in the AusPost portal, then
-                  upload it on the quote.
+                  upload it on the quote.{" "}
+                  <HelpLink page="trade-ins/clear-not-genuine" label="Spotting fake acceptances" />
                 </p>
                 <Button
                   variant="destructive"

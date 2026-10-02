@@ -50,6 +50,7 @@ export type SideEffect =
   | "commission"
   | "paid_email"
   | "expired_email"
+  | "returned_email"
   | "queue_label_refund"
   /** Take the quote's value off the linked customer's totalValueNZD */
   | "reverse_customer_value"
@@ -389,6 +390,21 @@ function applyAdminReturn(_q: QuoteData, ctx: TransitionContext): ApplyResult {
   return { fields: { returnReason: reason } };
 }
 
+/** returning → returned: the customer is emailed, with the return tracking number if given. */
+function applyReturned(q: QuoteData, ctx: TransitionContext): ApplyResult {
+  const tracking = str(ctx.payload?.returnTrackingNumber);
+  return withCustomerValue(
+    {
+      fields: {
+        returnTrackingNumber: tracking ? tracking.replace(/\s/g, "").toUpperCase() : null,
+      },
+      effects: ["returned_email"],
+    },
+    q,
+    "reverse_customer_value"
+  );
+}
+
 /** received → inspected: pays the original quote (D12). */
 function applyInspectAtOriginal(
   q: QuoteData,
@@ -640,8 +656,7 @@ export const TRANSITIONS: readonly Rule[] = [
     from: "returning",
     to: "returned",
     actors: ["admin"],
-    apply: (q) =>
-      withCustomerValue({ fields: {} }, q, "reverse_customer_value"),
+    apply: applyReturned,
   },
 ];
 

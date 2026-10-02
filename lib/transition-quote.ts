@@ -10,6 +10,7 @@ import { getRevisionResponseDays } from "@/lib/tradein-settings";
 import QuoteAcceptedEmail from "@/emails/quote-accepted";
 import QuoteExpiredEmail from "@/emails/quote-expired";
 import QuotePaidEmail from "@/emails/quote-paid";
+import QuoteReturnedEmail from "@/emails/quote-returned";
 import QuoteRevisedEmail from "@/emails/quote-revised";
 import {
   formatTradeInRef,
@@ -291,6 +292,24 @@ async function runSideEffects(
               customerName: (quote.customerName as string) ?? "there",
               deviceName: await deviceLabel(quote.deviceId),
               tradeInRef,
+            }),
+          });
+          break;
+        }
+
+        case "returned_email": {
+          if (!customerEmail) break;
+          const tradeInRef =
+            (quote.tradeInRef as string | undefined) ?? quoteId.slice(0, 8);
+          sendEmail({
+            to: customerEmail,
+            subject: `Your device is on its way back (${tradeInRef})`,
+            react: QuoteReturnedEmail({
+              customerName: (quote.customerName as string) ?? "there",
+              deviceName: await deviceLabel(quote.deviceId),
+              tradeInRef,
+              trackingNumber: (quote.returnTrackingNumber as string) ?? null,
+              shippingAddress: (quote.shippingAddress as string) ?? null,
             }),
           });
           break;

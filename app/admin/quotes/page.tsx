@@ -33,6 +33,7 @@ import { Loader2, Search, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useFX } from "@/lib/use-fx";
 import { GRADES, SELL_GRADE_LABELS } from "@/lib/grades";
 import Link from "next/link";
+import HelpLink from "@/components/admin/help-link";
 import {
   CANCEL_REASON_LABELS,
   QUOTE_STATUSES,
@@ -55,6 +56,7 @@ interface Quote {
   quotePriceNZD: number;
   displayCurrency: string;
   status: string;
+  tradeInRef: string | null;
   customerName: string | null;
   customerEmail: string | null;
   customerPhone: string | null;
@@ -323,15 +325,18 @@ export default function QuotesPage() {
               : `${quotes.length} quote${quotes.length !== 1 ? "s" : ""} found`}
           </p>
         </div>
-        <Button
-          onClick={() => {
-            resetCreateForm();
-            setCreateOpen(true);
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Create Quote
-        </Button>
+        <div className="flex items-center gap-4">
+          <HelpLink page="trade-ins" label="How trade-ins work" />
+          <Button
+            onClick={() => {
+              resetCreateForm();
+              setCreateOpen(true);
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Create Quote
+          </Button>
+        </div>
       </div>
 
       {/* Status filter tabs */}
@@ -373,7 +378,7 @@ export default function QuotesPage() {
         <div className="relative max-w-sm flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search by customer name or email..."
+            placeholder="Search by name, email or TI- reference..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="pl-9"
@@ -409,7 +414,7 @@ export default function QuotesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Quote ID</TableHead>
+                <TableHead>Reference</TableHead>
                 <TableHead>Device</TableHead>
                 <TableHead>Grade</TableHead>
                 <TableHead>IMEI</TableHead>
@@ -429,8 +434,12 @@ export default function QuotesPage() {
                     className="cursor-pointer"
                     onClick={() => router.push(`/admin/quotes/${quote.id}`)}
                   >
-                    <TableCell className="font-mono text-xs uppercase">
-                      {quote.id.substring(0, 8)}
+                    <TableCell className="font-mono text-xs">
+                      {quote.tradeInRef ?? (
+                        <span className="uppercase text-muted-foreground">
+                          {quote.id.substring(0, 8)}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {[quote.deviceMake, quote.deviceModel, quote.deviceStorage]
@@ -544,7 +553,8 @@ export default function QuotesPage() {
           <DialogHeader>
             <DialogTitle>Create Quote</DialogTitle>
             <DialogDescription>
-              Create a new trade-in quote for a device.
+              Create a new trade-in quote for a device.{" "}
+              <HelpLink page="trade-ins/create-and-accept" />
             </DialogDescription>
           </DialogHeader>
 

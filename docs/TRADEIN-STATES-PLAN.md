@@ -96,7 +96,7 @@ cancelled ◄────────────────┘                
 | revised → returning | customer, partner, apiKey, system | system: `revisionExpiresAt` passed (`revisionAutoExpired`) | none |
 | inspected → paid | admin | payout details present; not on hold | payout snapshot; commission (idempotent); paid email |
 | inspected → returning | admin | reason | none |
-| returning → returned | admin | none | reduce customer `totalValueNZD` |
+| returning → returned | admin | none (optional `returnTrackingNumber`) | reduce customer `totalValueNZD`; returned email (added 2026-10-02) |
 
 Every transition writes the status, the matching timestamp and a `statusHistory` entry `{from, to, actor, at, reason}`. Admin transitions are also written to `lib/audit-log.ts`. Sandbox quotes skip emails, customer linking and commission (handled once, in the module).
 

@@ -13,7 +13,7 @@ import { isQuoteStatus } from "@/lib/quote-status";
 // GET /api/admin/quotes — List all quotes with optional filters
 // Query params:
 //   ?status=   — filter by quote status
-//   ?search=   — search by customer name or email
+//   ?search=   — search by customer name or email, TI- reference or quote ID
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
@@ -108,6 +108,7 @@ export async function GET(request: NextRequest) {
         quotePriceNZD: data.quotePriceNZD,
         displayCurrency: data.displayCurrency,
         status: data.status,
+        tradeInRef: data.tradeInRef ?? null,
         customerName: data.customerName ?? null,
         customerEmail: data.customerEmail ?? null,
         customerPhone: data.customerPhone ?? null,
@@ -125,12 +126,12 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Apply in-memory search filter for customer name/email
+    // Apply in-memory search filter for customer name/email, reference or ID
     if (search) {
       quotes = quotes.filter((q) => {
-        const name = String(q.customerName ?? "").toLowerCase();
-        const email = String(q.customerEmail ?? "").toLowerCase();
-        const combined = `${name} ${email}`;
+        const combined = [q.customerName, q.customerEmail, q.tradeInRef, q.id]
+          .map((v) => String(v ?? "").toLowerCase())
+          .join(" ");
         const searchWords = search.split(/\s+/).filter(Boolean);
         return searchWords.every((word) => combined.includes(word));
       });

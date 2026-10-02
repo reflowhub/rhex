@@ -857,12 +857,31 @@ describe("customer totalValueNZD", () => {
 
   it("is untouched for quotes with no linked customer", () => {
     const plan = planTransition(quote("returning"), "returned", ctx("admin"));
-    expect(plan.ok && plan.effects).toEqual([]);
+    expect(plan.ok && plan.effects).toEqual(["returned_email"]);
     const paid = planTransition(
       quote("inspected", { ...linked, ...CUSTOMER_DETAILS }),
       "paid",
       ctx("admin")
     );
     expect(paid.ok && paid.effects).not.toContain("reverse_customer_value");
+  });
+});
+
+describe("returning → returned", () => {
+  it("emails the customer, with the return tracking number if given", () => {
+    const plan = planTransition(
+      quote("returning"),
+      "returned",
+      ctx("admin", { payload: { returnTrackingNumber: " 33ab 1234 " } })
+    );
+    if (!plan.ok) throw new Error(plan.message);
+    expect(plan.update.returnTrackingNumber).toBe("33AB1234");
+    expect(plan.effects).toContain("returned_email");
+  });
+
+  it("doesn't need a tracking number", () => {
+    const plan = planTransition(quote("returning"), "returned", ctx("admin"));
+    if (!plan.ok) throw new Error(plan.message);
+    expect(plan.update.returnTrackingNumber).toBeNull();
   });
 });

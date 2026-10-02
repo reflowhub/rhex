@@ -69,6 +69,7 @@ const PLAIN_FIELDS = [
   "holdReason",
   "releaseNote",
   "returnReason",
+  "returnTrackingNumber",
   "cancelReason",
   "cancelNote",
   "platform",

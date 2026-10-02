@@ -30,6 +30,7 @@ import {
   Trophy,
   MessageSquareCode,
   Truck,
+  CircleHelp,
 } from "lucide-react";
 
 const sidebarLinks = [
@@ -122,6 +123,11 @@ const sidebarLinks = [
     href: "/admin/visitors",
     label: "Visitors",
     icon: Globe,
+  },
+  {
+    href: "/admin/help",
+    label: "Help",
+    icon: CircleHelp,
   },
 ];
 
