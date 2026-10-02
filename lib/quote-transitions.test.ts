@@ -446,6 +446,35 @@ describe("cancellation", () => {
   });
 });
 
+describe("unused labels", () => {
+  it("go to the refund queue when an accepted quote is cancelled or expires", () => {
+    const withLabel = { labelId: "label1", labelSentAt: past(45), postByAt: past(31) };
+    const cancelled = planTransition(
+      quote("accepted", withLabel),
+      "cancelled",
+      ctx("admin", { payload: { cancelReason: "customer_request" } })
+    );
+    const expired = planTransition(quote("accepted", withLabel), "expired", ctx("system"));
+    expect(cancelled.ok && cancelled.effects).toEqual(["queue_label_refund"]);
+    expect(expired.ok && expired.effects).toEqual(["queue_label_refund"]);
+  });
+
+  it("aren't queued without a label, or once the parcel has shipped", () => {
+    const noLabel = planTransition(
+      quote("accepted"),
+      "cancelled",
+      ctx("admin", { payload: { cancelReason: "not_genuine" } })
+    );
+    const shipped = planTransition(
+      quote("shipped", { labelId: "label1" }),
+      "cancelled",
+      ctx("admin", { payload: { cancelReason: "lost_in_transit" } })
+    );
+    expect(noLabel.ok && noLabel.effects).toEqual([]);
+    expect(shipped.ok && shipped.effects).toEqual([]);
+  });
+});
+
 describe("on hold", () => {
   it("requires a reason and stores where it was held from", () => {
     expect(planTransition(quote("inspected"), "on_hold", ctx("admin")).ok).toBe(false);

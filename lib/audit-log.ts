@@ -81,6 +81,24 @@ export async function logQuoteTransition(params: {
   }
 }
 
+/** Record an admin action on a quote that isn't a status change (e.g. a label). */
+export async function logQuoteAction(params: {
+  adminUid: string;
+  adminEmail: string;
+  quoteId: string;
+  action: string;
+  details: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    await adminDb.collection("quoteAuditLog").add({
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      ...params,
+    });
+  } catch (error) {
+    console.error("Failed to write quote audit log:", error);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // createPriceSnapshot — Capture full price list state before overwrite
 // ---------------------------------------------------------------------------

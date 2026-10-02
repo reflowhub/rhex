@@ -41,7 +41,8 @@ export type SideEffect =
   | "accepted_email"
   | "revised_email"
   | "commission"
-  | "paid_email";
+  | "paid_email"
+  | "queue_label_refund";
 
 export interface StatusHistoryEntry {
   from: QuoteStatus;
@@ -310,6 +311,15 @@ function applyCancel(q: QuoteData, ctx: TransitionContext): ApplyResult {
   return { fields: { cancelReason, cancelNote: note } };
 }
 
+/** An unused label goes to the refund queue when its quote ends before shipping. */
+function withLabelRefund(result: ApplyResult, q: QuoteData): ApplyResult {
+  if ("error" in result || !q.labelId) return result;
+  return {
+    ...result,
+    effects: [...(result.effects ?? []), "queue_label_refund"],
+  };
+}
+
 function applyHold(q: QuoteData, ctx: TransitionContext): ApplyResult {
   const reason = str(ctx.reason);
   if (!reason) return { error: "A reason is required to put a quote on hold" };
@@ -435,8 +445,14 @@ export const TRANSITIONS: readonly Rule[] = [
       const deadline = postBy.getTime() + LATE_EXPIRY_GRACE_DAYS * DAY_MS;
       return deadline <= ctx.now.getTime() ? null : "Quote has not expired";
     },
+    apply: (q) => withLabelRefund({ fields: {} }, q),
   },
-  { from: "accepted", to: "cancelled", actors: ["admin"], apply: applyCancel },
+  {
+    from: "accepted",
+    to: "cancelled",
+    actors: ["admin"],
+    apply: (q, ctx) => withLabelRefund(applyCancel(q, ctx), q),
+  },
 
   { from: "shipped", to: "received", actors: ["admin"], apply: applyReceive },
   { from: "shipped", to: "cancelled", actors: ["admin"], apply: applyCancel },

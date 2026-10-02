@@ -29,6 +29,7 @@ import {
   Loader2,
   Trophy,
   MessageSquareCode,
+  Truck,
 } from "lucide-react";
 
 const sidebarLinks = [
@@ -46,6 +47,11 @@ const sidebarLinks = [
     href: "/admin/quotes",
     label: "Quotes",
     icon: FileText,
+  },
+  {
+    href: "/admin/trade-ins",
+    label: "Trade-in Ops",
+    icon: Truck,
   },
   {
     href: "/admin/bulk-quotes",

@@ -36,7 +36,10 @@ const inter = Inter({
 import { gtagEvent, gtagConversion } from "@/lib/gtag";
 import { fbPixelEvent } from "@/lib/fbpixel";
 import { SELL_GRADE_LABELS as GRADE_LABELS, GRADE_COLORS } from "@/lib/grades";
-import { TradeInShippingInstructions } from "@/components/trade-in-shipping";
+import {
+  TradeInLabelCard,
+  TradeInShippingInstructions,
+} from "@/components/trade-in-shipping";
 
 import { AlertTriangle } from "lucide-react";
 
@@ -52,6 +55,12 @@ interface QuoteData {
   createdAt: string;
   expiresAt: string;
   acceptedAt?: string;
+  tradeInRef?: string;
+  trackingNumber?: string;
+  hasLabel?: boolean;
+  labelSentAt?: string;
+  postByAt?: string;
+  shippedAt?: string;
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string;
@@ -97,6 +106,7 @@ export default function QuoteResultPage({
   const [requoting, setRequoting] = useState(false);
   const [competitors, setCompetitors] = useState<CompetitorOffer[]>([]);
   const [revisionLoading, setRevisionLoading] = useState(false);
+  const [posting, setPosting] = useState(false);
 
   // Form state
   const [customerName, setCustomerName] = useState("");
@@ -119,7 +129,7 @@ export default function QuoteResultPage({
         if (res.ok) {
           const data = await res.json();
           setQuote(data);
-          if (data.status === "accepted") {
+          if (data.status === "accepted" || data.status === "shipped") {
             setAccepted(true);
           }
         } else {
@@ -254,9 +264,31 @@ export default function QuoteResultPage({
     }
   };
 
+  const handleMarkPosted = async () => {
+    setPosting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/quote/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "mark_shipped" }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setQuote(data);
+      } else {
+        setError(data.error || "Failed to update your trade-in");
+      }
+    } catch {
+      setError("Failed to update your trade-in. Please try again.");
+    } finally {
+      setPosting(false);
+    }
+  };
+
   const handleCopyRef = () => {
     if (quote?.id) {
-      navigator.clipboard.writeText(quote.id);
+      navigator.clipboard.writeText(quote.tradeInRef ?? quote.id);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -284,6 +316,9 @@ export default function QuoteResultPage({
       setRevisionLoading(false);
     }
   };
+
+  // Only an open quote can be accepted
+  const isQuoted = quote?.status === "quoted" && !accepted;
 
   const isExpired = quote?.expiresAt
     ? new Date(quote.expiresAt) < new Date()
@@ -395,10 +430,15 @@ export default function QuoteResultPage({
                 <Check className="h-5 w-5 text-green-600" />
               </div>
               <div>
-                <p className="font-semibold text-green-800">Quote Accepted</p>
+                <p className="font-semibold text-green-800">
+                  {quote.status === "shipped" ? "On Its Way" : "Quote Accepted"}
+                </p>
                 <p className="text-sm text-green-700">
-                  Your quote has been confirmed. We&apos;ll email your prepaid
-                  shipping label shortly.
+                  {quote.status === "shipped"
+                    ? "Thanks for posting your device. We'll let you know when it arrives."
+                    : quote.hasLabel
+                    ? "Your prepaid shipping label is ready below."
+                    : "Your quote has been confirmed. We'll email your prepaid shipping label shortly."}
                 </p>
               </div>
             </div>
@@ -607,7 +647,7 @@ export default function QuoteResultPage({
           )}
 
           {/* Expiry Notice */}
-          {!accepted && !isExpired && (
+          {isQuoted && !isExpired && (
             <div className="mb-6 flex items-center gap-2 rounded-lg border p-3">
               <Clock className="h-4 w-4 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
@@ -619,7 +659,7 @@ export default function QuoteResultPage({
             </div>
           )}
 
-          {isExpired && !accepted && (
+          {isExpired && isQuoted && (
             <div className="mb-6 rounded-lg border border-destructive/20 bg-destructive/5 p-4">
               <p className="text-sm text-destructive font-medium">
                 This quote has expired. Prices may have changed.
@@ -650,7 +690,7 @@ export default function QuoteResultPage({
           )}
 
           {/* Accept Button */}
-          {!accepted && !isExpired && !showAcceptForm && (
+          {isQuoted && !isExpired && !showAcceptForm && (
             <Button
               className="w-full"
               size="lg"
@@ -662,7 +702,7 @@ export default function QuoteResultPage({
           )}
 
           {/* Accept Form */}
-          {showAcceptForm && !accepted && (
+          {showAcceptForm && isQuoted && (
             <form onSubmit={handleAcceptQuote} className="space-y-4">
               <div className="mb-2 border-t pt-4">
                 <h3 className="font-semibold">Your Details</h3>
@@ -892,11 +932,13 @@ export default function QuoteResultPage({
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <CreditCard className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold">Quote Reference</h3>
+                <h3 className="font-semibold">
+                  {quote.tradeInRef ? "Trade-In Reference" : "Quote Reference"}
+                </h3>
               </div>
               <div className="flex items-center gap-2 rounded-lg bg-muted p-3">
                 <code className="flex-1 text-sm font-mono break-all">
-                  {quote.id}
+                  {quote.tradeInRef ?? quote.id}
                 </code>
                 <Button
                   variant="ghost"
@@ -913,7 +955,19 @@ export default function QuoteResultPage({
               </div>
             </div>
 
-            <TradeInShippingInstructions quoteId={quote.id} />
+            {quote.hasLabel ? (
+              <TradeInLabelCard
+                quoteId={quote.id}
+                tradeInRef={quote.tradeInRef}
+                trackingNumber={quote.trackingNumber}
+                postByAt={quote.postByAt}
+                shippedAt={quote.status === "shipped" ? quote.shippedAt : undefined}
+                posting={posting}
+                onMarkPosted={handleMarkPosted}
+              />
+            ) : (
+              <TradeInShippingInstructions quoteId={quote.id} />
+            )}
 
             {/* Google Review Prompt */}
             {process.env.NEXT_PUBLIC_GOOGLE_PLACE_ID && (

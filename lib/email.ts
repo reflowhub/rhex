@@ -12,14 +12,21 @@ const DEFAULT_FROM = process.env.EMAIL_FROM ?? "rhex <noreply@rhex.com>";
  * Non-blocking: logs errors but never throws.
  * No-op when RESEND_API_KEY is unset (dev/CI).
  */
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+}
+
 export async function sendEmail({
   to,
   subject,
   react,
+  attachments,
 }: {
   to: string;
   subject: string;
   react: ReactElement;
+  attachments?: EmailAttachment[];
 }) {
   if (!resend) {
     console.log(`[email] skipped (no API key): "${subject}" → ${to}`);
@@ -32,6 +39,7 @@ export async function sendEmail({
       to,
       subject,
       react,
+      ...(attachments?.length && { attachments }),
     });
 
     if (error) {

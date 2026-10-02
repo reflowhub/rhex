@@ -1,4 +1,6 @@
-import { Clock, Package } from "lucide-react";
+import { Check, Clock, Download, Loader2, Package } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { formatCustomerDate } from "@/lib/label-deadlines";
 
 // Packing guidance from the trade-in terms (§6 and §8)
 const PACKING_STEPS = [
@@ -48,5 +50,94 @@ export function TradeInShippingInstructions({ quoteId }: { quoteId: string }) {
         </div>
       </div>
     </>
+  );
+}
+
+/** Shown once the label has been sent: download, post-by date, "I've posted it". */
+export function TradeInLabelCard({
+  quoteId,
+  tradeInRef,
+  trackingNumber,
+  postByAt,
+  shippedAt,
+  posting,
+  onMarkPosted,
+}: {
+  quoteId: string;
+  tradeInRef?: string;
+  trackingNumber?: string;
+  postByAt?: string;
+  /** Set once the customer (or RHEX) has marked the parcel as posted */
+  shippedAt?: string;
+  posting: boolean;
+  onMarkPosted: () => void;
+}) {
+  const reference = tradeInRef ?? quoteId.slice(0, 8);
+
+  return (
+    <div className="rounded-xl border bg-card p-6 shadow-sm">
+      <div className="mb-3 flex items-center gap-2">
+        <Package className="h-5 w-5 text-primary" />
+        <h3 className="font-semibold">Your Shipping Label</h3>
+      </div>
+      <div className="space-y-4 text-sm text-muted-foreground">
+        {!shippedAt && postByAt && (
+          <p className="rounded-lg bg-muted p-3 text-foreground">
+            Post your device by{" "}
+            <span className="font-semibold">{formatCustomerDate(postByAt)}</span>.
+          </p>
+        )}
+
+        <Button asChild className="w-full" variant={shippedAt ? "outline" : "default"}>
+          <a href={`/api/quote/${quoteId}/label`}>
+            <Download className="mr-2 h-4 w-4" />
+            Download label (PDF)
+          </a>
+        </Button>
+
+        <ol className="list-decimal space-y-1 pl-5">
+          <li>Print the label and attach it to your box.</li>
+          <li>
+            Put a note inside the box with your reference{" "}
+            <span className="font-mono font-medium text-foreground">
+              {reference}
+            </span>
+            .
+          </li>
+          <li>Drop it at any Australia Post outlet or street posting box.</li>
+        </ol>
+
+        <ul className="list-disc space-y-1 pl-5">
+          {PACKING_STEPS.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ul>
+
+        {trackingNumber && (
+          <p>
+            Tracking number:{" "}
+            <span className="font-mono text-foreground">{trackingNumber}</span>
+          </p>
+        )}
+
+        {shippedAt ? (
+          <p className="flex items-center gap-2 text-green-700">
+            <Check className="h-4 w-4" />
+            Marked as posted on {formatCustomerDate(shippedAt)}. We&apos;ll let
+            you know when it arrives.
+          </p>
+        ) : (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={onMarkPosted}
+            disabled={posting}
+          >
+            {posting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            I&apos;ve posted it
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }

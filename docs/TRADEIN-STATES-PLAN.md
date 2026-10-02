@@ -161,7 +161,7 @@ Cancellations send no customer email. Analytics and funnel metrics leave out `no
 
 ### Phase 2: shipping labels & receiving (D8, D13; findings 12, 18)
 
-1. **Storage:** private `labels/{quoteId}.pdf` path. Narrow the public read rule in `storage.rules` to the product media paths.
+1. **Storage:** production has no Firebase Storage bucket (checked 2026-10-02), so label PDFs are stored as bytes in private Firestore docs, like product images (`imageBlobs`): one `shippingLabels` doc per label (tracking, cost, `refundState`) with its PDF in `labelBlobs/{labelId}`. The quote holds its current label's fields. `storage.rules` is still narrowed to `inventory/**` for public reads.
 2. **Email:** add `attachments` to `lib/email.ts`. New `emails/quote-label.tsx` (label attached, `TI-` reference, use-by date, packing guidance, "View your trade-in" link).
 3. **Admin quote page:** upload the label PDF and enter the tracking number. Saves `trackingNumber`, `carrier: "auspost"`, `labelSentAt`, `postByAt`, `expectedByAt` and optional `labelCostAUD`, then sends the label email.
 4. **Customer quote page:**
@@ -172,13 +172,13 @@ Cancellations send no customer email. Analytics and funnel metrics leave out `no
 5. **Admin queues:**
    - **Awaiting label:** accepted, no label, oldest first, with age. Multi-select "Cancel as not genuine", for clearing bot acceptances in one go.
    - **Overdue:** past `expectedByAt`
-   - **Labels to refund:** expired/cancelled with a label and no `labelRefundedAt`; urgent at day 75; "Mark refunded" action
+   - **Labels to refund:** labels with `refundState: "pending"` (replaced, or the quote expired / was cancelled before shipping); urgent at day 75; "Mark refunded" or "Was used" (not refundable)
 6. **Receive parcel screen:**
    - scan box that works with a barcode scanner; matches on tracking number (contains), `TI-` reference, customer name/email or IMEI
    - shows the expected device and customer
    - IMEI/serial entry with a mismatch warning against the quote
    - receives the quote through the module
-   - "Log unmatched parcel" (photo, IMEI, note) → `unmatchedParcels` collection (terms §15)
+   - "Log unmatched parcel" (photo, IMEI, note) → `unmatchedParcels` collection (terms §17)
 7. Before building, test-scan one real AusPost label to confirm what the barcode contains, and check whether the portal has a label reference field (for printing the `TI-` reference).
 
 ### Phase 3: expiry & reminders (findings 5, 10, 11, 16; D1, D2, D3)

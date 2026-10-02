@@ -36,7 +36,10 @@ import {
   Package,
   History,
   PauseCircle,
+  Truck,
+  Download,
 } from "lucide-react";
+import { daysSince } from "@/lib/label-deadlines";
 import { useFX } from "@/lib/use-fx";
 import DeviceSearchSelect, {
   SelectedDevice,
@@ -122,6 +125,12 @@ interface Quote {
   geoCity?: string;
   geoRegion?: string;
   sandbox?: boolean;
+  labelId?: string | null;
+  trackingNumber?: string | null;
+  labelCostAUD?: number | null;
+  labelSentAt?: string | null;
+  postByAt?: string | null;
+  expectedByAt?: string | null;
   statusHistory: StatusHistoryEntry[];
   allowedTransitions: QuoteStatus[];
 }
@@ -306,6 +315,14 @@ export default function QuoteDetailPage() {
     bankAccountName: "",
   });
 
+  // ---- label form state ---------------------------------------------------
+  const [labelFile, setLabelFile] = useState<File | null>(null);
+  const [labelTracking, setLabelTracking] = useState("");
+  const [labelCost, setLabelCost] = useState("");
+  const [labelLoading, setLabelLoading] = useState(false);
+  const [labelError, setLabelError] = useState<string | null>(null);
+  const [labelFormKey, setLabelFormKey] = useState(0);
+
   // ---- inspection dialog state --------------------------------------------
   const [inspectionOpen, setInspectionOpen] = useState(false);
   const [inspectionGrade, setInspectionGrade] = useState<Grade | "">("");
@@ -360,6 +377,39 @@ export default function QuoteDetailPage() {
       return false;
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // ---- send or replace the shipping label ---------------------------------
+  const handleSendLabel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quote || !labelFile) return;
+    setLabelLoading(true);
+    setLabelError(null);
+    try {
+      const form = new FormData();
+      form.append("file", labelFile);
+      form.append("trackingNumber", labelTracking);
+      form.append("labelCostAUD", labelCost);
+      if (quote.labelId) form.append("replaceLabelId", quote.labelId);
+      const res = await fetch(`/api/admin/quotes/${id}/label`, {
+        method: "POST",
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setLabelError(data.error ?? "Failed to send label");
+        return;
+      }
+      setQuote(data);
+      setLabelFile(null);
+      setLabelTracking("");
+      setLabelCost("");
+      setLabelFormKey((k) => k + 1);
+    } catch {
+      setLabelError("Failed to send label");
+    } finally {
+      setLabelLoading(false);
     }
   };
 
@@ -831,6 +881,130 @@ export default function QuoteDetailPage() {
               </dd>
             </div>
           </dl>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------------------- */}
+      {/* 3c. Shipping Label                                                */}
+      {/* ---------------------------------------------------------------- */}
+      {(quote.status === "accepted" || quote.labelId) && (
+        <div className="mt-6 rounded-lg border border-border bg-card p-6">
+          <div className="mb-4 flex items-center gap-2">
+            <Truck className="h-5 w-5 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Shipping Label</h2>
+          </div>
+
+          {quote.labelId ? (
+            <dl className="grid gap-3 text-sm sm:grid-cols-2">
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Tracking</dt>
+                <dd className="font-mono text-xs">{quote.trackingNumber}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Sent</dt>
+                <dd>{formatDate(quote.labelSentAt)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Post by</dt>
+                <dd>{formatDate(quote.postByAt)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Expected by</dt>
+                <dd
+                  className={cn(
+                    (quote.status === "accepted" || quote.status === "shipped") &&
+                      quote.expectedByAt &&
+                      new Date(quote.expectedByAt) < new Date() &&
+                      "font-medium text-destructive"
+                  )}
+                >
+                  {formatDate(quote.expectedByAt)}
+                </dd>
+              </div>
+              {quote.labelCostAUD != null && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted-foreground">Cost</dt>
+                  <dd>${quote.labelCostAUD.toFixed(2)} AUD</dd>
+                </div>
+              )}
+              {(quote.status === "accepted" || quote.status === "shipped") && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted-foreground">Label</dt>
+                  <dd>
+                    <a
+                      href={`/api/quote/${quote.id}/label`}
+                      className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Download PDF
+                    </a>
+                  </dd>
+                </div>
+              )}
+            </dl>
+          ) : (
+            quote.acceptedAt && (
+              <p className="text-sm text-amber-700">
+                Awaiting label for {daysSince(quote.acceptedAt)} day
+                {daysSince(quote.acceptedAt) === 1 ? "" : "s"}. Create it in
+                the AusPost portal, then upload it here.
+              </p>
+            )
+          )}
+
+          {quote.status === "accepted" && (
+            <form
+              key={labelFormKey}
+              onSubmit={handleSendLabel}
+              className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-[1fr_1fr_8rem_auto] sm:items-end"
+            >
+              <div className="grid gap-1.5">
+                <Label htmlFor="label-file">Label PDF</Label>
+                <Input
+                  id="label-file"
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(e) => setLabelFile(e.target.files?.[0] ?? null)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="label-tracking">Tracking number</Label>
+                <Input
+                  id="label-tracking"
+                  value={labelTracking}
+                  onChange={(e) => setLabelTracking(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="label-cost">Cost (AUD)</Label>
+                <Input
+                  id="label-cost"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Optional"
+                  value={labelCost}
+                  onChange={(e) => setLabelCost(e.target.value)}
+                />
+              </div>
+              <Button
+                type="submit"
+                variant={quote.labelId ? "outline" : "default"}
+                disabled={labelLoading || !labelFile || !labelTracking.trim()}
+              >
+                {labelLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {quote.labelId ? "Replace Label" : "Send Label"}
+              </Button>
+              <p className="text-xs text-muted-foreground sm:col-span-4">
+                {quote.labelId
+                  ? "Replacing emails the new label, restarts the 14-day post-by window and queues the old label for a refund."
+                  : "The customer is emailed the label and has 14 days to post the device."}
+              </p>
+              {labelError && (
+                <p className="text-sm text-destructive sm:col-span-4">{labelError}</p>
+              )}
+            </form>
+          )}
         </div>
       )}
 

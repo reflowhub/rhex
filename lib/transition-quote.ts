@@ -4,6 +4,7 @@ import { logQuoteTransition } from "@/lib/audit-log";
 import { onQuotePaid } from "@/lib/commission-trigger";
 import { findOrCreateCustomer } from "@/lib/customer-link";
 import { sendEmail } from "@/lib/email";
+import { queueLabelRefund } from "@/lib/shipping-labels";
 import QuoteAcceptedEmail from "@/emails/quote-accepted";
 import QuotePaidEmail from "@/emails/quote-paid";
 import QuoteRevisedEmail from "@/emails/quote-revised";
@@ -274,6 +275,12 @@ async function runSideEffects(
 
         case "commission":
           await onQuotePaid(quoteId, quote);
+          break;
+
+        case "queue_label_refund":
+          if (typeof quote.labelId === "string") {
+            await queueLabelRefund(quote.labelId);
+          }
           break;
 
         case "paid_email": {

@@ -22,6 +22,7 @@ const PUBLIC_FIELDS = [
   "fxRate",
   "status",
   "tradeInRef",
+  "trackingNumber",
   "paymentMethod",
   "inspectionGrade",
   "revisedPriceNZD",
@@ -42,6 +43,10 @@ const PUBLIC_TIMESTAMP_FIELDS = [
   "revisionRejectedAt",
   "returningAt",
   "returnedAt",
+  "labelSentAt",
+  "postByAt",
+  "shippedAt",
+  "receivedAt",
 ] as const;
 
 /** Mask all but the last 3 characters, e.g. "•••• 123". */
@@ -79,6 +84,9 @@ async function toPublicQuote(
   if (data.bankAccountNumber) {
     quote.bankAccountNumber = maskTail(data.bankAccountNumber);
   }
+  quote.hasLabel =
+    typeof data.labelId === "string" &&
+    (data.status === "accepted" || data.status === "shipped");
   quote.device = await getDeviceSummary(data.deviceId);
   return quote;
 }
@@ -115,8 +123,8 @@ export async function GET(
   }
 }
 
-// PUT /api/quote/[id] — Accept a quote with customer details, or respond to
-// a revised quote
+// PUT /api/quote/[id] — Accept a quote with customer details, mark it as
+// posted, or respond to a revised quote
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -139,6 +147,23 @@ export async function PUT(
 
     if (!quoteDoc.exists || isPublicWriteBlocked(quoteDoc.data()!)) {
       return NextResponse.json({ error: "Quote not found" }, { status: 404 });
+    }
+
+    // --- "I've posted it" ---
+    if (body.action === "mark_shipped") {
+      const result = await transitionQuote(id, "shipped", { actor: "customer" });
+      if (!result.ok) {
+        return NextResponse.json(
+          {
+            error:
+              result.code === "invalid_transition"
+                ? "This trade-in can't be marked as posted"
+                : result.message,
+          },
+          { status: transitionErrorStatus(result.code) }
+        );
+      }
+      return NextResponse.json(await toPublicQuote(id, result.quote));
     }
 
     // --- Revision response ---

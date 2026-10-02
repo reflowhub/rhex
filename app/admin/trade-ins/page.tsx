@@ -1,0 +1,413 @@
+"use client";
+
+import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Loader2, ScanLine, RefreshCw } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { QUOTE_STATUS_LABELS, isQuoteStatus } from "@/lib/quote-status";
+import { REFUND_URGENT_DAYS } from "@/lib/label-deadlines";
+
+// ---------------------------------------------------------------------------
+// Types (GET /api/admin/trade-ins/queues)
+// ---------------------------------------------------------------------------
+
+interface QuoteRow {
+  id: string;
+  tradeInRef: string | null;
+  status: string;
+  customerName: string | null;
+  customerEmail: string | null;
+  device: string;
+  trackingNumber: string | null;
+  acceptedAt: string | null;
+  labelSentAt: string | null;
+  expectedByAt: string | null;
+}
+
+interface AwaitingRow extends QuoteRow {
+  waitingDays: number | null;
+}
+
+interface OverdueRow extends QuoteRow {
+  daysOverdue: number;
+}
+
+interface RefundRow {
+  labelId: string;
+  quoteId: string;
+  tradeInRef: string | null;
+  customerName: string | null;
+  trackingNumber: string;
+  costAUD: number | null;
+  sentAt: string | null;
+  ageDays: number;
+  urgent: boolean;
+  reason: string;
+}
+
+interface Queues {
+  awaitingLabel: AwaitingRow[];
+  overdue: OverdueRow[];
+  labelsToRefund: RefundRow[];
+}
+
+type Tab = "awaiting" | "overdue" | "refunds";
+
+function formatDate(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-NZ", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function days(n: number | null): string {
+  if (n === null) return "—";
+  return `${n} day${n === 1 ? "" : "s"}`;
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+export default function TradeInOpsPage() {
+  const router = useRouter();
+  const [queues, setQueues] = useState<Queues | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("awaiting");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    fetch("/api/admin/trade-ins/queues")
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to load queues");
+        setQueues(data);
+        setSelected(new Set());
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const cancelSelected = async () => {
+    if (selected.size === 0) return;
+    if (
+      !window.confirm(
+        `Cancel ${selected.size} quote${selected.size === 1 ? "" : "s"} as not genuine? This can't be undone.`
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/admin/trade-ins/cancel-not-genuine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quoteIds: Array.from(selected) }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNotice(data.error ?? "Failed to cancel quotes");
+      } else {
+        setNotice(
+          `Cancelled ${data.cancelled.length}.` +
+            (data.failed.length
+              ? ` ${data.failed.length} failed: ${data.failed
+                  .map((f: { id: string; error: string }) => `${f.id.slice(0, 8)} (${f.error})`)
+                  .join(", ")}`
+              : "")
+        );
+        load();
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resolveRefund = async (
+    labelId: string,
+    refundState: "refunded" | "not_refundable"
+  ) => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/admin/trade-ins/labels/${labelId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refundState }),
+      });
+      const data = await res.json();
+      if (!res.ok) setNotice(data.error ?? "Failed to update label");
+      else load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const tabs: { key: Tab; label: string; count: number }[] = [
+    { key: "awaiting", label: "Awaiting label", count: queues?.awaitingLabel.length ?? 0 },
+    { key: "overdue", label: "Overdue", count: queues?.overdue.length ?? 0 },
+    { key: "refunds", label: "Labels to refund", count: queues?.labelsToRefund.length ?? 0 },
+  ];
+
+  const openQuote = (id: string) => router.push(`/admin/quotes/${id}`);
+
+  return (
+    <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Trade-in Ops</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Labels to send, parcels running late and labels to refund.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={load} disabled={loading}>
+            <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />
+            Refresh
+          </Button>
+          <Button asChild>
+            <Link href="/admin/trade-ins/receive">
+              <ScanLine className="mr-2 h-4 w-4" />
+              Receive Parcel
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-6 flex flex-wrap gap-2">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={cn(
+              "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+              tab === t.key
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground"
+            )}
+          >
+            {t.label} ({t.count})
+          </button>
+        ))}
+      </div>
+
+      {notice && <p className="mt-4 text-sm text-muted-foreground">{notice}</p>}
+
+      <div className="mt-6 rounded-lg border border-border bg-card">
+        {loading && !queues ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : error ? (
+          <div className="py-20 text-center text-sm text-destructive">{error}</div>
+        ) : !queues ? null : tab === "awaiting" ? (
+          queues.awaitingLabel.length === 0 ? (
+            <Empty text="No accepted quotes are waiting for a label." />
+          ) : (
+            <>
+              <div className="flex items-center justify-between border-b px-4 py-3">
+                <p className="text-sm text-muted-foreground">
+                  Oldest first. Create the label in the AusPost portal, then
+                  upload it on the quote.
+                </p>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={busy || selected.size === 0}
+                  onClick={cancelSelected}
+                >
+                  Cancel as not genuine ({selected.size})
+                </Button>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10" />
+                    <TableHead>Reference</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Device</TableHead>
+                    <TableHead>Accepted</TableHead>
+                    <TableHead>Waiting</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {queues.awaitingLabel.map((q) => (
+                    <TableRow key={q.id} className="cursor-pointer" onClick={() => openQuote(q.id)}>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${q.tradeInRef ?? q.id}`}
+                          checked={selected.has(q.id)}
+                          onChange={() => toggle(q.id)}
+                          className="h-4 w-4 rounded border-border"
+                        />
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {q.tradeInRef ?? q.id.slice(0, 8)}
+                      </TableCell>
+                      <TableCell>
+                        <div>{q.customerName ?? "—"}</div>
+                        <div className="text-xs text-muted-foreground">{q.customerEmail}</div>
+                      </TableCell>
+                      <TableCell>{q.device}</TableCell>
+                      <TableCell>{formatDate(q.acceptedAt)}</TableCell>
+                      <TableCell
+                        className={cn((q.waitingDays ?? 0) >= 2 && "font-medium text-amber-700")}
+                      >
+                        {days(q.waitingDays)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </>
+          )
+        ) : tab === "overdue" ? (
+          queues.overdue.length === 0 ? (
+            <Empty text="No parcels are overdue." />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Device</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Tracking</TableHead>
+                  <TableHead>Expected by</TableHead>
+                  <TableHead>Overdue</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {queues.overdue.map((q) => (
+                  <TableRow key={q.id} className="cursor-pointer" onClick={() => openQuote(q.id)}>
+                    <TableCell className="font-mono text-xs">
+                      {q.tradeInRef ?? q.id.slice(0, 8)}
+                    </TableCell>
+                    <TableCell>{q.customerName ?? "—"}</TableCell>
+                    <TableCell>{q.device}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {isQuoteStatus(q.status) ? QUOTE_STATUS_LABELS[q.status] : q.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{q.trackingNumber}</TableCell>
+                    <TableCell>{formatDate(q.expectedByAt)}</TableCell>
+                    <TableCell className="font-medium text-destructive">
+                      {days(q.daysOverdue)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )
+        ) : queues.labelsToRefund.length === 0 ? (
+          <Empty text="No labels are waiting for a refund." />
+        ) : (
+          <>
+            <p className="border-b px-4 py-3 text-sm text-muted-foreground">
+              Check tracking shows no scans, then request the refund in the
+              AusPost portal. Flagged urgent from day {REFUND_URGENT_DAYS};
+              AusPost&apos;s deadline is day 90.
+            </p>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tracking</TableHead>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Why</TableHead>
+                  <TableHead>Sent</TableHead>
+                  <TableHead>Age</TableHead>
+                  <TableHead className="text-right">Cost</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {queues.labelsToRefund.map((l) => (
+                  <TableRow key={l.labelId}>
+                    <TableCell className="font-mono text-xs">{l.trackingNumber}</TableCell>
+                    <TableCell>
+                      <Link
+                        href={`/admin/quotes/${l.quoteId}`}
+                        className="font-mono text-xs text-primary underline-offset-4 hover:underline"
+                      >
+                        {l.tradeInRef ?? l.quoteId.slice(0, 8)}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{l.reason}</TableCell>
+                    <TableCell>{formatDate(l.sentAt)}</TableCell>
+                    <TableCell>
+                      {days(l.ageDays)}
+                      {l.urgent && (
+                        <Badge variant="destructive" className="ml-2">
+                          Urgent
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {l.costAUD != null ? `$${l.costAUD.toFixed(2)}` : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => resolveRefund(l.labelId, "refunded")}
+                        >
+                          Mark refunded
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => resolveRefund(l.labelId, "not_refundable")}
+                        >
+                          Was used
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Empty({ text }: { text: string }) {
+  return <div className="py-20 text-center text-sm text-muted-foreground">{text}</div>;
+}
