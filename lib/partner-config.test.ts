@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { parseEmailList, parseOptionalEmail, parseResultWebhook } from "@/lib/partner-config";
+import {
+  DEFAULT_SUPPORT_EMAIL,
+  customerEmailSwitches,
+  emailBrandFor,
+  parseCustomerEmails,
+  parseEmailBrand,
+  parseEmailList,
+  parseOptionalEmail,
+  parseResultWebhook,
+} from "@/lib/partner-config";
 
 describe("parseResultWebhook", () => {
   it("accepts https templates with {quoteId} and env var names", () => {
@@ -51,5 +60,65 @@ describe("email settings", () => {
     expect(parseOptionalEmail("", "Inbox")).toBeNull();
     expect(parseOptionalEmail("Terence+oppo@reflowhub.com", "Inbox")).toBe("terence+oppo@reflowhub.com");
     expect(() => parseOptionalEmail("x", "Inbox")).toThrow("Inbox");
+  });
+});
+
+describe("customer email brand", () => {
+  it("parses brand settings, blanks as unset", () => {
+    expect(
+      parseEmailBrand({
+        displayName: " OPPO ",
+        logoUrl: "https://cdn.shopify.com/s/files/oppo-logo.png?v=3",
+        supportEmail: "Support@ReflowHub.com",
+        supportPhone: "",
+      })
+    ).toEqual({
+      displayName: "OPPO",
+      logoUrl: "https://cdn.shopify.com/s/files/oppo-logo.png?v=3",
+      supportEmail: "support@reflowhub.com",
+      supportPhone: null,
+    });
+    expect(parseEmailBrand(undefined)).toEqual({
+      displayName: null,
+      logoUrl: null,
+      supportEmail: null,
+      supportPhone: null,
+    });
+  });
+
+  it("requires an https PNG logo and a phone-shaped phone", () => {
+    expect(() => parseEmailBrand({ logoUrl: "http://oppo.example/logo.png" })).toThrow("https");
+    expect(() => parseEmailBrand({ logoUrl: "https://oppo.example/logo.svg" })).toThrow("PNG");
+    expect(() => parseEmailBrand({ supportEmail: "nope" })).toThrow("Support email");
+    expect(parseEmailBrand({ supportPhone: "+61 2 9000 0000" }).supportPhone).toBe("+61 2 9000 0000");
+    expect(() => parseEmailBrand({ supportPhone: "call us" })).toThrow("phone");
+  });
+
+  it("fills defaults from the partner when the email is sent", () => {
+    expect(emailBrandFor({ name: "OPPO AU" })).toEqual({
+      name: "OPPO AU",
+      logoUrl: null,
+      supportEmail: DEFAULT_SUPPORT_EMAIL,
+      supportPhone: null,
+    });
+    expect(emailBrandFor({ name: "OPPO AU", emailBrand: { displayName: "OPPO" } }).name).toBe("OPPO");
+  });
+});
+
+describe("customer email switches", () => {
+  it("are all on unless switched off", () => {
+    expect(Object.values(customerEmailSwitches(undefined)).every(Boolean)).toBe(true);
+    const s = customerEmailSwitches({ customerEmails: { label: false, accepted: true } });
+    expect(s.label).toBe(false);
+    expect(s.accepted).toBe(true);
+    expect(s.received).toBe(true);
+  });
+
+  it("accept only known switches with on/off values", () => {
+    expect(parseCustomerEmails({ approved: false }).approved).toBe(false);
+    // Re-quote emails can't be switched off
+    expect(() => parseCustomerEmails({ revised: false })).toThrow("revised");
+    expect(() => parseCustomerEmails({ label: "no" })).toThrow("on or off");
+    expect(() => parseCustomerEmails(null)).toThrow();
   });
 });

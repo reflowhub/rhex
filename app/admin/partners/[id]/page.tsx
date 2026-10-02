@@ -47,6 +47,13 @@ import {
   Key,
 } from "lucide-react";
 import { useFX } from "@/lib/use-fx";
+import {
+  CUSTOMER_EMAIL_SWITCHES,
+  DEFAULT_SUPPORT_EMAIL,
+  customerEmailSwitches,
+  type CustomerEmailSwitch,
+  type EmailBrandSettings,
+} from "@/lib/partner-config";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -77,6 +84,8 @@ interface Partner {
   };
   sandboxEmailAllowlist: string[];
   sandboxEmailFallback: string | null;
+  emailBrand: EmailBrandSettings;
+  customerEmails: Record<CustomerEmailSwitch, boolean>;
   currency: "AUD" | "NZD";
   contactPerson: string | null;
   contactPhone: string | null;
@@ -190,6 +199,11 @@ export default function PartnerDetailPage() {
     resultSandboxSecretEnv: "",
     sandboxEmailAllowlist: "",
     sandboxEmailFallback: "",
+    emailDisplayName: "",
+    emailLogoUrl: "",
+    emailSupportEmail: "",
+    emailSupportPhone: "",
+    customerEmails: customerEmailSwitches(undefined),
     commissionModel: "percentage",
     commissionPercent: 5,
     commissionFlat: 5,
@@ -388,6 +402,11 @@ export default function PartnerDetailPage() {
       resultSandboxSecretEnv: partner.resultWebhook?.sandboxSecretEnv ?? "",
       sandboxEmailAllowlist: (partner.sandboxEmailAllowlist ?? []).join("\n"),
       sandboxEmailFallback: partner.sandboxEmailFallback ?? "",
+      emailDisplayName: partner.emailBrand?.displayName ?? "",
+      emailLogoUrl: partner.emailBrand?.logoUrl ?? "",
+      emailSupportEmail: partner.emailBrand?.supportEmail ?? "",
+      emailSupportPhone: partner.emailBrand?.supportPhone ?? "",
+      customerEmails: partner.customerEmails ?? customerEmailSwitches(undefined),
       commissionModel: partner.commissionModel || "percentage",
       commissionPercent: partner.commissionPercent ?? 5,
       commissionFlat: partner.commissionFlat ?? 5,
@@ -451,6 +470,13 @@ export default function PartnerDetailPage() {
             },
             sandboxEmailAllowlist: editForm.sandboxEmailAllowlist,
             sandboxEmailFallback: editForm.sandboxEmailFallback.trim() || null,
+            emailBrand: {
+              displayName: editForm.emailDisplayName,
+              logoUrl: editForm.emailLogoUrl,
+              supportEmail: editForm.emailSupportEmail,
+              supportPhone: editForm.emailSupportPhone,
+            },
+            customerEmails: editForm.customerEmails,
           }),
           payoutFrequency: editForm.payoutFrequency,
           contactPerson: editForm.contactPerson.trim() || null,
@@ -756,6 +782,29 @@ export default function PartnerDetailPage() {
                     <br />
                     <span className="text-muted-foreground">
                       Others → {partner.sandboxEmailFallback ?? "dropped"}
+                    </span>
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4 pl-6">
+                  <dt className="shrink-0 text-muted-foreground">Customer emails</dt>
+                  <dd className="text-right text-xs">
+                    {partner.emailBrand?.displayName || partner.name}
+                    {partner.emailBrand?.logoUrl ? " (logo set)" : " (no logo)"}
+                    <br />
+                    <span className="text-muted-foreground">
+                      Support {partner.emailBrand?.supportEmail ?? DEFAULT_SUPPORT_EMAIL}
+                      {partner.emailBrand?.supportPhone && `, ${partner.emailBrand.supportPhone}`}
+                    </span>
+                    <br />
+                    <span className="text-muted-foreground">
+                      {(() => {
+                        const off = CUSTOMER_EMAIL_SWITCHES.filter(
+                          (e) => partner.customerEmails?.[e.key] === false
+                        );
+                        return off.length === 0
+                          ? "All on"
+                          : `Off: ${off.map((e) => e.label).join(", ")}`;
+                      })()}
                     </span>
                   </dd>
                 </div>
@@ -1536,6 +1585,76 @@ export default function PartnerDetailPage() {
                       }))
                     }
                   />
+                </div>
+                <p className="pt-2 text-sm font-medium">Customer emails</p>
+                <p className="text-xs text-muted-foreground">
+                  Co-branded with the partner&apos;s logo, from rhex. Replies go to
+                  the support email. Read each time an email is sent.
+                </p>
+                <div className="grid gap-2">
+                  <Label>Display name</Label>
+                  <Input
+                    placeholder={editForm.name || "Partner name"}
+                    value={editForm.emailDisplayName}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, emailDisplayName: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Logo URL (https PNG)</Label>
+                  <Input
+                    placeholder="https://cdn.example.com/logo.png"
+                    value={editForm.emailLogoUrl}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, emailLogoUrl: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Support email</Label>
+                  <Input
+                    placeholder={DEFAULT_SUPPORT_EMAIL}
+                    value={editForm.emailSupportEmail}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, emailSupportEmail: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Support phone (optional)</Label>
+                  <Input
+                    value={editForm.emailSupportPhone}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, emailSupportPhone: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Emails RHEX sends</Label>
+                  {CUSTOMER_EMAIL_SWITCHES.map(({ key, label }) => (
+                    <label key={key} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={editForm.customerEmails[key]}
+                        onChange={(e) =>
+                          setEditForm((f) => ({
+                            ...f,
+                            customerEmails: {
+                              ...f.customerEmails,
+                              [key]: e.target.checked,
+                            },
+                          }))
+                        }
+                        className="h-4 w-4 rounded border-border"
+                      />
+                      {label}
+                    </label>
+                  ))}
+                  <p className="text-xs text-muted-foreground">
+                    Re-quote emails and the re-quote reminder always go: only RHEX
+                    can send them.
+                  </p>
                 </div>
               </div>
             )}

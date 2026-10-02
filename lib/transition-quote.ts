@@ -7,14 +7,18 @@ import {
   deliverPartnerNotification,
   queuePartnerResult,
 } from "@/lib/partner-notifications";
-import { sendQuoteEmail } from "@/lib/quote-email";
+import { deviceLabel, sendQuoteEmail } from "@/lib/quote-email";
+import { formatCustomerDate } from "@/lib/label-deadlines";
 import { originalAmount, payableAmount } from "@/lib/quote-money";
 import { queueLabelRefund } from "@/lib/shipping-labels";
 import { getRevisionResponseDays } from "@/lib/tradein-settings";
 import QuoteAcceptedEmail from "@/emails/quote-accepted";
+import QuoteApprovedEmail from "@/emails/quote-approved";
 import QuoteExpiredEmail from "@/emails/quote-expired";
 import QuotePaidEmail from "@/emails/quote-paid";
+import QuoteReceivedEmail from "@/emails/quote-received";
 import QuoteReturnedEmail from "@/emails/quote-returned";
+import QuoteReturningEmail, { type ReturningReason } from "@/emails/quote-returning";
 import QuoteRevisedEmail from "@/emails/quote-revised";
 import {
   formatSandboxTradeInRef,
@@ -213,14 +217,6 @@ function sandboxEffects(q: QuoteData, effects: SideEffect[]): SideEffect[] {
 // Side effects
 // ---------------------------------------------------------------------------
 
-async function deviceLabel(deviceId: unknown): Promise<string> {
-  if (typeof deviceId !== "string" || !deviceId) return "your device";
-  const doc = await adminDb.collection("devices").doc(deviceId).get();
-  if (!doc.exists) return "your device";
-  const d = doc.data()!;
-  return `${d.make} ${d.model} ${d.storage}`.trim();
-}
-
 function formatLongDate(date: Date): string {
   return date.toLocaleDateString("en-NZ", {
     year: "numeric",
@@ -240,6 +236,9 @@ async function runSideEffects(
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://rhex.app";
   const customerEmail =
     typeof quote.customerEmail === "string" ? quote.customerEmail : null;
+  const customerName = (quote.customerName as string) ?? "there";
+  const tradeInRef =
+    (quote.tradeInRef as string | undefined) ?? quoteId.slice(0, 8);
 
   for (const effect of effects) {
     try {
@@ -284,7 +283,7 @@ async function runSideEffects(
           // Customer-priced quotes (public and Mode C, whose customer deals
           // with RHEX); other v1 accepts keep the NZD email
           const isPublic = actor === "customer" || isModeC(quote);
-          await sendQuoteEmail(quote, {
+          await sendQuoteEmail(quote, "accepted", async (brand) => ({
             to: customerEmail,
             subject: "Your trade-in quote has been accepted",
             react: QuoteAcceptedEmail({
@@ -300,38 +299,75 @@ async function runSideEffects(
                 : "NZD",
               quoteId,
               rhexLabel: isPublic,
+              brand,
             }),
-          });
+          }));
           break;
         }
 
-        case "revised_email": {
+        case "revised_email":
           if (!customerEmail) break;
-          const revisedDeviceName = quote.revisedDeviceId
-            ? `${quote.revisedDeviceMake} ${quote.revisedDeviceModel} ${quote.revisedDeviceStorage}`.trim()
-            : undefined;
-          // The customer's own quote page (Mode B quotes send no customer email)
-          const quoteUrl = `${siteUrl}/sell/quote/${quoteId}`;
-          const expiresAt = toDate(quote.revisionExpiresAt) ?? new Date();
+          await sendRevisedEmail(quoteId, quote, customerEmail, false);
+          break;
+
+        case "received_email": {
+          if (!customerEmail) break;
           const original = originalAmount(quote);
-          const revised = payableAmount(quote);
-          await sendQuoteEmail(quote, {
+          await sendQuoteEmail(quote, "received", async (brand) => ({
             to: customerEmail,
-            subject: "Your trade-in device has been inspected — action required",
-            react: QuoteRevisedEmail({
-              customerName: (quote.customerName as string) ?? "there",
+            subject: `We've received your trade-in (${tradeInRef})`,
+            react: QuoteReceivedEmail({
+              customerName,
               deviceName: await deviceLabel(quote.deviceId),
-              originalGrade: quote.grade as string,
-              revisedGrade: quote.inspectionGrade as string,
-              originalPrice: original.amount,
-              revisedPrice: revised.amount,
-              currency: revised.currency,
-              quoteUrl,
-              expiresAt: formatLongDate(expiresAt),
-              deviceChanged: !!quote.revisedDeviceId,
-              revisedDeviceName,
+              tradeInRef,
+              quotePrice: original.amount,
+              currency: original.currency,
+              quoteId,
+              brand: brand!,
             }),
-          });
+          }));
+          break;
+        }
+
+        case "returning_email": {
+          if (!customerEmail) break;
+          const reason: ReturningReason =
+            quote.revisionAutoExpired === true
+              ? "expired"
+              : quote.revisionRejectedAt
+                ? "declined"
+                : "rejected";
+          const revisionEnd = toDate(quote.revisionExpiresAt);
+          await sendQuoteEmail(quote, "returning", async (brand) => ({
+            to: customerEmail,
+            subject: `Your trade-in won't go ahead (${tradeInRef})`,
+            react: QuoteReturningEmail({
+              customerName,
+              deviceName: await deviceLabel(quote.deviceId),
+              tradeInRef,
+              reason,
+              revisionExpiredOn: revisionEnd ? formatCustomerDate(revisionEnd) : null,
+              brand: brand!,
+            }),
+          }));
+          break;
+        }
+
+        case "approved_email": {
+          if (!customerEmail) break;
+          const payable = payableAmount(quote);
+          await sendQuoteEmail(quote, "approved", async (brand) => ({
+            to: customerEmail,
+            subject: `Your trade-in is approved (${tradeInRef})`,
+            react: QuoteApprovedEmail({
+              customerName,
+              deviceName: await deviceLabel(quote.deviceId),
+              tradeInRef,
+              finalPrice: payable.amount,
+              currency: payable.currency,
+              brand: brand!,
+            }),
+          }));
           break;
         }
 
@@ -341,35 +377,33 @@ async function runSideEffects(
 
         case "expired_email": {
           if (!customerEmail) break;
-          const tradeInRef =
-            (quote.tradeInRef as string | undefined) ?? quoteId.slice(0, 8);
-          await sendQuoteEmail(quote, {
+          await sendQuoteEmail(quote, "closed", async (brand) => ({
             to: customerEmail,
             subject: `Your trade-in has been closed (${tradeInRef})`,
             react: QuoteExpiredEmail({
-              customerName: (quote.customerName as string) ?? "there",
+              customerName,
               deviceName: await deviceLabel(quote.deviceId),
               tradeInRef,
+              brand,
             }),
-          });
+          }));
           break;
         }
 
         case "returned_email": {
           if (!customerEmail) break;
-          const tradeInRef =
-            (quote.tradeInRef as string | undefined) ?? quoteId.slice(0, 8);
-          await sendQuoteEmail(quote, {
+          await sendQuoteEmail(quote, "returned", async (brand) => ({
             to: customerEmail,
             subject: `Your device is on its way back (${tradeInRef})`,
             react: QuoteReturnedEmail({
-              customerName: (quote.customerName as string) ?? "there",
+              customerName,
               deviceName: await deviceLabel(quote.deviceId),
               tradeInRef,
               trackingNumber: (quote.returnTrackingNumber as string) ?? null,
               shippingAddress: (quote.shippingAddress as string) ?? null,
+              brand,
             }),
-          });
+          }));
           break;
         }
 
@@ -395,11 +429,11 @@ async function runSideEffects(
           if (!customerEmail) break;
           const googlePlaceId = process.env.GOOGLE_PLACE_ID;
           const payable = payableAmount(quote);
-          await sendQuoteEmail(quote, {
+          await sendQuoteEmail(quote, "paid", async () => ({
             to: customerEmail,
             subject: "Payment sent for your trade-in",
             react: QuotePaidEmail({
-              customerName: (quote.customerName as string) ?? "there",
+              customerName,
               deviceName: await deviceLabel(quote.deviceId),
               finalPrice: payable.amount,
               currency: payable.currency,
@@ -409,7 +443,7 @@ async function runSideEffects(
                 : undefined,
               feedbackUrl: `${siteUrl}/feedback/${quoteId}`,
             }),
-          });
+          }));
           break;
         }
       }
@@ -418,6 +452,54 @@ async function runSideEffects(
       console.error(`Quote ${quoteId} side effect "${effect}" failed:`, err);
     }
   }
+}
+
+/**
+ * The revised offer email, or the Mode C reminder 48 hours before it ends
+ * (lib/revision-reminder.ts). Mode B quotes send no customer email.
+ */
+export async function sendRevisedEmail(
+  quoteId: string,
+  quote: QuoteData,
+  to: string,
+  reminder: boolean
+): Promise<boolean> {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://rhex.app";
+  const revisedDeviceName = quote.revisedDeviceId
+    ? `${quote.revisedDeviceMake} ${quote.revisedDeviceModel} ${quote.revisedDeviceStorage}`.trim()
+    : undefined;
+  const expiresAt = toDate(quote.revisionExpiresAt) ?? new Date();
+  const original = originalAmount(quote);
+  const revised = payableAmount(quote);
+  const tradeInRef =
+    (quote.tradeInRef as string | undefined) ?? quoteId.slice(0, 8);
+  return sendQuoteEmail(
+    quote,
+    reminder ? "revisionReminder" : "revised",
+    async (brand) => ({
+      to,
+      subject: reminder
+        ? `Reminder: respond to your revised offer by ${formatCustomerDate(expiresAt)} (${tradeInRef})`
+        : "Your trade-in device has been inspected — action required",
+      react: QuoteRevisedEmail({
+        customerName: (quote.customerName as string) ?? "there",
+        deviceName: await deviceLabel(quote.deviceId),
+        originalGrade: quote.grade as string,
+        revisedGrade: quote.inspectionGrade as string,
+        originalPrice: original.amount,
+        revisedPrice: revised.amount,
+        currency: revised.currency,
+        // The customer's own quote page
+        quoteUrl: `${siteUrl}/sell/quote/${quoteId}`,
+        // Mode C customers are in Australia; consumer dates are unchanged
+        expiresAt: brand ? formatCustomerDate(expiresAt) : formatLongDate(expiresAt),
+        deviceChanged: !!quote.revisedDeviceId,
+        revisedDeviceName,
+        brand,
+        reminder,
+      }),
+    })
+  );
 }
 
 /**

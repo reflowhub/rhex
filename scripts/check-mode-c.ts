@@ -4,7 +4,9 @@
  * SBX- references, the customer record, signed result notifications to a
  * local stub that verifies the signature like the partner's server, retries
  * (502 → retried, 401 → failed, admin retry), exactly-once queuing under
- * concurrency, and missing config. Creates its own data and deletes it
+ * concurrency, missing config, and which customer emails go out (co-branded
+ * Mode C emails and the partner's switches; checked from the mailer's log,
+ * so it needs RESEND_API_KEY unset). Creates its own data and deletes it
  * afterwards, restoring the trade-in counters.
  *
  * Usage: npx tsx scripts/check-mode-c.ts   (refuses to run unless .env.local
@@ -73,8 +75,30 @@ async function main() {
     await import("../lib/partner-notifications");
   const { TRADEIN_TERMS_VERSION } = await import("../lib/tradein-terms");
   const { v1QuoteStatus } = await import("../lib/v1-quote");
+  const { sendRevisionReminder } = await import("../lib/revision-reminder");
   const adminUser = { uid: "mode-c-test", email: "mode-c-test@rhex.local" };
+  const testEmail = "mode-c-e2e@example.com";
+  const sandboxInbox = "mode-c-sandbox@example.com";
   const check = (label: string, cond: unknown) => console.log(`${cond ? "PASS" : "FAIL"}  ${label}`);
+
+  // Customer emails, from the mailer's log lines (no RESEND_API_KEY: logged, not sent)
+  if (process.env.RESEND_API_KEY) throw new Error("unset RESEND_API_KEY: this script checks emails from the log");
+  const emailLog: string[] = [];
+  const log = console.log;
+  console.log = (...args: unknown[]) => {
+    const line = args.map(String).join(" ");
+    if (line.startsWith("[email]")) emailLog.push(line);
+    else log(...args);
+  };
+  let emailMark = 0;
+  /** Email log lines since the last call */
+  const emailsSince = () => {
+    const lines = emailLog.slice(emailMark);
+    emailMark = emailLog.length;
+    return lines;
+  };
+  const sentTo = (lines: string[], subject: string, to = testEmail) =>
+    lines.some((l) => l.includes("skipped (no API key)") && l.includes(subject) && l.endsWith(`→ ${to}`));
 
   // 502 the first time for quotes flagged "flaky", 401 for "reject" until reset
   const behaviour = new Map<string, "flaky" | "reject">();
@@ -88,7 +112,6 @@ async function main() {
   const counters = ["counters/tradeIns", "counters/tradeInsSandbox"].map((p) => adminDb.doc(p));
   const countersBefore = await Promise.all(counters.map(async (c) => (await c.get()).data()));
   const createdQuotes: string[] = [];
-  const testEmail = "mode-c-e2e@example.com";
 
   const partnerRef = await adminDb.collection("partners").add({
     name: "Mode C E2E Partner",
@@ -98,7 +121,7 @@ async function main() {
     partnerRateDiscount: 0,
     resultWebhook: { url: stub.url, sandboxUrl: stub.url, secretEnv: SECRET_ENV, sandboxSecretEnv: SECRET_ENV },
     sandboxEmailAllowlist: [],
-    sandboxEmailFallback: null,
+    sandboxEmailFallback: sandboxInbox,
   });
   const bPartnerRef = await adminDb.collection("partners").add({ name: "Mode B E2E Partner", status: "active", modes: ["B"] });
 
@@ -134,7 +157,9 @@ async function main() {
     check("stale terms version refused", !noTerms.ok);
     const byCustomer = await transitionQuote(q.id, "accepted", { actor: "customer", payload: accept });
     check("customer can't accept a Mode C quote", !byCustomer.ok && byCustomer.code === "forbidden");
+    emailsSince();
     check("partner accepts with contact, address and consent", (await transitionQuote(q.id, "accepted", { ...apiKey, payload: accept })).ok);
+    check("email: accepted", sentTo(emailsSince(), "Your trade-in quote has been accepted"));
     let d = (await q.get()).data()!;
     check(`TI- reference (${d.tradeInRef})`, /^TI-\d+$/.test(d.tradeInRef));
     check("name split and joined", d.customerFirstName === "Mode" && d.customerName === "Mode Tester");
@@ -147,6 +172,7 @@ async function main() {
     check("marketing consent defaults to false", customer?.marketingConsent === false && d.marketingConsent === false);
 
     check("received", (await transitionQuote(q.id, "received", { ...admin, payload: { imei: "356789012345678" } })).ok);
+    check("email: received (new for Mode C)", sentTo(emailsSince(), `We've received your trade-in (${d.tradeInRef})`));
     check("inspected at original (better grade A)", (await transitionQuote(q.id, "inspected", { ...admin, payload: { inspectionGrade: "A" } })).ok);
     check("no result sent before approval", stub.received.filter((r) => r.quoteId === q.id).length === 0);
     const [p1, p2] = await Promise.all([
@@ -154,6 +180,9 @@ async function main() {
       transitionQuote(q.id, "paid", admin),
     ]);
     check("concurrent approve: exactly one succeeds", [p1, p2].filter((r) => r.ok).length === 1);
+    const approvedEmails = emailsSince();
+    check("email: approved, once", approvedEmails.filter((l) => l.includes(`Your trade-in is approved (${d.tradeInRef})`)).length === 1);
+    check("email: no \"Payment sent\"", !approvedEmails.some((l) => l.includes("Payment sent")));
     check("exactly one notification queued", (await notificationsFor(q.id)).length === 1);
     const sent = stub.received.filter((r) => r.quoteId === q.id);
     check("partner received one PUT", sent.length === 1);
@@ -175,10 +204,21 @@ async function main() {
     check(`sandbox SBX- reference (${d.tradeInRef})`, /^SBX-\d+$/.test(d.tradeInRef));
     check("sandbox: no customer record", !d.customerId);
     await transitionQuote(s.id, "received", { ...admin, payload: { imei: "356789012345679" } });
+    emailsSince();
     check("revised to 150 NZD", (await transitionQuote(s.id, "revised", { ...admin, payload: { inspectionGrade: "C", revisedPriceNZD: 150 } })).ok);
+    check(
+      "sandbox email: re-quote redirected to the test inbox",
+      sentTo(emailsSince(), `[SANDBOX → ${testEmail}] Your trade-in device has been inspected`, sandboxInbox)
+    );
+    // 24 hours left, offer made 5 days ago → the 48-hour reminder is due
+    await s.update({ revisedAt: new Date(Date.now() - 5 * 86400000), revisionExpiresAt: new Date(Date.now() + 86400000) });
+    const reminders = await Promise.all([sendRevisionReminder(s.id), sendRevisionReminder(s.id)]);
+    check("re-quote reminder: sent exactly once", reminders.filter(Boolean).length === 1 && (await sendRevisionReminder(s.id)) === false);
+    check("email: re-quote reminder", sentTo(emailsSince(), "Reminder: respond to your revised offer by", sandboxInbox));
     const partnerAnswers = await transitionQuote(s.id, "returning", apiKey);
     check("partner can't answer the re-quote", !partnerAnswers.ok && partnerAnswers.code === "forbidden");
     check("customer declines", (await transitionQuote(s.id, "returning", { actor: "customer" })).ok);
+    check("email: returning (declined)", sentTo(emailsSince(), "Your trade-in won't go ahead", sandboxInbox));
     const declined = stub.received.filter((r) => r.quoteId === s.id);
     check(
       `sandbox result to staging: revised AUD price + grade, not accepted (${JSON.stringify(declined[0]?.body)})`,
@@ -190,7 +230,9 @@ async function main() {
     behaviour.set(f.id, "flaky");
     await transitionQuote(f.id, "accepted", { ...apiKey, payload: accept });
     await transitionQuote(f.id, "received", { ...admin, payload: { imei: "356789012345670" } });
+    emailsSince();
     await transitionQuote(f.id, "returning", { ...admin, reason: "iCloud locked" });
+    check("email: returning (rejected by RHEX)", sentTo(emailsSince(), "Your trade-in won't go ahead"));
     let [n] = await notificationsFor(f.id);
     let nd = n.data();
     check(`502 → pending with backoff (${nd.status}, attempts ${nd.attempts})`, nd.status === "pending" && nd.attempts === 1 && nd.lastStatusCode === 502);
@@ -215,6 +257,31 @@ async function main() {
     check("admin Retry now delivers", retried.ok && retried.status === "sent");
     check("quote shows delivered after retry", (await r.get()).data()!.partnerResult?.status === "sent");
 
+    // --- Email switches ---------------------------------------------------
+    await partnerRef.update({ customerEmails: { received: false, closed: false } });
+    const w = await mkQuote();
+    await transitionQuote(w.id, "accepted", { ...apiKey, payload: accept });
+    emailsSince();
+    await transitionQuote(w.id, "received", { ...admin, payload: { imei: "356789012345673" } });
+    let lines = emailsSince();
+    check("switched off: no received email", !lines.some((l) => l.includes("We've received")) && lines.some((l) => l.includes("received email switched off")));
+    await transitionQuote(w.id, "revised", { ...admin, payload: { inspectionGrade: "C", revisedPriceNZD: 150 } });
+    check("re-quote email can't be switched off", sentTo(emailsSince(), "Your trade-in device has been inspected"));
+    const x = await mkQuote();
+    await transitionQuote(x.id, "accepted", { ...apiKey, payload: accept });
+    await x.update({ labelSentAt: new Date(Date.now() - 50 * 86400000), postByAt: new Date(Date.now() - 40 * 86400000) });
+    emailsSince();
+    check("unposted → expired", (await transitionQuote(x.id, "expired", { actor: "system" })).ok);
+    lines = emailsSince();
+    check("switched off: no closed email", !lines.some((l) => l.includes("has been closed")));
+    await partnerRef.update({ customerEmails: {} });
+    const y = await mkQuote();
+    await transitionQuote(y.id, "accepted", { ...apiKey, payload: accept });
+    await y.update({ labelSentAt: new Date(Date.now() - 50 * 86400000), postByAt: new Date(Date.now() - 40 * 86400000) });
+    emailsSince();
+    await transitionQuote(y.id, "expired", { actor: "system" });
+    check("switched back on: closed email", sentTo(emailsSince(), "Your trade-in has been closed"));
+
     // --- Missing config -------------------------------------------------
     await partnerRef.update({ "resultWebhook.secretEnv": "MODE_C_E2E_UNSET_SECRET" });
     const m = await mkQuote();
@@ -234,6 +301,7 @@ async function main() {
     check("Mode B: no customer record", !d.customerId);
     check("Mode B: no partner result", (await notificationsFor(b.id)).length === 0);
   } finally {
+    console.log = log;
     stub.close();
     const notes = await adminDb.collection(PARTNER_NOTIFICATIONS).where("partnerId", "==", partnerRef.id).get();
     const customers = await adminDb.collection("customers").where("email", "==", testEmail).get();
