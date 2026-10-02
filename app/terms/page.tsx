@@ -26,7 +26,7 @@ export default function TermsPage() {
         Terms &amp; Conditions
       </h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Last updated: 13 February 2025
+        Last updated: 3 October 2026
       </p>
 
       <div className="mt-10 space-y-10 text-sm leading-relaxed text-foreground/90">
