@@ -107,6 +107,8 @@ interface Quote {
   expiresAt: string;
   acceptedAt?: string;
   customerName?: string;
+  customerFirstName?: string;
+  customerLastName?: string;
   customerEmail?: string;
   customerPhone?: string;
   shippingAddress?: string;
@@ -382,6 +384,8 @@ export default function QuoteDetailPage() {
   const [acceptAddress, setAcceptAddress] = useState<AuAddressInput>(EMPTY_AU_ADDRESS);
   const [acceptForm, setAcceptForm] = useState({
     customerName: "",
+    customerFirstName: "",
+    customerLastName: "",
     customerEmail: "",
     customerPhone: "",
     paymentMethod: "",
@@ -516,6 +520,8 @@ export default function QuoteDetailPage() {
     if (!quote) return;
     setAcceptForm({
       customerName: quote.customerName ?? "",
+      customerFirstName: quote.customerFirstName ?? "",
+      customerLastName: quote.customerLastName ?? "",
       customerEmail: quote.customerEmail ?? "",
       customerPhone: quote.customerPhone ?? "",
       paymentMethod: quote.paymentMethod ?? "",
@@ -564,8 +570,21 @@ export default function QuoteDetailPage() {
   };
 
   const handleAccept = async () => {
+    // Mode C: split name and no payout details (the partner refunds the customer)
+    const {
+      customerName,
+      customerFirstName,
+      customerLastName,
+      customerEmail,
+      customerPhone,
+      ...payment
+    } = acceptForm;
     const ok = await transition("accepted", {
-      ...acceptForm,
+      ...(quote?.partnerMode === "C"
+        ?{ customerFirstName, customerLastName }
+        : { customerName, ...payment }),
+      customerEmail,
+      customerPhone,
       shippingAddressParts: acceptAddress,
     });
     if (ok) setAcceptOpen(false);
@@ -1846,18 +1865,26 @@ export default function QuoteDetailPage() {
           <DialogHeader>
             <DialogTitle>Accept Quote</DialogTitle>
             <DialogDescription>
-              Confirm the customer&apos;s contact and payout details. No email
-              is sent for admin acceptances.{" "}
+              {quote.partnerMode === "C"
+                ? "Confirm the customer's contact details. The partner refunds the customer, so no payout details are needed."
+                : "Confirm the customer's contact and payout details."}{" "}
+              No email is sent for admin acceptances.{" "}
               <HelpLink page="trade-ins/create-and-accept" />
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-2">
-            {(
-              [
-                ["customerName", "Name"],
-                ["customerEmail", "Email"],
-                ["customerPhone", "Phone"],
-              ] as const
+            {(quote.partnerMode === "C"
+              ? ([
+                  ["customerFirstName", "First name"],
+                  ["customerLastName", "Last name"],
+                  ["customerEmail", "Email"],
+                  ["customerPhone", "Phone"],
+                ] as const)
+              : ([
+                  ["customerName", "Name"],
+                  ["customerEmail", "Email"],
+                  ["customerPhone", "Phone"],
+                ] as const)
             ).map(([field, label]) => (
               <div key={field} className="grid gap-1.5">
                 <Label htmlFor={`accept-${field}`}>{label}</Label>
@@ -1880,26 +1907,29 @@ export default function QuoteDetailPage() {
                   : undefined
               }
             />
-            <div className="grid gap-1.5">
-              <Label>
-                Payment method
-                {quote.partnerMode === "B" && " (optional for Mode B)"}
-              </Label>
-              <Select
-                value={acceptForm.paymentMethod}
-                onValueChange={(val) =>
-                  setAcceptForm((f) => ({ ...f, paymentMethod: val }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select payment method" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="payid">PayID</SelectItem>
-                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Mode C has no payment method, so the payout fields below stay hidden too */}
+            {quote.partnerMode !== "C" && (
+              <div className="grid gap-1.5">
+                <Label>
+                  Payment method
+                  {quote.partnerMode === "B" && " (optional for Mode B)"}
+                </Label>
+                <Select
+                  value={acceptForm.paymentMethod}
+                  onValueChange={(val) =>
+                    setAcceptForm((f) => ({ ...f, paymentMethod: val }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select payment method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="payid">PayID</SelectItem>
+                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {acceptForm.paymentMethod === "payid" && (
               <div className="grid gap-1.5">
                 <Label htmlFor="accept-payid">PayID phone</Label>

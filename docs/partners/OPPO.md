@@ -51,24 +51,38 @@ Reflow is the buyer, so it holds the customer's name, email, phone and address (
 | 2026-10-02 | Trade-ins that end without a customer decision (Reflow rejects the device and returns it, or it's surrendered to authorities) send OPPO `accepted: false` with the last offered price and grade. Default until OPPO confirms whether it prefers a price of 0. |
 | 2026-10-02 | Staging webhook secret: the "API_Key" in OPPO's PDF (Trade-In Doc Web-hook API, v1.0, 25 Aug 2026). The PDF's auth (`X-Webhook-Secret` header) and `approvedGrading` field are out of date: a signed PUT per `oppo-trade-in-result-api.md` (HMAC, `acceptGrading`) to staging returned 404 for an unknown quote, and a wrong secret returned 401. Stored only as the Vercel env var `TRADE_IN_WEBHOOK_SECRET_SANDBOX`, never in the repo. |
 | 2026-10-02 | Sandbox emails go to the address entered only if it's on OPPO's sandbox allow-list (`rex.zheng@oppomobile.com.au`, `terence+oppo@reflowhub.com`); everything else is redirected to `terence+oppo@reflowhub.com`. |
+| 2026-10-02 | Mode C customer emails keep the "rhex" sender and are co-branded in the header and footer only (partner logo, "powered by Reflow Hub"). Support contact and reply-to: `support@reflowhub.com`; no phone number for now. |
+| 2026-10-02 | No new trade-in terms for Mode C. OPPO's partial refund is a payment on Reflow's behalf; Reflow is the buyer and reimburses OPPO. |
+| 2026-10-02 | Never arrived: one partner setting covers quotes that expire unposted, admin cancellations before arrival, and parcels lost after posting (shipped → cancelled). When on, RHEX sends `accepted: false` with the original price and grade. On for OPPO at launch. |
+| 2026-10-02 | Once a Mode C result has been sent, the quote can't be received any more; a late device is returned. |
+| 2026-10-02 | Re-quote emails include a reminder 48 hours before the 7-day deadline. |
+| 2026-10-02 | OPPO expects about 200 trade-ins a month. |
+| 2026-10-02 | Reflow handles logistics for now (inbound labels and returns). OPPO will say on 5 October 2026 whether it takes over inbound logistics and charges Reflow through settlement. Returns stay with Reflow either way, since Reflow has the device. |
 
 ## Build plan
 
 Reuse the consumer trade-in flow (labels, reminders, receiving, expiry, re-quote, late arrivals) and map onto `docs/TRADEIN-STATES-PLAN.md`; no parallel flow. Propose each phase's plan for review before coding it.
 
-**Phase 1 (dry run, 7–8 Oct): shipped 2026-10-02 (da079bb).** Mode C in v1 and the state machine, signed result outbox + retry cron, sandbox end to end (SBX- refs, email allow-list, OPPO staging), admin partner settings and result panel, Mode B trimmed. Checks: `npx tsx scripts/check-mode-c.ts` (rhex-test). Left to do: switch OPPO AU to Mode C in admin once OPPO sends the new accept fields. Known gap: the admin "accept on behalf" form has no first/last name fields for Mode C quotes.
+**Phase 1 (dry run, 7–8 Oct): shipped 2026-10-02 (da079bb).** Mode C in v1 and the state machine, signed result outbox + retry cron, sandbox end to end (SBX- refs, email allow-list, OPPO staging), admin partner settings and result panel, Mode B trimmed. Checks: `npx tsx scripts/check-mode-c.ts` (rhex-test). Left to do: switch OPPO AU to Mode C in admin once OPPO sends the new accept fields.
 
-**Phase 2 (by launch, late October):**
-- Customer emails and pages for Mode C, reusing the consumer templates, co-branded (partner name/logo from partner config, "powered by Reflow Hub"): label, reminders, received, re-quote with the 7-day accept/decline page, return, and final outcome. Outcome wording: "Your trade-in value of $X is approved. {partner} will refund $X to your original payment method. Any {partner} bonus credit is applied by {partner} under its promotion terms." Never show bonus amounts. Include a support contact for shipping or lost-parcel queries.
-- Never arrived: when a Mode C quote expires unshipped, send OPPO the original price and grade with `accepted: false`, behind config until OPPO confirms.
-- Label volume: labels are created by hand in the AusPost portal and uploaded. Estimate whether that holds at launch volume; if not, propose AusPost API automation as a follow-up (don't build without approval).
-- Production API key and production config for OPPO (production result URL and secret), plus the API reference for OPPO (required customer fields, address shape, terms consent).
+**Phase 2 (by launch, late October):** plan agreed 2026-10-02, built for Reflow logistics.
+- **2a. Unblock the Mode C switch: done 2026-10-02.** API keys can be issued to Mode C partners, a Mode C-only partner can be saved in admin, and the admin accept form takes first and last name (and no payout details) for Mode C.
+- **2b. Co-branded emails.** Partner brand settings (display name, logo URL as an https PNG, support email, optional phone), read when each email is sent. A shared trade-in email layout; consumer emails are unchanged. Mode C emails: accepted, label, label reminders, received (new), re-quote with the 7-day deadline, re-quote reminder 48h before (new), returning (new: declined, expired or rejected), returned with tracking, approved (new, replaces the paid email), and closed unposted (no `/sell` link). Approved wording: "Your trade-in value of $X is approved. {partner} will refund $X to your original payment method. Any {partner} bonus credit is applied by {partner} under its promotion terms." Never show bonus amounts.
+- **2c. Quote page for Mode C.** The public quote data includes the partner mode, name and logo, and no payout details. No accept form, payment fields, competitor comparison, review prompt or `/sell` links. Paid shows "Approved" with the refund wording; amounts in AUD and dates in en-AU. The feedback raffle rejects Mode C quotes.
+- **2d. Never arrived.** The partner setting above. Mode C accepted quotes with no label after one business day show in the Awaiting label queue. Receiving is blocked once a result has been sent.
+- **2e. Labels, production, API reference.**
+  - Label volume: about 200 a month is roughly 10 labels a working day, or 30–50 minutes of manual work at 3–5 minutes each, so the manual flow holds at launch. Watch the launch-week spike, and propose AusPost API automation past about 30 a day (don't build without approval).
+  - Labels record who provided and who paid for them, and returns get a `shippingLabels` entry with tracking and optional cost, so Phase 3 can add partner logistics charges if OPPO takes over logistics.
+  - Production: issue an `rhx_` key, set the production result URL and `TRADE_IN_WEBHOOK_SECRET` once OPPO issues the secret, then switch OPPO AU to Mode C.
+  - API reference: tidy `docs/API-REFERENCE.md` for OPPO (Mode C quote validity, required accept fields, address shape, terms consent, never-arrived outcome).
 
 **Phase 3 (can follow launch):** settlement ledger. Per-quote entries created on the final outcome, amounts in AUD, fees ex-GST with GST separate. Per-partner fee config ($20 completed, $10 returned/declined). Net statement per period (period configurable, value TBC). Must backfill from quote history (`settlement` and `partnerResult` on quotes). Mode A payouts stay as they are.
 
 ## Still open
 
-- **Never arrived:** when a Mode C quote expires unshipped, send OPPO the original price and grade with `accepted: false`. Proposed default, pending OPPO's confirmation; keep it behind config.
+- **Never arrived:** OPPO to confirm `accepted: false` with the original price and grade (the setting is on until then). It can be turned off in admin without a deploy.
+- **Customer emails:** OPPO may want RHEX to email customers only for re-quotes and send the rest itself. Confirm which emails RHEX sends before building all of 2b.
+- **Logistics:** OPPO decides on 5 October 2026 whether it takes over inbound labels (eParcel) and charges Reflow through settlement.
 - **Settlement:** the period and payment terms.
 - **Blocklisted or locked devices:** the processing fee for devices that can't be returned.
 - **Production webhook secret:** OPPO to issue one for production (separate from staging).

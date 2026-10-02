@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
-import { hashApiKey } from "@/lib/api-key-auth";
+import { hashApiKey, partnerApiMode } from "@/lib/api-key-auth";
 import crypto from "crypto";
 import { serializeTimestamp } from "@/lib/serialize";
 
@@ -81,7 +81,7 @@ export async function POST(
   try {
     const { id } = await params;
 
-    // Verify partner exists and is Mode B
+    // Verify partner exists and has an API mode (B or C)
     const partnerDoc = await adminDb.collection("partners").doc(id).get();
     if (!partnerDoc.exists) {
       return NextResponse.json(
@@ -91,9 +91,9 @@ export async function POST(
     }
 
     const partnerData = partnerDoc.data()!;
-    if (!partnerData.modes?.includes("B")) {
+    if (!partnerApiMode(partnerData)) {
       return NextResponse.json(
-        { error: "Partner must have Mode B to use API access" },
+        { error: "Partner must have Mode B or C to use API access" },
         { status: 400 }
       );
     }
