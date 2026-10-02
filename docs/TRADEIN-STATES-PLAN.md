@@ -210,7 +210,7 @@ Cancellations send no customer email. Analytics and funnel metrics leave out `no
 
 ### Phase 5: UI, consumers, docs (finding 4)
 
-1. **Customer page** `app/sell/quote/[id]/page.tsx`: one view per status (including `expired`, `on_hold` shown as "Under review", `shipped` and the label states). Accept form only for unexpired `quoted`. Timeline built from `statusHistory`.
+1. **Customer page** `app/sell/quote/[id]/page.tsx`: one view per status (including `expired`, `on_hold` shown as "Under review", `shipped` and the label states). Accept form only for unexpired `quoted`. Timeline built from `statusHistory`. Show the competitor comparison only for `quoted`. Today it stays visible after acceptance and always uses the original price, so after a revision it overstates the difference (e.g. "+$85 more with us" when the revised offer is only $5 above).
 2. Move everything that compares status strings onto `QUOTE_STATUSES`. Analytics leaves out `cancelReason: "not_genuine"`.
    - admin quotes list (filters for the new states and queues)
    - `app/api/admin/analytics/{funnel,revenue,inventory}`
