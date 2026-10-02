@@ -1666,7 +1666,7 @@ export default function PartnerDetailPage() {
                 editLoading ||
                 !editForm.name.trim() ||
                 !editForm.code.trim() ||
-                (!editForm.modeA && !editForm.modeB)
+                (!editForm.modeA && !editForm.modeB && !editForm.modeC)
               }
             >
               {editLoading && (
