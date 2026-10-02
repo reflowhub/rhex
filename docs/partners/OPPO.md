@@ -52,6 +52,20 @@ Reflow is the buyer, so it holds the customer's name, email, phone and address (
 | 2026-10-02 | Staging webhook secret: the "API_Key" in OPPO's PDF (Trade-In Doc Web-hook API, v1.0, 25 Aug 2026). The PDF's auth (`X-Webhook-Secret` header) and `approvedGrading` field are out of date: a signed PUT per `oppo-trade-in-result-api.md` (HMAC, `acceptGrading`) to staging returned 404 for an unknown quote, and a wrong secret returned 401. Stored only as the Vercel env var `TRADE_IN_WEBHOOK_SECRET_SANDBOX`, never in the repo. |
 | 2026-10-02 | Sandbox emails go to the address entered only if it's on OPPO's sandbox allow-list (`rex.zheng@oppomobile.com.au`, `terence+oppo@reflowhub.com`); everything else is redirected to `terence+oppo@reflowhub.com`. |
 
+## Build plan
+
+Reuse the consumer trade-in flow (labels, reminders, receiving, expiry, re-quote, late arrivals) and map onto `docs/TRADEIN-STATES-PLAN.md`; no parallel flow. Propose each phase's plan for review before coding it.
+
+**Phase 1 (dry run, 7–8 Oct): shipped 2026-10-02 (da079bb).** Mode C in v1 and the state machine, signed result outbox + retry cron, sandbox end to end (SBX- refs, email allow-list, OPPO staging), admin partner settings and result panel, Mode B trimmed. Checks: `npx tsx scripts/check-mode-c.ts` (rhex-test). Left to do: switch OPPO AU to Mode C in admin once OPPO sends the new accept fields. Known gap: the admin "accept on behalf" form has no first/last name fields for Mode C quotes.
+
+**Phase 2 (by launch, late October):**
+- Customer emails and pages for Mode C, reusing the consumer templates, co-branded (partner name/logo from partner config, "powered by Reflow Hub"): label, reminders, received, re-quote with the 7-day accept/decline page, return, and final outcome. Outcome wording: "Your trade-in value of $X is approved. {partner} will refund $X to your original payment method. Any {partner} bonus credit is applied by {partner} under its promotion terms." Never show bonus amounts. Include a support contact for shipping or lost-parcel queries.
+- Never arrived: when a Mode C quote expires unshipped, send OPPO the original price and grade with `accepted: false`, behind config until OPPO confirms.
+- Label volume: labels are created by hand in the AusPost portal and uploaded. Estimate whether that holds at launch volume; if not, propose AusPost API automation as a follow-up (don't build without approval).
+- Production API key and production config for OPPO (production result URL and secret), plus the API reference for OPPO (required customer fields, address shape, terms consent).
+
+**Phase 3 (can follow launch):** settlement ledger. Per-quote entries created on the final outcome, amounts in AUD, fees ex-GST with GST separate. Per-partner fee config ($20 completed, $10 returned/declined). Net statement per period (period configurable, value TBC). Must backfill from quote history (`settlement` and `partnerResult` on quotes). Mode A payouts stay as they are.
+
 ## Still open
 
 - **Never arrived:** when a Mode C quote expires unshipped, send OPPO the original price and grade with `accepted: false`. Proposed default, pending OPPO's confirmation; keep it behind config.
