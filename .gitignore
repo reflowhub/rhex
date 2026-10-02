@@ -40,7 +40,7 @@ next-env.d.ts
 # /docs/
 
 # firebase
-firebase-debug.log
+firebase-debug*.log
 .firebase/
 .firebaserc
 firebase-credentials.json
