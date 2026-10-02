@@ -70,7 +70,9 @@ interface BulkLine {
 // Constants
 // ---------------------------------------------------------------------------
 
-const RECEIVABLE_STATUSES = ["received", "inspected", "paid"];
+// Must match app/api/admin/inventory/receive/route.ts
+const RECEIVABLE_QUOTE_STATUSES = ["inspected", "paid"];
+const RECEIVABLE_BULK_STATUSES = ["received", "inspected", "paid"];
 const GRADES = ["A", "B", "C", "D", "E"];
 
 // ---------------------------------------------------------------------------
@@ -149,7 +151,7 @@ export default function ReceiveInventoryPage() {
         .then((data: Quote[]) => {
           if (Array.isArray(data)) {
             setQuotes(
-              data.filter((q) => RECEIVABLE_STATUSES.includes(q.status))
+              data.filter((q) => RECEIVABLE_QUOTE_STATUSES.includes(q.status))
             );
           }
         })
@@ -162,7 +164,7 @@ export default function ReceiveInventoryPage() {
         .then((data: BulkQuote[]) => {
           if (Array.isArray(data)) {
             setBulkQuotes(
-              data.filter((q) => RECEIVABLE_STATUSES.includes(q.status))
+              data.filter((q) => RECEIVABLE_BULK_STATUSES.includes(q.status))
             );
           }
         })
@@ -485,11 +487,14 @@ export default function ReceiveInventoryPage() {
                 </dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Price</dt>
+                <dt className="text-muted-foreground">Cost</dt>
                 <dd className="font-medium">
-                  {formatPrice(
+                  {/* Stored as costNZD: the payable amount (lib/quote-money.ts) */}
+                  $
+                  {(
                     selectedQuote.revisedPriceNZD ?? selectedQuote.quotePriceNZD
-                  )}
+                  ).toFixed(2)}{" "}
+                  NZD
                 </dd>
               </div>
               <div>

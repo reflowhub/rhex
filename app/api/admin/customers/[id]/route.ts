@@ -168,6 +168,22 @@ export async function GET(
 // PUT /api/admin/customers/[id] — Update customer contact info
 // ---------------------------------------------------------------------------
 
+const PAYMENT_QUOTE_FIELDS = [
+  "paymentMethod",
+  "payIdPhone",
+  "bankBSB",
+  "bankAccountNumber",
+  "bankAccountName",
+];
+
+/** Quote statuses whose payout details no longer follow the customer record */
+const PAYMENT_LOCKED_STATUSES: unknown[] = [
+  "paid",
+  "returned",
+  "cancelled",
+  "expired",
+];
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -252,14 +268,29 @@ export async function PUT(
       }
     }
 
+    // Payout details on a finished quote record where it was (or would have
+    // been) paid, so they're left alone
+    const finishedQuoteUpdate = { ...quoteUpdate };
+    for (const field of PAYMENT_QUOTE_FIELDS) delete finishedQuoteUpdate[field];
+
     if (Object.keys(quoteUpdate).length > 0) {
       const quoteIds: string[] = customerData.quoteIds ?? [];
       if (quoteIds.length > 0) {
+        const quoteDocs = await adminDb.getAll(
+          ...quoteIds.map((qid) => adminDb.collection("quotes").doc(qid))
+        );
         const batch = adminDb.batch();
-        for (const qid of quoteIds) {
-          batch.update(adminDb.collection("quotes").doc(qid), quoteUpdate);
+        let writes = 0;
+        for (const qDoc of quoteDocs) {
+          if (!qDoc.exists) continue;
+          const update = PAYMENT_LOCKED_STATUSES.includes(qDoc.data()!.status)
+            ? finishedQuoteUpdate
+            : quoteUpdate;
+          if (Object.keys(update).length === 0) continue;
+          batch.update(qDoc.ref, update);
+          writes++;
         }
-        await batch.commit();
+        if (writes > 0) await batch.commit();
       }
     }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { checkQuoteExpiry } from "@/lib/quote-expiry";
+import { maskTail } from "@/lib/quote-money";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { serializeTimestamp } from "@/lib/serialize";
 import { transitionQuote, transitionErrorStatus } from "@/lib/transition-quote";
@@ -26,6 +27,7 @@ const PUBLIC_FIELDS = [
   "paymentMethod",
   "inspectionGrade",
   "revisedPriceNZD",
+  "revisedPriceDisplay",
   "revisedDeviceId",
   "revisedDeviceMake",
   "revisedDeviceModel",
@@ -48,13 +50,6 @@ const PUBLIC_TIMESTAMP_FIELDS = [
   "shippedAt",
   "receivedAt",
 ] as const;
-
-/** Mask all but the last 3 characters, e.g. "•••• 123". */
-function maskTail(value: unknown): string | null {
-  if (typeof value !== "string" || !value) return null;
-  const compact = value.replace(/\s/g, "");
-  return compact.length > 3 ? `•••• ${compact.slice(-3)}` : "••••";
-}
 
 async function getDeviceSummary(deviceId: unknown) {
   if (typeof deviceId !== "string" || !deviceId) return null;

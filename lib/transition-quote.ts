@@ -1,9 +1,10 @@
-import { adminDb } from "@/lib/firebase-admin";
+import admin, { adminDb } from "@/lib/firebase-admin";
 import type { AdminSession } from "@/lib/admin-auth";
 import { logQuoteTransition } from "@/lib/audit-log";
 import { onQuotePaid } from "@/lib/commission-trigger";
 import { findOrCreateCustomer } from "@/lib/customer-link";
 import { sendEmail } from "@/lib/email";
+import { originalAmount, payableAmount } from "@/lib/quote-money";
 import { queueLabelRefund } from "@/lib/shipping-labels";
 import { getRevisionResponseDays } from "@/lib/tradein-settings";
 import QuoteAcceptedEmail from "@/emails/quote-accepted";
@@ -210,8 +211,11 @@ async function runSideEffects(
             quoteId,
             quoteValueNZD: Number(quote.quotePriceNZD ?? 0),
           });
-          await ref.update({ customerId });
+          // customerValueNZD: what this quote added to the customer's total
+          const customerValueNZD = Number(quote.quotePriceNZD ?? 0);
+          await ref.update({ customerId, customerValueNZD });
           quote.customerId = customerId;
+          quote.customerValueNZD = customerValueNZD;
           break;
         }
 
@@ -250,6 +254,8 @@ async function runSideEffects(
             ? `${siteUrl}/partner/quotes/${quoteId}`
             : `${siteUrl}/sell/quote/${quoteId}`;
           const expiresAt = toDate(quote.revisionExpiresAt) ?? new Date();
+          const original = originalAmount(quote);
+          const revised = payableAmount(quote);
           sendEmail({
             to: customerEmail,
             subject: "Your trade-in device has been inspected — action required",
@@ -258,11 +264,9 @@ async function runSideEffects(
               deviceName: await deviceLabel(quote.deviceId),
               originalGrade: quote.grade as string,
               revisedGrade: quote.inspectionGrade as string,
-              originalPrice: Number(
-                quote.quotePriceDisplay ?? quote.quotePriceNZD ?? 0
-              ),
-              revisedPrice: Number(quote.revisedPriceNZD ?? 0),
-              currency: (quote.displayCurrency as string) ?? "AUD",
+              originalPrice: original.amount,
+              revisedPrice: revised.amount,
+              currency: revised.currency,
               quoteUrl,
               expiresAt: formatLongDate(expiresAt),
               deviceChanged: !!quote.revisedDeviceId,
@@ -298,22 +302,26 @@ async function runSideEffects(
           }
           break;
 
+        case "reverse_customer_value":
+        case "restore_customer_value":
+          await adjustCustomerValue(
+            quoteId,
+            effect === "reverse_customer_value" ? "reverse" : "restore"
+          );
+          break;
+
         case "paid_email": {
           if (!customerEmail) break;
           const googlePlaceId = process.env.GOOGLE_PLACE_ID;
+          const payable = payableAmount(quote);
           sendEmail({
             to: customerEmail,
             subject: "Payment sent for your trade-in",
             react: QuotePaidEmail({
               customerName: (quote.customerName as string) ?? "there",
               deviceName: await deviceLabel(quote.deviceId),
-              finalPrice: Number(
-                quote.revisedPriceNZD ??
-                  quote.quotePriceDisplay ??
-                  quote.quotePriceNZD ??
-                  0
-              ),
-              currency: (quote.displayCurrency as string) ?? "AUD",
+              finalPrice: payable.amount,
+              currency: payable.currency,
               paymentMethod: (quote.paymentMethod as string) ?? "bank_transfer",
               googleReviewUrl: googlePlaceId
                 ? `https://search.google.com/local/writereview?placeid=${googlePlaceId}`
@@ -329,4 +337,39 @@ async function runSideEffects(
       console.error(`Quote ${quoteId} side effect "${effect}" failed:`, err);
     }
   }
+}
+
+/**
+ * Take a quote's value off its customer's totalValueNZD when it ends unpaid,
+ * or add it back if an expired quote is received after all. The quote's
+ * `customerValueNZD` records what is currently counted, so each change
+ * applies once. Quotes linked before it existed counted quotePriceNZD.
+ */
+async function adjustCustomerValue(
+  quoteId: string,
+  direction: "reverse" | "restore"
+): Promise<void> {
+  const quoteRef = adminDb.collection("quotes").doc(quoteId);
+  await adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(quoteRef);
+    const q = snap.data();
+    if (!q || typeof q.customerId !== "string" || !q.customerId) return;
+
+    const counted =
+      typeof q.customerValueNZD === "number"
+        ? q.customerValueNZD
+        : Number(q.quotePriceNZD ?? 0);
+    const target = direction === "reverse" ? 0 : Number(q.quotePriceNZD ?? 0);
+    const delta = target - counted;
+    if (delta === 0) return;
+
+    const customerRef = adminDb.collection("customers").doc(q.customerId);
+    const customer = await tx.get(customerRef);
+    if (customer.exists) {
+      tx.update(customerRef, {
+        totalValueNZD: admin.firestore.FieldValue.increment(delta),
+      });
+    }
+    tx.update(quoteRef, { customerValueNZD: target });
+  });
 }

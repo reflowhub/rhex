@@ -2,13 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
+import { payableAmount } from "@/lib/quote-money";
 
 // ---------------------------------------------------------------------------
 // POST /api/admin/inventory/receive — Receive a device from a quote into
 // inventory. Auto-fills fields from the source quote.
 // ---------------------------------------------------------------------------
 
-const RECEIVABLE_STATUSES = ["received", "inspected", "paid"];
+/** A trade-in is stock once inspected, at the price RHEX pays for it */
+const RECEIVABLE_QUOTE_STATUSES = ["inspected", "paid"];
+// Bulk quotes keep their own status flow (lib/status-transition.ts)
+const RECEIVABLE_BULK_STATUSES = ["received", "inspected", "paid"];
 
 export async function POST(request: NextRequest) {
   try {
@@ -66,15 +70,15 @@ export async function POST(request: NextRequest) {
 
       const quoteData = quoteDoc.data()!;
 
-      if (!RECEIVABLE_STATUSES.includes(quoteData.status as string)) {
+      if (!RECEIVABLE_QUOTE_STATUSES.includes(quoteData.status as string)) {
         return NextResponse.json(
-          { error: `Quote must be at 'received' status or later (current: ${quoteData.status})` },
+          { error: `Quote must be inspected or paid before it can be added to inventory (current: ${quoteData.status})` },
           { status: 400 }
         );
       }
 
       deviceRef = quoteData.deviceId as string;
-      costNZD = (quoteData.revisedPriceNZD as number) ?? (quoteData.quotePriceNZD as number);
+      costNZD = payableAmount(quoteData).amountNZD;
       sourceType = "trade-in";
 
       // Look up device for category
@@ -103,7 +107,7 @@ export async function POST(request: NextRequest) {
 
       const bulkData = bulkDoc.data()!;
 
-      if (!RECEIVABLE_STATUSES.includes(bulkData.status as string)) {
+      if (!RECEIVABLE_BULK_STATUSES.includes(bulkData.status as string)) {
         return NextResponse.json(
           { error: `Bulk quote must be at 'received' status or later (current: ${bulkData.status})` },
           { status: 400 }

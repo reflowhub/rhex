@@ -262,6 +262,7 @@ Cancellations send no customer email. Analytics and funnel metrics leave out `no
 - Who ships for partner quotes; whether partners get RHEX labels; v1 endpoints for label, tracking and "posted".
 - Mode B revision emails (currently sent to `customerEmail` with a partner-portal link).
 - Whether revised Mode B prices are entered at the public rate or the partner rate (`publicPriceNZD` is not returned by the admin endpoint).
+- Partner portal and v1 return only `revisedPriceNZD`; the partner quote page converts it at today's FX rate. Phase 4 stores `revisedPriceDisplay` (locked rate), so these could return it instead.
 - Whether partner quotes should be reachable on the public endpoints at all (D7).
 - New status values (`expired`, `on_hold`) are a contract change for v1 consumers.
 

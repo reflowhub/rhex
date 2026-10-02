@@ -1,6 +1,7 @@
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { calculateCommission, PartnerCommissionConfig } from "@/lib/commission";
+import { payableAmount } from "@/lib/quote-money";
 
 /**
  * Called when a quote transitions to "paid" status.
@@ -34,10 +35,8 @@ export async function onQuotePaid(
     commissionTiers: partnerData.commissionTiers ?? null,
   };
 
-  // Determine quote total and device count — use revised price if available
-  const quoteTotal = Number(
-    quoteData.revisedPriceNZD ?? quoteData.quotePriceNZD ?? 0
-  );
+  // Quote total (the revised price if one was accepted) and device count
+  const quoteTotal = payableAmount(quoteData).amountNZD;
   const deviceCount = 1; // single quote = 1 device
 
   // For tiered model, count this month's devices

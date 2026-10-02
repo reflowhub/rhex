@@ -35,6 +35,7 @@ const PLAIN_FIELDS = [
   "quotePriceNZD",
   "quotePriceDisplay",
   "displayCurrency",
+  "fxRate",
   "status",
   "tradeInRef",
   "termsVersion",
@@ -55,6 +56,7 @@ const PLAIN_FIELDS = [
   "lateArrival",
   "inspectionGrade",
   "revisedPriceNZD",
+  "revisedPriceDisplay",
   "revisedDeviceId",
   "revisedDeviceMake",
   "revisedDeviceModel",
@@ -115,6 +117,10 @@ export async function toAdminQuote(id: string, data: QuoteData) {
     ...entry,
     at: serializeTimestamp(entry.at),
   }));
+  const payout = data.payout as Record<string, unknown> | undefined;
+  quote.payout = payout
+    ? { ...payout, paidAt: serializeTimestamp(payout.paidAt) }
+    : null;
   quote.allowedTransitions = allowedTransitions(data, "admin");
 
   return quote;

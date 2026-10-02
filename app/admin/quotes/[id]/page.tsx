@@ -40,7 +40,12 @@ import {
   Download,
 } from "lucide-react";
 import { daysSince } from "@/lib/label-deadlines";
-import { useFX } from "@/lib/use-fx";
+import {
+  formatMoney,
+  originalAmount,
+  payableAmount,
+  toQuoteCurrency,
+} from "@/lib/quote-money";
 import DeviceSearchSelect, {
   SelectedDevice,
 } from "@/components/admin/device-search-select";
@@ -80,7 +85,9 @@ interface Quote {
   device: QuoteDevice;
   grade: Grade;
   quotePriceNZD: number;
+  quotePriceDisplay?: number | null;
   displayCurrency: string;
+  fxRate?: number | null;
   status: QuoteStatus;
   tradeInRef?: string | null;
   createdAt: string;
@@ -105,6 +112,7 @@ interface Quote {
   partnerMode?: string;
   inspectionGrade?: Grade;
   revisedPriceNZD?: number;
+  revisedPriceDisplay?: number | null;
   revisedDeviceId?: string;
   revisedDeviceMake?: string;
   revisedDeviceModel?: string;
@@ -131,8 +139,41 @@ interface Quote {
   labelSentAt?: string | null;
   postByAt?: string | null;
   expectedByAt?: string | null;
+  payout?: {
+    method: string | null;
+    payIdPhone: string | null;
+    bankBSB: string | null;
+    bankAccountNumber: string | null;
+    bankAccountName: string | null;
+    amount: number;
+    currency: string;
+    amountNZD: number;
+    paidAt: string | null;
+    paidBy: string | null;
+  } | null;
   statusHistory: StatusHistoryEntry[];
   allowedTransitions: QuoteStatus[];
+}
+
+/** "$135.00 AUD ($146.00 NZD)", or just the NZD amount for NZD quotes. */
+function formatWithNZD(
+  money: { amount: number; currency: string },
+  amountNZD: number
+): string {
+  const main = formatMoney(money.amount, money.currency);
+  return money.currency === "NZD"
+    ? main
+    : `${main} (${formatMoney(amountNZD, "NZD")})`;
+}
+
+function payoutDestination(p: NonNullable<Quote["payout"]>): string {
+  if (p.method === "payid") return `PayID ${p.payIdPhone ?? ""}`.trim();
+  if (p.method === "bank_transfer") {
+    return [`BSB ${p.bankBSB ?? "—"}`, p.bankAccountNumber, p.bankAccountName]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  return "—";
 }
 
 /** Dialogs that collect input before a transition. */
@@ -273,7 +314,6 @@ function formatDate(iso: string | undefined | null): string {
 export default function QuoteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { formatPrice: fxFormatPrice } = useFX();
 
   // ---- data state ---------------------------------------------------------
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -322,6 +362,9 @@ export default function QuoteDetailPage() {
   const [labelLoading, setLabelLoading] = useState(false);
   const [labelError, setLabelError] = useState<string | null>(null);
   const [labelFormKey, setLabelFormKey] = useState(0);
+
+  // ---- mark paid dialog state ---------------------------------------------
+  const [payOpen, setPayOpen] = useState(false);
 
   // ---- inspection dialog state --------------------------------------------
   const [inspectionOpen, setInspectionOpen] = useState(false);
@@ -509,11 +552,20 @@ export default function QuoteDetailPage() {
   const hasMismatch =
     gradeChanged || (changeDevice && revisedDevice !== null);
   const parsedRevisedPrice = parseFloat(revisedPrice);
+  const original = quote ? originalAmount(quote) : null;
+  // What the customer would see, at the quote's locked FX rate (D6)
+  const revisedCustomerPrice =
+    quote && !isNaN(parsedRevisedPrice) && parsedRevisedPrice >= 0
+      ? toQuoteCurrency(quote, Math.round(parsedRevisedPrice * 100) / 100)
+      : null;
   const revisedPriceValid =
     !isNaN(parsedRevisedPrice) &&
     parsedRevisedPrice >= 0 &&
     !!quote &&
-    parsedRevisedPrice < quote.quotePriceNZD;
+    parsedRevisedPrice < quote.quotePriceNZD &&
+    (original?.currency === "NZD" ||
+      revisedCustomerPrice === null ||
+      revisedCustomerPrice < original!.amount);
 
   // ---- render: loading ----------------------------------------------------
   if (loading) {
@@ -632,7 +684,7 @@ export default function QuoteDetailPage() {
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Quote Price</dt>
               <dd className="font-medium">
-                {fxFormatPrice(quote.quotePriceNZD, "AUD")}
+                {formatWithNZD(originalAmount(quote), quote.quotePriceNZD)}
               </dd>
             </div>
 
@@ -707,28 +759,16 @@ export default function QuoteDetailPage() {
                   quote.revisedPriceNZD !== null && (
                     <div className="flex justify-between">
                       <dt className="text-muted-foreground">Revised Price</dt>
-                      <dd className="font-medium">
-                        {fxFormatPrice(quote.revisedPriceNZD, "AUD")}
-                        {quote.revisedPriceNZD !== quote.quotePriceNZD && (
-                          <span
-                            className={cn(
-                              "ml-2 text-xs",
-                              quote.revisedPriceNZD < quote.quotePriceNZD
-                                ? "text-destructive"
-                                : "text-emerald-600"
-                            )}
-                          >
-                            ({quote.revisedPriceNZD < quote.quotePriceNZD
-                              ? "-"
-                              : "+"}
-                            {fxFormatPrice(
-                              Math.abs(
-                                quote.revisedPriceNZD - quote.quotePriceNZD
-                              ), "AUD"
-                            )}
-                            )
-                          </span>
-                        )}
+                      <dd className="font-medium text-right">
+                        {formatWithNZD(payableAmount(quote), quote.revisedPriceNZD)}
+                        <span className="ml-2 text-xs text-destructive">
+                          (−
+                          {formatMoney(
+                            quote.quotePriceNZD - quote.revisedPriceNZD,
+                            "NZD"
+                          )}
+                          )
+                        </span>
                       </dd>
                     </div>
                   )}
@@ -1127,9 +1167,19 @@ export default function QuoteDetailPage() {
             </div>
           )}
           {quote.status === "paid" && (
-            <div className="flex items-center gap-2 text-emerald-600">
-              <CheckCircle2 className="h-4 w-4" />
-              Quote completed — payment has been made.
+            <div className="flex items-start gap-2 text-emerald-600">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Quote completed — payment has been made.
+                {quote.payout && (
+                  <span className="block text-muted-foreground">
+                    {formatWithNZD(quote.payout, quote.payout.amountNZD)} to{" "}
+                    {payoutDestination(quote.payout)}
+                    {quote.payout.paidBy && ` · by ${quote.payout.paidBy}`}
+                    {quote.payout.paidAt && ` · ${formatDate(quote.payout.paidAt)}`}
+                  </span>
+                )}
+              </span>
             </div>
           )}
           {quote.status === "cancelled" && (
@@ -1201,8 +1251,12 @@ export default function QuoteDetailPage() {
             </Button>
           )}
           {can("paid") && (
-            <Button onClick={() => transition("paid")} disabled={actionLoading}>
-              {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button
+              onClick={() => {
+                setActionError(null);
+                setPayOpen(true);
+              }}
+            >
               Mark Paid
             </Button>
           )}
@@ -1305,7 +1359,7 @@ export default function QuoteDetailPage() {
               <p className="font-medium">{deviceSummary}</p>
               <p className="mt-1 text-muted-foreground">
                 Original: Grade {quote.grade} &mdash;{" "}
-                {fxFormatPrice(quote.quotePriceNZD, "AUD")}
+                {formatWithNZD(originalAmount(quote), quote.quotePriceNZD)}
               </p>
             </div>
 
@@ -1382,9 +1436,40 @@ export default function QuoteDetailPage() {
                   value={revisedPrice}
                   onChange={(e) => setRevisedPrice(e.target.value)}
                 />
+                {original && original.currency !== "NZD" && (
+                  <div className="grid grid-cols-2 gap-2 rounded-md border border-border p-2 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">You enter (NZD)</p>
+                      <p className="font-medium">
+                        {revisedPrice !== "" && !isNaN(parsedRevisedPrice)
+                          ? formatMoney(parsedRevisedPrice, "NZD")
+                          : "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">
+                        Customer sees ({original.currency}
+                        {quote.fxRate ? ` @ ${quote.fxRate.toFixed(4)}` : ""})
+                      </p>
+                      <p className="font-medium">
+                        {revisedCustomerPrice !== null
+                          ? formatMoney(revisedCustomerPrice, original.currency)
+                          : "—"}
+                        <span className="text-muted-foreground">
+                          {" "}
+                          vs {formatMoney(original.amount, original.currency)}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                )}
                 {revisedPrice !== "" && !revisedPriceValid && (
                   <p className="text-xs text-destructive">
-                    Enter a price below {quote.quotePriceNZD.toFixed(2)} NZD.
+                    {!isNaN(parsedRevisedPrice) &&
+                    parsedRevisedPrice < quote.quotePriceNZD &&
+                    original
+                      ? `In ${original.currency} this isn't below the original ${formatMoney(original.amount, original.currency)}. Enter a lower price.`
+                      : `Enter a price below ${quote.quotePriceNZD.toFixed(2)} NZD.`}
                   </p>
                 )}
               </div>
@@ -1428,6 +1513,76 @@ export default function QuoteDetailPage() {
                 Send Revised Offer
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Mark Paid Dialog                                                  */}
+      {/* ---------------------------------------------------------------- */}
+      <Dialog open={payOpen} onOpenChange={setPayOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Payment</DialogTitle>
+            <DialogDescription>
+              Send the payment first, then mark the quote paid. The customer
+              gets a payment email.
+            </DialogDescription>
+          </DialogHeader>
+          {(() => {
+            const payable = payableAmount(quote);
+            return (
+              <dl className="grid gap-2 py-2 text-sm">
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Amount</dt>
+                  <dd className="text-right font-semibold">
+                    {formatMoney(payable.amount, payable.currency)}
+                    {payable.currency !== "NZD" && (
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        {formatMoney(payable.amountNZD, "NZD")}
+                      </span>
+                    )}
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Basis</dt>
+                  <dd>{payable.revised ? "Revised offer" : "Original quote"}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Pay to</dt>
+                  <dd className="text-right">
+                    {quote.paymentMethod === "payid"
+                      ? `PayID ${quote.payIdPhone ?? ""}`
+                      : quote.paymentMethod === "bank_transfer"
+                        ? `BSB ${quote.bankBSB ?? ""} · ${quote.bankAccountNumber ?? ""} · ${quote.bankAccountName ?? ""}`
+                        : quote.partnerMode === "B"
+                          ? "Partner (Mode B)"
+                          : "—"}
+                  </dd>
+                </div>
+              </dl>
+            );
+          })()}
+          {actionError && (
+            <p className="text-sm text-destructive">{actionError}</p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPayOpen(false)}
+              disabled={actionLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (await transition("paid")) setPayOpen(false);
+              }}
+              disabled={actionLoading}
+            >
+              {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Mark Paid
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

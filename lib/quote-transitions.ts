@@ -13,6 +13,12 @@ import {
   type QuoteStatus,
   isQuoteStatus,
 } from "@/lib/quote-status";
+import {
+  formatMoney,
+  originalAmount,
+  payoutSnapshot,
+  toQuoteCurrency,
+} from "@/lib/quote-money";
 import { TRADEIN_TERMS_VERSION } from "@/lib/tradein-terms";
 
 // ---------------------------------------------------------------------------
@@ -43,7 +49,11 @@ export type SideEffect =
   | "commission"
   | "paid_email"
   | "expired_email"
-  | "queue_label_refund";
+  | "queue_label_refund"
+  /** Take the quote's value off the linked customer's totalValueNZD */
+  | "reverse_customer_value"
+  /** Add it back (an expired quote received after all) */
+  | "restore_customer_value";
 
 export interface StatusHistoryEntry {
   from: QuoteStatus;
@@ -311,7 +321,11 @@ function applyCancel(q: QuoteData, ctx: TransitionContext): ApplyResult {
     return { error: "A note is required when the reason is 'other'" };
   }
 
-  return { fields: { cancelReason, cancelNote: note } };
+  return withCustomerValue(
+    { fields: { cancelReason, cancelNote: note } },
+    q,
+    "reverse_customer_value"
+  );
 }
 
 /** An unused label goes to the refund queue when its quote ends before shipping. */
@@ -321,6 +335,16 @@ function withLabelRefund(result: ApplyResult, q: QuoteData): ApplyResult {
     ...result,
     effects: [...(result.effects ?? []), "queue_label_refund"],
   };
+}
+
+/** A linked customer's totalValueNZD drops when their quote ends unpaid. */
+function withCustomerValue(
+  result: ApplyResult,
+  q: QuoteData,
+  effect: "reverse_customer_value" | "restore_customer_value"
+): ApplyResult {
+  if ("error" in result || !q.customerId) return result;
+  return { ...result, effects: [...(result.effects ?? []), effect] };
 }
 
 function applyHold(q: QuoteData, ctx: TransitionContext): ApplyResult {
@@ -373,8 +397,7 @@ function applyRevise(q: QuoteData, ctx: TransitionContext): ApplyResult {
   if (typeof price !== "number" || !Number.isFinite(price) || price < 0) {
     return { error: "revisedPriceNZD is required" };
   }
-  const original = Number(q.quotePriceNZD ?? 0);
-  if (price >= original) {
+  if (price >= Number(q.quotePriceNZD ?? 0)) {
     return {
       error:
         "A revised price must be below the original quote. If the device is as good or better, confirm at the original quote.",
@@ -384,11 +407,27 @@ function applyRevise(q: QuoteData, ctx: TransitionContext): ApplyResult {
   const device = revisedDeviceFields(p);
   if ("error" in device) return device;
 
+  // The customer sees the offer in their currency at the quote's locked FX
+  // rate (D6), rounded like the original, so it must be lower there too
+  const revisedPriceNZD = Math.round(price * 100) / 100;
+  const revisedPriceDisplay = toQuoteCurrency(q, revisedPriceNZD);
+  const original = originalAmount(q);
+  if (
+    revisedPriceDisplay !== null &&
+    original.currency !== "NZD" &&
+    revisedPriceDisplay >= original.amount
+  ) {
+    return {
+      error: `At the quote's exchange rate the revised offer is ${formatMoney(revisedPriceDisplay, original.currency)}, which isn't below the original ${formatMoney(original.amount, original.currency)}. Lower the revised price or confirm at the original quote.`,
+    };
+  }
+
   const days = ctx.revisionExpiryDays ?? DEFAULT_REVISION_RESPONSE_DAYS;
   return {
     fields: {
       inspectionGrade: grade,
-      revisedPriceNZD: Math.round(price * 100) / 100,
+      revisedPriceNZD,
+      revisedPriceDisplay,
       revisionExpiresAt: new Date(ctx.now.getTime() + days * DAY_MS),
       ...device.fields,
     },
@@ -449,7 +488,11 @@ export const TRANSITIONS: readonly Rule[] = [
       return deadline <= ctx.now.getTime() ? null : "Quote has not expired";
     },
     apply: (q) =>
-      withLabelRefund({ fields: {}, effects: ["expired_email"] }, q),
+      withCustomerValue(
+        withLabelRefund({ fields: {}, effects: ["expired_email"] }, q),
+        q,
+        "reverse_customer_value"
+      ),
   },
   {
     from: "accepted",
@@ -467,7 +510,8 @@ export const TRANSITIONS: readonly Rule[] = [
     actors: ["admin"],
     state: (q) =>
       q.acceptedAt ? null : "Only a quote that had been accepted can be received",
-    apply: applyReceive,
+    apply: (q, ctx) =>
+      withCustomerValue(applyReceive(q, ctx), q, "restore_customer_value"),
   },
 
   {
@@ -551,7 +595,10 @@ export const TRANSITIONS: readonly Rule[] = [
     actors: ["admin"],
     state: (q) =>
       isModeB(q) || hasPayoutDetails(q) ? null : "Payout details are missing",
-    apply: () => ({ fields: {}, effects: ["commission", "paid_email"] }),
+    apply: (q, ctx) => ({
+      fields: { payout: payoutSnapshot(q, ctx.now, ctx.actorId ?? null) },
+      effects: ["commission", "paid_email"],
+    }),
   },
   {
     from: "inspected",
@@ -560,7 +607,13 @@ export const TRANSITIONS: readonly Rule[] = [
     apply: applyAdminReturn,
   },
 
-  { from: "returning", to: "returned", actors: ["admin"] },
+  {
+    from: "returning",
+    to: "returned",
+    actors: ["admin"],
+    apply: (q) =>
+      withCustomerValue({ fields: {} }, q, "reverse_customer_value"),
+  },
 ];
 
 function findRule(from: QuoteStatus, to: QuoteStatus): Rule | undefined {

@@ -576,6 +576,38 @@ describe("inspection (D12)", () => {
     expect(plan.effects).toEqual(["revised_email"]);
   });
 
+  it("stores the revised price in the customer's currency at the locked rate (D6)", () => {
+    const aud = { displayCurrency: "AUD", fxRate: 0.92, quotePriceDisplay: 180 };
+    const plan = planTransition(
+      quote("received", aud),
+      "revised",
+      ctx("admin", { payload: { inspectionGrade: "C", revisedPriceNZD: 150 } })
+    );
+    expect(plan.ok && plan.update).toMatchObject({
+      revisedPriceNZD: 150,
+      revisedPriceDisplay: 135,
+    });
+
+    const nzd = planTransition(
+      quote("received", { displayCurrency: "NZD", fxRate: 1, quotePriceDisplay: 200 }),
+      "revised",
+      ctx("admin", { payload: { inspectionGrade: "C", revisedPriceNZD: 199.5 } })
+    );
+    expect(nzd.ok && nzd.update.revisedPriceDisplay).toBe(199.5);
+  });
+
+  it("revisions must also go down in the customer's currency", () => {
+    // 199 NZD × 0.92 = 183.08 → $180, the same as the original $180
+    const aud = { displayCurrency: "AUD", fxRate: 0.92, quotePriceDisplay: 180 };
+    const plan = planTransition(
+      quote("received", aud),
+      "revised",
+      ctx("admin", { payload: { inspectionGrade: "C", revisedPriceNZD: 199 } })
+    );
+    expect(plan).toMatchObject({ ok: false, code: "guard_failed" });
+    expect(!plan.ok && plan.message).toContain("$180.00 AUD");
+  });
+
   it("revised device fields must be complete", () => {
     expect(
       inspect("inspected", { inspectionGrade: "A", revisedDeviceId: "d1" }).ok
@@ -657,6 +689,33 @@ describe("inspected → paid", () => {
     const plan = planTransition(quote("inspected", CUSTOMER_DETAILS), "paid", ctx("admin"));
     expect(plan.ok && plan.effects).toEqual(["commission", "paid_email"]);
   });
+
+  it("saves a payout snapshot of the amount payable", () => {
+    const plan = planTransition(
+      quote("inspected", {
+        ...CUSTOMER_DETAILS,
+        displayCurrency: "AUD",
+        fxRate: 0.92,
+        quotePriceDisplay: 180,
+        revisedPriceNZD: 150,
+        revisedPriceDisplay: 135,
+      }),
+      "paid",
+      ctx("admin", { actorId: "admin@rhex.app" })
+    );
+    expect(plan.ok && plan.update.payout).toEqual({
+      method: "payid",
+      payIdPhone: "•••• 123",
+      bankBSB: null,
+      bankAccountNumber: null,
+      bankAccountName: null,
+      amount: 135,
+      currency: "AUD",
+      amountNZD: 150,
+      paidAt: NOW,
+      paidBy: "admin@rhex.app",
+    });
+  });
 });
 
 describe("admin returns", () => {
@@ -700,5 +759,64 @@ describe("allowedTransitions", () => {
         expect(allowedTransitions(quote(status), actor, NOW)).toEqual([]);
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Customer totals
+// ---------------------------------------------------------------------------
+
+describe("customer totalValueNZD", () => {
+  const linked = { customerId: "c1", acceptedAt: past(5) };
+
+  it("is reversed when a linked quote ends unpaid", () => {
+    const cases: [QuoteData, QuoteStatus, TransitionContext][] = [
+      [
+        quote("accepted", linked),
+        "cancelled",
+        ctx("admin", { payload: { cancelReason: "customer_request" } }),
+      ],
+      [
+        quote("shipped", linked),
+        "cancelled",
+        ctx("admin", { payload: { cancelReason: "lost_in_transit" } }),
+      ],
+      [
+        quote("on_hold", { ...linked, heldFrom: "received" }),
+        "cancelled",
+        ctx("admin", { payload: { cancelReason: "surrendered" } }),
+      ],
+      [
+        quote("accepted", { ...linked, labelSentAt: past(45), postByAt: past(31) }),
+        "expired",
+        ctx("system"),
+      ],
+      [quote("returning", linked), "returned", ctx("admin")],
+    ];
+    for (const [q, to, c] of cases) {
+      const plan = planTransition(q, to, c);
+      if (!plan.ok) throw new Error(plan.message);
+      expect(plan.effects).toContain("reverse_customer_value");
+    }
+  });
+
+  it("is restored when an expired quote is received after all", () => {
+    const plan = planTransition(
+      quote("expired", linked),
+      "received",
+      ctx("admin", { payload: { imei: "356789012345678" } })
+    );
+    expect(plan.ok && plan.effects).toEqual(["restore_customer_value"]);
+  });
+
+  it("is untouched for quotes with no linked customer", () => {
+    const plan = planTransition(quote("returning"), "returned", ctx("admin"));
+    expect(plan.ok && plan.effects).toEqual([]);
+    const paid = planTransition(
+      quote("inspected", { ...linked, ...CUSTOMER_DETAILS }),
+      "paid",
+      ctx("admin")
+    );
+    expect(paid.ok && paid.effects).not.toContain("reverse_customer_value");
   });
 });

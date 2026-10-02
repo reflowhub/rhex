@@ -2,8 +2,9 @@
  * End-to-end checks for lib/transition-quote.ts and lib/shipping-labels.ts
  * against the test Firebase project: concurrent transitions, TI- references,
  * commission, audit log, lazy expiry (quoted, accepted, revised), label
- * reminders, sandbox handling, label send/replace/refund and "I've posted
- * it". Creates its own data and
+ * reminders, sandbox handling, label send/replace/refund, "I've posted
+ * it", and money (revised price at the locked FX rate, payout snapshot,
+ * customer totalValueNZD). Creates its own data and
  * deletes it afterwards, restoring counters/tradeIns to its previous value.
  *
  * Usage: npx tsx scripts/check-quote-transitions.ts   (refuses to run unless
@@ -59,6 +60,7 @@ async function main() {
     check("received → revised at 150", (await transitionQuote(q.id, "revised", { actor: "admin", admin: adminUser, payload: { inspectionGrade: "C", revisedPriceNZD: 150 } })).ok);
     d = (await q.get()).data()!;
     check("revisionExpiresAt set", !!d.revisionExpiresAt);
+    check(`revisedPriceDisplay at locked FX 0.9 (${d.revisedPriceDisplay})`, d.revisedPriceDisplay === 135);
     check("customer accepts revision", (await transitionQuote(q.id, "inspected", { actor: "customer" })).ok);
     check("inspected → on_hold", (await transitionQuote(q.id, "on_hold", { actor: "admin", admin: adminUser, reason: "Blacklist check" })).ok);
     const paidWhileHeld = await transitionQuote(q.id, "paid", { actor: "admin", admin: adminUser });
@@ -71,7 +73,10 @@ async function main() {
     check("concurrent paid: exactly one succeeds", [p1, p2].filter((r) => r.ok).length === 1);
     const ledger = await adminDb.collection("commissionLedger").where("quoteId", "==", q.id).get();
     check(`one commission entry (${ledger.docs.map((x) => x.id).join(",")})`, ledger.size === 1 && ledger.docs[0].id === `quote_${q.id}`);
+    check(`commission on the revised NZD price (${ledger.docs[0]?.data().quoteTotal})`, ledger.docs[0]?.data().quoteTotal === 150);
     d = (await q.get()).data()!;
+    const po = d.payout ?? {};
+    check(`payout snapshot: ${po.amount} ${po.currency} / ${po.amountNZD} NZD, ${po.method} ${po.payIdPhone}, by ${po.paidBy}`, po.amount === 135 && po.currency === "AUD" && po.amountNZD === 150 && po.method === "payid" && po.payIdPhone === "•••• 123" && po.paidBy === adminUser.email && !!po.paidAt);
     check(`history entries: ${d.statusHistory.map((e: { to: string }) => e.to).join(" → ")}`, d.statusHistory.length === 8);
     const audit = await adminDb.collection("quoteAuditLog").where("quoteId", "==", q.id).get();
     check(`admin audit entries (${audit.size})`, audit.size === 6);
@@ -153,6 +158,31 @@ async function main() {
     await rm.update({ labelSentAt: daysFromNow(-7), postByAt: daysFromNow(7) });
     await transitionQuote(rm.id, "shipped", { actor: "customer" });
     check("no reminder once marked posted", (await sendLabelReminder(rm.id)) === null);
+
+    // Phase 4: revision guard in the customer's currency, customer totals
+    const fx = await mkQuote({ fxRate: 0.92, quotePriceDisplay: 180, status: "received", acceptedAt: new Date() });
+    const flat = await transitionQuote(fx.id, "revised", { actor: "admin", admin: adminUser, payload: { inspectionGrade: "C", revisedPriceNZD: 199 } });
+    check(`revision not lower in AUD rejected (${!flat.ok && flat.message})`, !flat.ok && flat.code === "guard_failed");
+
+    const customerTotal = async (ref: FirebaseFirestore.DocumentReference) => {
+      const cid = (await ref.get()).data()!.customerId;
+      return (await adminDb.collection("customers").doc(cid).get()).data()!.totalValueNZD;
+    };
+    const cv = await mkQuote();
+    await transitionQuote(cv.id, "accepted", { actor: "customer", payload: { ...details, customerEmail: "phase4-cancel@example.com" } });
+    check(`accept credits the customer (${await customerTotal(cv)})`, (await customerTotal(cv)) === 200 && (await cv.get()).data()!.customerValueNZD === 200);
+    await transitionQuote(cv.id, "cancelled", { actor: "admin", admin: adminUser, payload: { cancelReason: "customer_request" } });
+    check(`cancel reverses it (${await customerTotal(cv)})`, (await customerTotal(cv)) === 0 && (await cv.get()).data()!.customerValueNZD === 0);
+
+    const ev = await mkQuote();
+    await transitionQuote(ev.id, "accepted", { actor: "customer", payload: { ...details, customerEmail: "phase4-expire@example.com" } });
+    await sendQuoteLabel(ev.id, { pdf, fileName: "label.pdf", trackingNumber: "33AAA0000020", labelCostAUD: null, admin: adminUser });
+    await ev.update({ labelSentAt: daysFromNow(-45), postByAt: daysFromNow(-31), expectedByAt: daysFromNow(-21) });
+    await checkQuoteExpiry("quotes", ev.id);
+    check(`expiry reverses it (${await customerTotal(ev)})`, (await customerTotal(ev)) === 0);
+    await transitionQuote(ev.id, "received", { actor: "admin", admin: adminUser, payload: { imei: "356789012345678" } });
+    check(`receiving after expiry restores it (${await customerTotal(ev)})`, (await customerTotal(ev)) === 200);
+    check("returned reverses it again", (await transitionQuote(ev.id, "returning", { actor: "admin", admin: adminUser, reason: "Rejected" })).ok && (await transitionQuote(ev.id, "returned", { actor: "admin", admin: adminUser })).ok && (await customerTotal(ev)) === 0);
   } finally {
     // Clean up everything this run created
     for (const id of created) {

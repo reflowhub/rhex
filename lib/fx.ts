@@ -77,17 +77,5 @@ export async function getTodayFXRate(): Promise<FXRates> {
   };
 }
 
-/**
- * Convert NZD price to display currency with optional rounding.
- */
-export function convertPrice(
-  priceNZD: number,
-  currency: "AUD" | "NZD",
-  fxRate: number,
-  roundTo: number = 5
-): number {
-  if (currency === "NZD") return priceNZD;
-  const converted = priceNZD * fxRate;
-  if (roundTo <= 0) return Math.round(converted * 100) / 100;
-  return Math.floor(converted / roundTo) * roundTo;
-}
+// Pure, so it lives with the other client-safe money helpers
+export { convertPrice } from "@/lib/quote-money";

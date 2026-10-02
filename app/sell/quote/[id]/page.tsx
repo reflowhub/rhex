@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Inter } from "next/font/google";
 import { cn } from "@/lib/utils";
+import { originalAmount, payableAmount } from "@/lib/quote-money";
 import { formatTimeLeft } from "@/lib/quote-validity";
 
 const inter = Inter({
@@ -75,6 +76,7 @@ interface QuoteData {
   };
   inspectionGrade?: string;
   revisedPriceNZD?: number;
+  revisedPriceDisplay?: number;
   revisedDeviceId?: string;
   revisedDeviceMake?: string;
   revisedDeviceModel?: string;
@@ -466,10 +468,7 @@ export default function QuoteResultPage({
                   Grade {quote.grade}
                 </p>
                 <p className="text-lg font-bold mt-1">
-                  $
-                  {(
-                    quote.quotePriceDisplay ?? quote.quotePriceNZD
-                  ).toFixed(2)}
+                  ${originalAmount(quote).amount.toFixed(2)}
                 </p>
               </div>
               <div className="rounded-lg bg-white/80 p-3 border-2 border-amber-300">
@@ -485,7 +484,7 @@ export default function QuoteResultPage({
                   Grade {quote.inspectionGrade}
                 </p>
                 <p className="text-lg font-bold mt-1">
-                  ${(quote.revisedPriceNZD ?? 0).toFixed(2)}
+                  ${payableAmount(quote).amount.toFixed(2)}
                 </p>
               </div>
             </div>
@@ -612,16 +611,32 @@ export default function QuoteResultPage({
           )}
 
 
-          {/* Price */}
-          <div className="mb-6 rounded-lg bg-primary/5 p-6 text-center">
-            <p className="text-sm text-muted-foreground">Your Quote</p>
-            <p className="mt-1 text-4xl font-bold text-primary">
-              ${(quote.quotePriceDisplay ?? quote.quotePriceNZD).toFixed(2)}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {quote.displayCurrency}
-            </p>
-          </div>
+          {/* Price: the final amount once a revised offer is accepted */}
+          {(() => {
+            const payable = payableAmount(quote);
+            const isFinal =
+              payable.revised &&
+              (quote.status === "inspected" || quote.status === "paid");
+            const shown = isFinal ? payable : originalAmount(quote);
+            return (
+              <div className="mb-6 rounded-lg bg-primary/5 p-6 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {isFinal ? "Final Price" : "Your Quote"}
+                </p>
+                <p className="mt-1 text-4xl font-bold text-primary">
+                  ${shown.amount.toFixed(2)}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {shown.currency}
+                  {isFinal && (
+                    <span className="ml-2 line-through">
+                      ${originalAmount(quote).amount.toFixed(2)}
+                    </span>
+                  )}
+                </p>
+              </div>
+            );
+          })()}
 
           {/* Competitor Comparison */}
           {competitors.length > 0 && (
