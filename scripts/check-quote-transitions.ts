@@ -1,8 +1,9 @@
 /**
  * End-to-end checks for lib/transition-quote.ts and lib/shipping-labels.ts
  * against the test Firebase project: concurrent transitions, TI- references,
- * commission, audit log, lazy revision expiry, sandbox handling, label
- * send/replace/refund and "I've posted it". Creates its own data and
+ * commission, audit log, lazy expiry (quoted, accepted, revised), label
+ * reminders, sandbox handling, label send/replace/refund and "I've posted
+ * it". Creates its own data and
  * deletes it afterwards, restoring counters/tradeIns to its previous value.
  *
  * Usage: npx tsx scripts/check-quote-transitions.ts   (refuses to run unless
@@ -16,8 +17,8 @@ async function main() {
   if (process.env.FIREBASE_ADMIN_PROJECT_ID !== "rhex-test") throw new Error("not rhex-test");
   const { adminDb } = await import("../lib/firebase-admin");
   const { transitionQuote } = await import("../lib/transition-quote");
-  const { checkRevisionExpiry } = await import("../lib/revision-expiry");
-  const { sendQuoteLabel, resolveLabelRefund } = await import("../lib/shipping-labels");
+  const { checkQuoteExpiry } = await import("../lib/quote-expiry");
+  const { sendQuoteLabel, resolveLabelRefund, sendLabelReminder } = await import("../lib/shipping-labels");
   const adminUser = { uid: "phase1-test", email: "phase1-test@rhex.local" };
   const created: string[] = [];
   const counterRef = adminDb.doc("counters/tradeIns");
@@ -78,7 +79,7 @@ async function main() {
 
     // Lazy revision expiry through the module
     const r = await mkQuote({ status: "revised", revisionExpiresAt: new Date(Date.now() - 1000), customerEmail: "phase1-test@example.com" });
-    check("checkRevisionExpiry moves an expired revision", await checkRevisionExpiry("quotes", r.id));
+    check("checkQuoteExpiry moves an expired revision", await checkQuoteExpiry("quotes", r.id));
     const rd = (await r.get()).data()!;
     check("auto-expired via system actor", rd.status === "returning" && rd.revisionAutoExpired === true && rd.statusHistory?.[0]?.actor === "system");
 
@@ -119,6 +120,39 @@ async function main() {
     await transitionQuote(c.id, "cancelled", { actor: "admin", admin: adminUser, payload: { cancelReason: "customer_request" } });
     const cancelledLabel = cl.ok ? (await adminDb.collection("shippingLabels").doc(cl.labelId).get()).data() : null;
     check("cancel queues the label for refund", cancelledLabel?.refundState === "pending");
+
+    // Phase 3: deadlines (lazy check; the cron uses the same transitions) and reminders
+    const daysFromNow = (n: number) => new Date(Date.now() + n * 86400000);
+    const ex = await mkQuote({ expiresAt: daysFromNow(-0.01) });
+    check("open after expiresAt: quoted → expired", (await checkQuoteExpiry("quotes", ex.id)) && (await ex.get()).data()!.status === "expired");
+    check("expired quote can't be accepted", !(await transitionQuote(ex.id, "accepted", { actor: "customer", payload: details })).ok);
+
+    const un = await mkQuote();
+    await transitionQuote(un.id, "accepted", { actor: "customer", payload: details });
+    const ul = await sendQuoteLabel(un.id, { pdf, fileName: "label.pdf", trackingNumber: "33AAA0000010", labelCostAUD: null, admin: adminUser });
+    check("accepted quote not expired before postByAt + 30d", !(await checkQuoteExpiry("quotes", un.id)));
+    await un.update({ labelSentAt: daysFromNow(-45), postByAt: daysFromNow(-31), expectedByAt: daysFromNow(-21) });
+    check("unposted at day 45: accepted → expired", (await checkQuoteExpiry("quotes", un.id)) && (await un.get()).data()!.status === "expired");
+    const unLabel = ul.ok ? (await adminDb.collection("shippingLabels").doc(ul.labelId).get()).data() : null;
+    check("expired quote's label queued for refund", unLabel?.refundState === "pending");
+    check("expired-after-acceptance can still be received", (await transitionQuote(un.id, "received", { actor: "admin", admin: adminUser, payload: { imei: "356789012345678" } })).ok && (await un.get()).data()!.lateArrival === true);
+
+    const rm = await mkQuote();
+    await transitionQuote(rm.id, "accepted", { actor: "customer", payload: details });
+    const rl = await sendQuoteLabel(rm.id, { pdf, fileName: "label.pdf", trackingNumber: "33AAA0000011", labelCostAUD: null, admin: adminUser });
+    check("no reminder on day 0", (await sendLabelReminder(rm.id)) === null);
+    await rm.update({ labelSentAt: daysFromNow(-7), postByAt: daysFromNow(7) });
+    const [r1, r2] = await Promise.all([sendLabelReminder(rm.id), sendLabelReminder(rm.id)]);
+    check(`concurrent day-7 reminder: sent once (${r1}, ${r2})`, [r1, r2].filter((x) => x === "day7").length === 1 && [r1, r2].includes(null));
+    await rm.update({ labelSentAt: daysFromNow(-12), postByAt: daysFromNow(2) });
+    check("day-12 reminder", (await sendLabelReminder(rm.id)) === "day12");
+    check("no third reminder", (await sendLabelReminder(rm.id)) === null);
+    const rr = rl.ok ? await sendQuoteLabel(rm.id, { pdf, fileName: "label.pdf", trackingNumber: "33AAA0000012", labelCostAUD: null, admin: adminUser, replaceLabelId: rl.labelId }) : null;
+    const rmd = (await rm.get()).data()!;
+    check("replacement label resets reminders", !!rr?.ok && Object.keys(rmd.remindersSent ?? {}).length === 0);
+    await rm.update({ labelSentAt: daysFromNow(-7), postByAt: daysFromNow(7) });
+    await transitionQuote(rm.id, "shipped", { actor: "customer" });
+    check("no reminder once marked posted", (await sendLabelReminder(rm.id)) === null);
   } finally {
     // Clean up everything this run created
     for (const id of created) {

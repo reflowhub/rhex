@@ -1,9 +1,9 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-export function loadEnv() {
+export function loadEnv(file = '.env.local') {
   try {
-    const envPath = resolve(process.cwd(), '.env.local');
+    const envPath = resolve(process.cwd(), file);
     const envFile = readFileSync(envPath, 'utf-8');
 
     envFile.split('\n').forEach(line => {
@@ -25,8 +25,8 @@ export function loadEnv() {
       }
     });
 
-    console.log('Environment variables loaded from .env.local');
+    console.log(`Environment variables loaded from ${file}`);
   } catch (error) {
-    console.error('Failed to load .env.local:', error);
+    console.error(`Failed to load ${file}:`, error);
   }
 }

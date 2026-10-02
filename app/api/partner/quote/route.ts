@@ -7,6 +7,7 @@ import { calculatePartnerRate } from "@/lib/partner-pricing";
 import { readGrades } from "@/lib/grades";
 import { getActivePriceList, getCategoryGrades } from "@/lib/categories";
 import { parsePlatform } from "@/lib/parse-platform";
+import { PARTNER_QUOTE_VALIDITY_MS } from "@/lib/quote-validity";
 
 // ---------------------------------------------------------------------------
 // POST /api/partner/quote — Create a single quote at partner rate (Mode B)
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
 
     // Calculate expiry (14 days)
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(now.getTime() + PARTNER_QUOTE_VALIDITY_MS);
 
     // Capture client metadata from request headers
     const userAgent = request.headers.get("user-agent") ?? null;

@@ -6,6 +6,7 @@ import { readGrades } from "@/lib/grades";
 import { getActivePriceList, getCategoryGrades } from "@/lib/categories";
 import { getTodayFXRate, convertPrice } from "@/lib/fx";
 import { serializeTimestamp } from "@/lib/serialize";
+import { PARTNER_QUOTE_VALIDITY_MS } from "@/lib/quote-validity";
 
 // ---------------------------------------------------------------------------
 // GET /api/admin/quotes — List all quotes with optional filters
@@ -229,9 +230,9 @@ export async function POST(request: NextRequest) {
       quotePriceDisplay = convertPrice(Number(quotePriceNZD), "AUD", fxRate, 5);
     }
 
-    // Calculate expiry (14 days from now)
+    // Calculate expiry (14 days)
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(now.getTime() + PARTNER_QUOTE_VALIDITY_MS);
 
     // Build quote document
     const quoteData: Record<string, unknown> = {

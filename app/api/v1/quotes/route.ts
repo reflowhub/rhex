@@ -8,6 +8,7 @@ import { readGrades } from "@/lib/grades";
 import { getActivePriceList, getCategoryGrades } from "@/lib/categories";
 import { parsePlatform } from "@/lib/parse-platform";
 import { getTodayFXRate, convertPrice } from "@/lib/fx";
+import { PARTNER_QUOTE_VALIDITY_MS } from "@/lib/quote-validity";
 
 // ---------------------------------------------------------------------------
 // POST /api/v1/quotes — Create a single-device quote at partner rate
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
     const now = new Date();
     const expiryMs = partner.sandbox
       ? 1 * 60 * 60 * 1000
-      : 14 * 24 * 60 * 60 * 1000;
+      : PARTNER_QUOTE_VALIDITY_MS;
     const expiresAt = new Date(now.getTime() + expiryMs);
 
     // Capture client metadata

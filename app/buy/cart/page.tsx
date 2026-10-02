@@ -54,7 +54,12 @@ export default function CartPage() {
       }
       const data = await res.json();
 
-      if (data.expiresAt && new Date(data.expiresAt) < new Date()) {
+      if (
+        data.status === "expired" ||
+        (data.status === "quoted" &&
+          data.expiresAt &&
+          new Date(data.expiresAt) < new Date())
+      ) {
         setTradeInError("This quote has expired. Please request a new one.");
         return;
       }

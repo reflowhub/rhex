@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Inter } from "next/font/google";
 import { cn } from "@/lib/utils";
+import { formatTimeLeft } from "@/lib/quote-validity";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -320,19 +321,13 @@ export default function QuoteResultPage({
   // Only an open quote can be accepted
   const isQuoted = quote?.status === "quoted" && !accepted;
 
-  const isExpired = quote?.expiresAt
-    ? new Date(quote.expiresAt) < new Date()
-    : false;
-
-  const daysUntilExpiry = quote?.expiresAt
-    ? Math.max(
-        0,
-        Math.ceil(
-          (new Date(quote.expiresAt).getTime() - Date.now()) /
-            (1000 * 60 * 60 * 24)
-        )
-      )
-    : 0;
+  // An unaccepted quote past expiresAt, whether or not the status has
+  // caught up yet (the quote-expiry cron runs hourly)
+  const isExpired =
+    (quote?.status === "expired" && !quote.acceptedAt) ||
+    (isQuoted && !!quote?.expiresAt && new Date(quote.expiresAt) < new Date());
+  // An accepted quote that was never posted (postByAt + 30 days)
+  const isClosedUnposted = quote?.status === "expired" && !!quote.acceptedAt;
 
   // Loading state
   if (loading) {
@@ -551,6 +546,19 @@ export default function QuoteResultPage({
           </div>
         )}
 
+        {/* Expired after acceptance — never posted */}
+        {isClosedUnposted && (
+          <div className="mb-6 rounded-xl border bg-muted p-4">
+            <p className="font-semibold">Trade-In Closed</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              We didn&apos;t receive your device in time, so this trade-in has
+              been closed and its shipping label cancelled. Please don&apos;t
+              use the label. If you&apos;ve already posted your device, contact
+              us with your postage receipt.
+            </p>
+          </div>
+        )}
+
         {/* Returned — terminal */}
         {quote.status === "returned" && (
           <div className="mb-6 rounded-xl border bg-muted p-4">
@@ -653,13 +661,13 @@ export default function QuoteResultPage({
               <p className="text-sm text-muted-foreground">
                 Quote expires in{" "}
                 <span className="font-medium text-foreground">
-                  {daysUntilExpiry} days
+                  {formatTimeLeft(quote.expiresAt)}
                 </span>
               </p>
             </div>
           )}
 
-          {isExpired && isQuoted && (
+          {isExpired && (
             <div className="mb-6 rounded-lg border border-destructive/20 bg-destructive/5 p-4">
               <p className="text-sm text-destructive font-medium">
                 This quote has expired. Prices may have changed.

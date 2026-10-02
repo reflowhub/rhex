@@ -49,12 +49,16 @@ export async function GET(request: NextRequest) {
     let cancelled = 0;
 
     snapshot.docs.forEach((doc) => {
-      const status = doc.data().status as string;
+      const data = doc.data();
+      const status = data.status as string;
       if (status === "cancelled") {
         cancelled++;
         return;
       }
-      const idx = STATUS_ORDER.indexOf(status);
+      // An expired quote reached "quoted", or "accepted" if it was never posted
+      const stage =
+        status === "expired" ? (data.acceptedAt ? "accepted" : "quoted") : status;
+      const idx = STATUS_ORDER.indexOf(stage);
       if (idx === -1) return;
       // Cumulative: a quote in "paid" has passed through all prior stages
       for (let i = 0; i <= idx; i++) {

@@ -89,6 +89,7 @@ const STATUSES = [
   "paid",
   "returning",
   "returned",
+  "expired",
   "cancelled",
 ] as const;
 

@@ -5,7 +5,9 @@ import {
   type QuoteStatus,
 } from "@/lib/quote-status";
 import {
+  DEFAULT_REVISION_RESPONSE_DAYS,
   allowedTransitions,
+  dueSystemTransition,
   planTransition,
   type QuoteData,
   type TransitionContext,
@@ -366,6 +368,41 @@ describe("expiry", () => {
     expect(expire({ labelSentAt: past(20), postByAt: past(6) })).toBe(false);
     expect(expire({ labelSentAt: past(45), postByAt: past(31) })).toBe(true);
   });
+
+  it("dueSystemTransition finds the deadline that has passed, if any", () => {
+    const due = (status: QuoteStatus, extra: QuoteData = {}) =>
+      dueSystemTransition(quote(status, extra), NOW);
+    expect(due("quoted", { expiresAt: future() })).toBeNull();
+    expect(due("quoted", { expiresAt: past() })).toBe("expired");
+    expect(due("accepted", { expiresAt: past(10) })).toBeNull();
+    expect(due("accepted", { labelSentAt: past(20), postByAt: past(6) })).toBeNull();
+    expect(due("accepted", { labelSentAt: past(45), postByAt: past(31) })).toBe("expired");
+    expect(due("revised", { revisionExpiresAt: future() })).toBeNull();
+    expect(due("revised", { revisionExpiresAt: past() })).toBe("returning");
+    expect(due("shipped", { expiresAt: past(), postByAt: past(60) })).toBeNull();
+    expect(due("received", { expiresAt: past() })).toBeNull();
+  });
+
+  it("an unposted accepted quote expires with a closing email", () => {
+    const plan = planTransition(
+      quote("accepted", { labelSentAt: past(45), postByAt: past(31) }),
+      "expired",
+      ctx("system")
+    );
+    expect(plan.ok && plan.effects).toEqual(["expired_email"]);
+  });
+
+  it("the revision window defaults to 7 days (D3)", () => {
+    expect(DEFAULT_REVISION_RESPONSE_DAYS).toBe(7);
+    const plan = planTransition(
+      quote("received"),
+      "revised",
+      ctx("admin", { payload: { inspectionGrade: "C", revisedPriceNZD: 100 } })
+    );
+    expect(plan.ok && plan.update.revisionExpiresAt).toEqual(
+      new Date(NOW.getTime() + 7 * DAY)
+    );
+  });
 });
 
 describe("accepted → shipped", () => {
@@ -456,7 +493,10 @@ describe("unused labels", () => {
     );
     const expired = planTransition(quote("accepted", withLabel), "expired", ctx("system"));
     expect(cancelled.ok && cancelled.effects).toEqual(["queue_label_refund"]);
-    expect(expired.ok && expired.effects).toEqual(["queue_label_refund"]);
+    expect(expired.ok && expired.effects).toEqual([
+      "expired_email",
+      "queue_label_refund",
+    ]);
   });
 
   it("aren't queued without a label, or once the parcel has shipped", () => {

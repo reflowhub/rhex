@@ -6,6 +6,7 @@ import { readGrades } from "@/lib/grades";
 import { getActivePriceList, getCategoryGrades } from "@/lib/categories";
 import { parsePlatform } from "@/lib/parse-platform";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { PUBLIC_QUOTE_VALIDITY_MS } from "@/lib/quote-validity";
 
 // POST /api/quote — Create a new quote
 export async function POST(request: NextRequest) {
@@ -94,9 +95,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calculate expiry (14 days from now)
+    // Public quotes are valid for 24 hours (D1)
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(now.getTime() + PUBLIC_QUOTE_VALIDITY_MS);
 
     // Currency conversion
     const currency = displayCurrency === "AUD" ? "AUD" : "NZD";

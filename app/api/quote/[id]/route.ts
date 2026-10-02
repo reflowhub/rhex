@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import { checkRevisionExpiry } from "@/lib/revision-expiry";
+import { checkQuoteExpiry } from "@/lib/quote-expiry";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { serializeTimestamp } from "@/lib/serialize";
 import { transitionQuote, transitionErrorStatus } from "@/lib/transition-quote";
@@ -104,8 +104,8 @@ export async function GET(
   try {
     const { id } = await params;
 
-    // Check for revision expiry (auto-transitions if expired)
-    await checkRevisionExpiry("quotes", id);
+    // Apply any passed deadline (auto-transitions if expired)
+    await checkQuoteExpiry("quotes", id);
 
     const quoteDoc = await adminDb.collection("quotes").doc(id).get();
 

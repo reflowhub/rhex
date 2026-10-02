@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
-import { checkRevisionExpiry } from "@/lib/revision-expiry";
+import { checkQuoteExpiry } from "@/lib/quote-expiry";
 import { isQuoteStatus } from "@/lib/quote-status";
 import { toAdminQuote } from "@/lib/admin-quote";
 import {
@@ -22,8 +22,8 @@ export async function GET(
     if (adminUser instanceof NextResponse) return adminUser;
     const { id } = await params;
 
-    // Check for revision expiry (auto-transitions if expired)
-    await checkRevisionExpiry("quotes", id);
+    // Apply any passed deadline (auto-transitions if expired)
+    await checkQuoteExpiry("quotes", id);
 
     const quoteDoc = await adminDb.collection("quotes").doc(id).get();
     if (!quoteDoc.exists) {

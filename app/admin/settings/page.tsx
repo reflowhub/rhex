@@ -80,18 +80,26 @@ export default function AdminSettingsPage() {
   const [shippingSaved, setShippingSaved] = useState(false);
   const [shippingError, setShippingError] = useState<string | null>(null);
 
+  // ---- trade-in settings state ----------------------------------------------
+  const [revisionResponseDays, setRevisionResponseDays] = useState<string>("7");
+  const [tradeInSaving, setTradeInSaving] = useState(false);
+  const [tradeInSaved, setTradeInSaved] = useState(false);
+  const [tradeInError, setTradeInError] = useState<string | null>(null);
+
   // ---- fetch data ---------------------------------------------------------
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [catRes, pricingRes, shippingRes] = await Promise.all([
+      const [catRes, pricingRes, shippingRes, tradeInRes] = await Promise.all([
         fetch("/api/admin/categories"),
         fetch(`/api/admin/settings/pricing?category=Phone`),
         fetch("/api/admin/shipping"),
+        fetch("/api/admin/settings"),
       ]);
       const catData = await catRes.json();
       const pricingData: PricingSettingsData = await pricingRes.json();
       const shippingData = await shippingRes.json();
+      const tradeInData = await tradeInRes.json();
 
       if (catData.categories) {
         setCategories(catData.categories);
@@ -101,6 +109,7 @@ export default function AdminSettingsPage() {
       setShippingRates(shippingData.rates ?? {});
       setShippingFreeThreshold(String(shippingData.freeThreshold ?? 0));
       setShippingDefaultRate(String(shippingData.defaultRate ?? 10));
+      setRevisionResponseDays(String(tradeInData.revisionResponseDays ?? 7));
     } catch (err) {
       console.error("Failed to load settings:", err);
     } finally {
@@ -319,6 +328,36 @@ export default function AdminSettingsPage() {
     }
   };
 
+  // ---- save trade-in settings ---------------------------------------------
+  const handleSaveTradeIn = async () => {
+    setTradeInSaving(true);
+    setTradeInError(null);
+    setTradeInSaved(false);
+
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          revisionResponseDays: Number(revisionResponseDays),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setTradeInError(data.error || "Failed to save trade-in settings");
+        return;
+      }
+
+      setTradeInSaved(true);
+      setTimeout(() => setTradeInSaved(false), 3000);
+    } catch {
+      setTradeInError("Failed to save trade-in settings");
+    } finally {
+      setTradeInSaving(false);
+    }
+  };
+
   // ---- render: loading state ----------------------------------------------
   if (loading) {
     return (
@@ -341,7 +380,8 @@ export default function AdminSettingsPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage product categories and pricing parameters.
+          Manage product categories, pricing, shipping and trade-in
+          deadlines.
         </p>
       </div>
 
@@ -622,6 +662,57 @@ export default function AdminSettingsPage() {
             Save Shipping Settings
           </Button>
           {shippingSaved && (
+            <span className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
+              <Check className="h-4 w-4" />
+              Saved
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Section 4: Trade-In Settings                                     */}
+      {/* ---------------------------------------------------------------- */}
+      <div className="mt-6 max-w-2xl rounded-lg border border-border bg-card p-6">
+        <h2 className="text-lg font-semibold">Trade-Ins</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Deadlines for trade-in quotes and bulk quotes.
+        </p>
+
+        <div className="mt-4 max-w-[200px]">
+          <Label htmlFor="revision-days" className="text-sm font-medium">
+            Revision Response Window (days)
+          </Label>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Time to accept or reject a revised offer. No response returns the
+            device. Applies to offers revised from now on.
+          </p>
+          <Input
+            id="revision-days"
+            type="number"
+            min={1}
+            max={30}
+            step="1"
+            value={revisionResponseDays}
+            onChange={(e) => setRevisionResponseDays(e.target.value)}
+            className="mt-1"
+          />
+        </div>
+
+        {tradeInError && (
+          <div className="mt-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            {tradeInError}
+          </div>
+        )}
+
+        <div className="mt-6 flex items-center gap-3">
+          <Button onClick={handleSaveTradeIn} disabled={tradeInSaving}>
+            {tradeInSaving && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            Save Trade-In Settings
+          </Button>
+          {tradeInSaved && (
             <span className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
               <Check className="h-4 w-4" />
               Saved

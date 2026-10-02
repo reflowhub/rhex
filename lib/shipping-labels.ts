@@ -3,7 +3,15 @@ import type { AdminSession } from "@/lib/admin-auth";
 import { logQuoteAction } from "@/lib/audit-log";
 import { sendEmail } from "@/lib/email";
 import QuoteLabelEmail from "@/emails/quote-label";
-import { formatCustomerDate, labelDeadlines } from "@/lib/label-deadlines";
+import QuoteLabelReminderEmail from "@/emails/quote-label-reminder";
+import {
+  LABEL_REMINDER_DAYS,
+  dueLabelReminder,
+  formatCustomerDate,
+  labelDeadlines,
+  type LabelReminder,
+} from "@/lib/label-deadlines";
+import { toDate } from "@/lib/quote-transitions";
 
 // ---------------------------------------------------------------------------
 // Shipping labels for trade-in quotes
@@ -105,6 +113,8 @@ export async function sendQuoteLabel(
       labelSentAt: now,
       postByAt,
       expectedByAt,
+      // A new label starts a new post-by period, so reminders start again
+      remindersSent: {},
     });
 
     return { ok: true as const, quote: q, postByAt };
@@ -126,14 +136,7 @@ export async function sendQuoteLabel(
 
   const q = outcome.quote;
   if (q.sandbox !== true && typeof q.customerEmail === "string") {
-    let deviceName = "your device";
-    if (typeof q.deviceId === "string" && q.deviceId) {
-      const device = await adminDb.collection("devices").doc(q.deviceId).get();
-      if (device.exists) {
-        const d = device.data()!;
-        deviceName = `${d.make} ${d.model} ${d.storage}`.trim();
-      }
-    }
+    const deviceName = await deviceLabel(q.deviceId);
     const tradeInRef = (q.tradeInRef as string) ?? quoteId.slice(0, 8);
     await sendEmail({
       to: q.customerEmail,
@@ -153,6 +156,56 @@ export async function sendQuoteLabel(
   }
 
   return { ok: true, labelId: labelRef.id };
+}
+
+async function deviceLabel(deviceId: unknown): Promise<string> {
+  if (typeof deviceId !== "string" || !deviceId) return "your device";
+  const device = await adminDb.collection("devices").doc(deviceId).get();
+  if (!device.exists) return "your device";
+  const d = device.data()!;
+  return `${d.make} ${d.model} ${d.storage}`.trim();
+}
+
+/**
+ * Send the label reminder that is due now, if any (day 7 / day 12, see
+ * dueLabelReminder). The reminder is recorded in `remindersSent` inside a
+ * transaction before the email goes out, so each one is sent at most once.
+ */
+export async function sendLabelReminder(
+  quoteId: string,
+  now: Date = new Date()
+): Promise<LabelReminder | null> {
+  const quoteRef = adminDb.collection("quotes").doc(quoteId);
+  const claimed = await adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(quoteRef);
+    if (!snap.exists) return null;
+    const q = snap.data()!;
+    const reminder = dueLabelReminder(q, now);
+    if (!reminder || typeof q.customerEmail !== "string") return null;
+    tx.update(quoteRef, { [`remindersSent.${reminder}`]: now });
+    return { reminder, q };
+  });
+  if (!claimed) return null;
+
+  const { reminder, q } = claimed;
+  const tradeInRef = (q.tradeInRef as string) ?? quoteId.slice(0, 8);
+  const postBy = toDate(q.postByAt)!;
+  const final = reminder === `day${LABEL_REMINDER_DAYS[LABEL_REMINDER_DAYS.length - 1]}`;
+  await sendEmail({
+    to: q.customerEmail as string,
+    subject: final
+      ? `Last reminder: post your trade-in by ${formatCustomerDate(postBy)} (${tradeInRef})`
+      : `Reminder: post your trade-in by ${formatCustomerDate(postBy)} (${tradeInRef})`,
+    react: QuoteLabelReminderEmail({
+      customerName: (q.customerName as string) ?? "there",
+      deviceName: await deviceLabel(q.deviceId),
+      tradeInRef,
+      postBy: formatCustomerDate(postBy),
+      quoteId,
+      final,
+    }),
+  });
+  return reminder;
 }
 
 /** Put a quote's current label in the refund queue (quote expired or cancelled). */

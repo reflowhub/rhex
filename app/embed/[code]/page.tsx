@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { formatTimeLeft } from "@/lib/quote-validity";
 import { SELL_GRADE_LABELS as GRADE_LABELS } from "@/lib/grades";
 import { hexToHSL } from "@/lib/color-utils";
 import { TradeInShippingInstructions } from "@/components/trade-in-shipping";
@@ -548,16 +549,6 @@ export default function EmbedWidgetPage({
   const isExpired = quote?.expiresAt
     ? new Date(quote.expiresAt) < new Date()
     : false;
-
-  const daysUntilExpiry = quote?.expiresAt
-    ? Math.max(
-        0,
-        Math.ceil(
-          (new Date(quote.expiresAt).getTime() - Date.now()) /
-            (1000 * 60 * 60 * 24)
-        )
-      )
-    : 0;
 
   // ---- Compute primary color CSS override
   const colorStyle: React.CSSProperties = config?.widgetPrimaryColor
@@ -1103,7 +1094,7 @@ export default function EmbedWidgetPage({
                     <p className="text-sm text-muted-foreground">
                       Quote expires in{" "}
                       <span className="font-medium text-foreground">
-                        {daysUntilExpiry} days
+                        {formatTimeLeft(quote.expiresAt)}
                       </span>
                     </p>
                   </div>

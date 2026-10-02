@@ -66,7 +66,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "How long is my quote valid?",
-    a: "Quotes are valid for 14 days from the date they're generated. After that, you can request a new quote — though prices may have changed.",
+    a: "Quotes are valid for 24 hours. Accept within that time to lock in your price; we'll then email you a prepaid Australia Post label, and you'll have 14 days to post your device. If your quote expires, you can request a new one, though prices may have changed.",
   },
   {
     q: "What happens if you grade my device differently?",
@@ -747,8 +747,8 @@ export default function Home() {
             },
             {
               icon: Undo2,
-              title: "14-day quotes",
-              desc: "Your quote is locked in for 14 days. No pressure.",
+              title: "14 days to post",
+              desc: "Once we email your prepaid label, you have 14 days to post your device.",
             },
           ].map((item) => (
             <div

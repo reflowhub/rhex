@@ -145,14 +145,10 @@ export async function POST(request: NextRequest) {
         .collection("quotes")
         .doc(tradeInQuoteIdInput)
         .get();
-      if (quoteDoc.exists) {
-        const quoteData = quoteDoc.data();
-        if (quoteData?.status === "accepted") {
-          const expiresAt = quoteData.expiresAt?.toDate?.();
-          if (!expiresAt || expiresAt >= new Date()) {
-            validatedTradeInQuoteId = tradeInQuoteIdInput;
-          }
-        }
+      // expiresAt only limits acceptance; an accepted quote stays linkable
+      // until it moves on (an unposted one expires via the quote-expiry cron)
+      if (quoteDoc.exists && quoteDoc.data()?.status === "accepted") {
+        validatedTradeInQuoteId = tradeInQuoteIdInput;
       }
       // Non-blocking: if quote is invalid/expired, we still proceed without it
     }

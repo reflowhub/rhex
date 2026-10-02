@@ -3,7 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { requirePartner } from "@/lib/partner-auth";
 import { PartnerSession } from "@/lib/partner-auth";
 import { transitionQuote } from "@/lib/transition-quote";
-import { applyRevisionExpiry } from "@/lib/revision-expiry";
+import { applyQuoteExpiry } from "@/lib/quote-expiry";
 import { serializeTimestamp } from "@/lib/serialize";
 
 // ---------------------------------------------------------------------------
@@ -31,7 +31,7 @@ export async function GET(
       }
 
       // Check for revision expiry
-      const data = (await applyRevisionExpiry(quoteDoc))!;
+      const data = (await applyQuoteExpiry(quoteDoc))!;
 
       // Fetch device info
       let device: Record<string, unknown> | null = null;

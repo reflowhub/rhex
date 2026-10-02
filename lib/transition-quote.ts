@@ -5,7 +5,9 @@ import { onQuotePaid } from "@/lib/commission-trigger";
 import { findOrCreateCustomer } from "@/lib/customer-link";
 import { sendEmail } from "@/lib/email";
 import { queueLabelRefund } from "@/lib/shipping-labels";
+import { getRevisionResponseDays } from "@/lib/tradein-settings";
 import QuoteAcceptedEmail from "@/emails/quote-accepted";
+import QuoteExpiredEmail from "@/emails/quote-expired";
 import QuotePaidEmail from "@/emails/quote-paid";
 import QuoteRevisedEmail from "@/emails/quote-revised";
 import {
@@ -67,11 +69,6 @@ export function transitionErrorStatus(
   }
 }
 
-function revisionExpiryDays(): number {
-  const days = parseInt(process.env.REVISION_EXPIRY_DAYS ?? "14", 10);
-  return Number.isFinite(days) && days > 0 ? days : 14;
-}
-
 export async function transitionQuote(
   quoteId: string,
   to: QuoteStatus,
@@ -80,6 +77,8 @@ export async function transitionQuote(
   const ref = adminDb.collection("quotes").doc(quoteId);
   const actorId =
     opts.actor === "admin" ? opts.admin?.email ?? null : opts.actorId ?? null;
+  const revisionExpiryDays =
+    to === "revised" ? await getRevisionResponseDays() : undefined;
 
   const outcome = await adminDb.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -98,7 +97,7 @@ export async function transitionQuote(
       now: new Date(),
       payload: opts.payload,
       reason: opts.reason,
-      revisionExpiryDays: revisionExpiryDays(),
+      revisionExpiryDays,
     });
     if (!plan.ok) {
       return {
@@ -276,6 +275,22 @@ async function runSideEffects(
         case "commission":
           await onQuotePaid(quoteId, quote);
           break;
+
+        case "expired_email": {
+          if (!customerEmail) break;
+          const tradeInRef =
+            (quote.tradeInRef as string | undefined) ?? quoteId.slice(0, 8);
+          sendEmail({
+            to: customerEmail,
+            subject: `Your trade-in has been closed (${tradeInRef})`,
+            react: QuoteExpiredEmail({
+              customerName: (quote.customerName as string) ?? "there",
+              deviceName: await deviceLabel(quote.deviceId),
+              tradeInRef,
+            }),
+          });
+          break;
+        }
 
         case "queue_label_refund":
           if (typeof quote.labelId === "string") {

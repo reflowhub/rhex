@@ -3,8 +3,9 @@ import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { onBulkQuotePaid } from "@/lib/commission-trigger";
 import { requireAdmin } from "@/lib/admin-auth";
-import { checkRevisionExpiry } from "@/lib/revision-expiry";
+import { checkQuoteExpiry } from "@/lib/quote-expiry";
 import { serializeTimestamp } from "@/lib/serialize";
+import { getRevisionResponseDays } from "@/lib/tradein-settings";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,7 +45,7 @@ export async function GET(
     }
 
     // Check for revision expiry
-    await checkRevisionExpiry("bulkQuotes", id);
+    await checkQuoteExpiry("bulkQuotes", id);
     const freshBulkDoc = await adminDb.collection("bulkQuotes").doc(id).get();
     const data = freshBulkDoc.data()!;
 
@@ -171,7 +172,7 @@ export async function PUT(
       updateData.receivedAt = admin.firestore.FieldValue.serverTimestamp();
     } else if (status === "revised") {
       updateData.revisedAt = admin.firestore.FieldValue.serverTimestamp();
-      const expiryDays = parseInt(process.env.REVISION_EXPIRY_DAYS ?? "14", 10);
+      const expiryDays = await getRevisionResponseDays();
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + expiryDays);
       updateData.revisionExpiresAt = admin.firestore.Timestamp.fromDate(expiresAt);

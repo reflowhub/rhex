@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { requireApiKey, ApiKeyPartner, canAccess } from "@/lib/api-key-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { applyRevisionExpiry } from "@/lib/revision-expiry";
+import { applyQuoteExpiry } from "@/lib/quote-expiry";
 import { serializeTimestamp } from "@/lib/serialize";
 
 // ---------------------------------------------------------------------------
@@ -38,7 +38,7 @@ export async function GET(
     }
 
     // Check for revision expiry
-    const quoteData = (await applyRevisionExpiry(quoteDoc))!;
+    const quoteData = (await applyQuoteExpiry(quoteDoc))!;
 
     // Fetch device info
     let device = null;

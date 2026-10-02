@@ -9,6 +9,22 @@
       ]
     },
     {
+      "collectionGroup": "quotes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "expiresAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "quotes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "revisionExpiresAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "customers",
       "queryScope": "COLLECTION",
       "fields": [

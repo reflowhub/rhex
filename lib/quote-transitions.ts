@@ -42,6 +42,7 @@ export type SideEffect =
   | "revised_email"
   | "commission"
   | "paid_email"
+  | "expired_email"
   | "queue_label_refund";
 
 export interface StatusHistoryEntry {
@@ -91,8 +92,10 @@ interface Rule {
 // ---------------------------------------------------------------------------
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_REVISION_EXPIRY_DAYS = 14;
-const LATE_EXPIRY_GRACE_DAYS = 30;
+/** Used when settings/trade-in has no revisionResponseDays (D3) */
+export const DEFAULT_REVISION_RESPONSE_DAYS = 7;
+/** An accepted quote expires this many days after postByAt (D2) */
+export const LATE_EXPIRY_GRACE_DAYS = 30;
 
 export const STATUS_TIMESTAMP_FIELDS: Record<QuoteStatus, string> = {
   quoted: "createdAt",
@@ -381,7 +384,7 @@ function applyRevise(q: QuoteData, ctx: TransitionContext): ApplyResult {
   const device = revisedDeviceFields(p);
   if ("error" in device) return device;
 
-  const days = ctx.revisionExpiryDays ?? DEFAULT_REVISION_EXPIRY_DAYS;
+  const days = ctx.revisionExpiryDays ?? DEFAULT_REVISION_RESPONSE_DAYS;
   return {
     fields: {
       inspectionGrade: grade,
@@ -445,7 +448,8 @@ export const TRANSITIONS: readonly Rule[] = [
       const deadline = postBy.getTime() + LATE_EXPIRY_GRACE_DAYS * DAY_MS;
       return deadline <= ctx.now.getTime() ? null : "Quote has not expired";
     },
-    apply: (q) => withLabelRefund({ fields: {} }, q),
+    apply: (q) =>
+      withLabelRefund({ fields: {}, effects: ["expired_email"] }, q),
   },
   {
     from: "accepted",
@@ -584,6 +588,18 @@ export function allowedTransitions(
       r.actors.includes(actor) &&
       (!r.state || r.state(q, ctx) === null)
   ).map((r) => r.to);
+}
+
+/**
+ * The deadline transition now due for a quote, if any: quoted or accepted
+ * → expired, or revised → returning. Used by the expiry cron and the check
+ * when a quote is opened.
+ */
+export function dueSystemTransition(
+  q: QuoteData,
+  now: Date = new Date()
+): QuoteStatus | null {
+  return allowedTransitions(q, "system", now)[0] ?? null;
 }
 
 /** Validate a transition and work out what it writes. */

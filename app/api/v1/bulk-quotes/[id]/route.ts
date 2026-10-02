@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { requireApiKey, ApiKeyPartner, canAccess } from "@/lib/api-key-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { applyRevisionExpiry } from "@/lib/revision-expiry";
+import { applyQuoteExpiry } from "@/lib/quote-expiry";
 import { serializeV1BulkQuote } from "@/lib/v1-bulk-quote";
 
 // ---------------------------------------------------------------------------
@@ -38,7 +38,7 @@ export async function GET(
     }
 
     // Check for revision expiry
-    const data = (await applyRevisionExpiry(doc))!;
+    const data = (await applyQuoteExpiry(doc))!;
 
     return NextResponse.json(await serializeV1BulkQuote(doc.ref, data));
   } catch (error) {
