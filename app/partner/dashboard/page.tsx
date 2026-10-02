@@ -22,6 +22,7 @@ import {
   Search,
 } from "lucide-react";
 import { useFX } from "@/lib/use-fx";
+import { quoteStatusLabel } from "@/lib/quote-status";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -368,7 +369,7 @@ export default function PartnerDashboardPage() {
                                 : ""
                             }
                           >
-                            {item.status}
+                            {quoteStatusLabel(item.status, "public")}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">

@@ -140,16 +140,23 @@ export default function TradeInTermsPage() {
         <section>
           <h2 className="text-lg font-semibold">5. Quote validity</h2>
           <p className="mt-2">
-            Unless otherwise stated, an Indicative Quote is valid for <strong>14 days from the date it is issued</strong>.
+            An Indicative Quote is valid for <strong>24 hours</strong> from the time it is issued. To proceed, you must submit a Trade-In Order within that period.
           </p>
           <p className="mt-2">
-            Your Device must be received by RHEX within that 14-day period for the Indicative Quote to remain valid.
+            After you submit a Trade-In Order, we will email you a shipping label. You must lodge your Device with the carrier using that label within <strong>14 days of the date we send it to you</strong> (the <strong>Lodgement Period</strong>). If you lodge your Device within the Lodgement Period, we will assess it against your Indicative Quote, subject to these Terms.
           </p>
           <p className="mt-2">
-            If your Device arrives after the quote has expired, we may reassess its market value and provide a new Indicative Quote or Final Offer.
+            If your Device is lodged after the Lodgement Period, we may, at our discretion:
+          </p>
+          <ul className="mt-2 space-y-1 pl-5">
+            <li>(a) honour the Indicative Quote; or</li>
+            <li>(b) reassess your Device at our then-current pricing and provide a Final Offer.</li>
+          </ul>
+          <p className="mt-2">
+            If your Device has not been lodged within 30 days after the end of the Lodgement Period, we may cancel your Trade-In Order and the shipping label we provided. If your Device is received after your Trade-In Order has been cancelled, we will contact you and may, at our discretion, process it under paragraph (b) above or return it to you in accordance with these Terms.
           </p>
           <p className="mt-2">
-            You may reject any revised price and request return of the Device in accordance with these Terms.
+            You may reject any Final Offer that differs from the Indicative Quote and request return of the Device in accordance with these Terms.
           </p>
         </section>
 
@@ -158,6 +165,9 @@ export default function TradeInTermsPage() {
           <h2 className="text-lg font-semibold">6. Shipping your Device</h2>
           <p className="mt-2">
             Where available, RHEX may provide you with a digital shipping label, QR code or shipping instructions to assist you in sending your Device to us.
+          </p>
+          <p className="mt-2">
+            A shipping label provided by RHEX may only be used once, to send the Device described in your Trade-In Order. We may cancel a shipping label that has not been used when your Trade-In Order is cancelled or expires under section 5. You must not use a cancelled label.
           </p>
           <p className="mt-2">
             The provision of a shipping label, QR code or shipping instructions does <strong>not</strong> mean that RHEX assumes risk for your Device while it is in transit.
@@ -347,10 +357,10 @@ export default function TradeInTermsPage() {
             A materially reduced Final Offer will not be treated as accepted merely because you do not respond.
           </p>
           <p className="mt-2">
-            We may set a reasonable period for you to respond to a revised Final Offer and may send reminder notices.
+            You will have <strong>7 days</strong> from the date we notify you of a revised Final Offer to accept or reject it. We may send reminder notices during that period.
           </p>
           <p className="mt-2">
-            If you do not respond, we may continue to hold the Device while attempting to contact you. Any Device that remains unclaimed will be dealt with in accordance with applicable law.
+            If you do not respond within that period, we will treat the revised Final Offer as rejected and return your Device to the address you provided, in accordance with section 16.
           </p>
         </section>
 

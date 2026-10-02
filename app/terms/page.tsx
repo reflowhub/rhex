@@ -148,8 +148,9 @@ export default function TermsPage() {
           <p className="mt-2">
             In summary, when you submit a trade-in, you confirm that you are the legal owner
             of the device, that it is not stolen or encumbered, and that you will remove all
-            personal data and account locks before shipping. Trade-in quotes are valid for 14 days,
-            and payment is processed within 3–5 business days of inspection.
+            personal data and account locks before shipping. Trade-in quotes are valid for 24 hours;
+            once we email your shipping label, you have 14 days to post your device. Payment is
+            processed within 3–5 business days of inspection.
           </p>
           <p className="mt-2">
             Please read the full{" "}

@@ -13,6 +13,9 @@ import {
   Clock,
   CreditCard,
   Copy,
+  Search,
+  XCircle,
+  History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +32,8 @@ import { Inter } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { originalAmount, payableAmount } from "@/lib/quote-money";
 import { formatTimeLeft } from "@/lib/quote-validity";
+import { formatCustomerDate } from "@/lib/label-deadlines";
+import { TIMELINE_STEP_LABELS, type TimelineEntry } from "@/lib/quote-timeline";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -63,10 +68,17 @@ interface QuoteData {
   labelSentAt?: string;
   postByAt?: string;
   shippedAt?: string;
+  receivedAt?: string;
+  paidAt?: string;
+  timeline?: TimelineEntry[];
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string;
   paymentMethod?: string;
+  /** Masked, e.g. "•••• 123" */
+  payIdPhone?: string;
+  /** Masked, e.g. "•••• 123" */
+  bankAccountNumber?: string;
   imei?: string;
   device?: {
     id: string;
@@ -104,7 +116,6 @@ export default function QuoteResultPage({
   const [error, setError] = useState<string | null>(null);
   const [showAcceptForm, setShowAcceptForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [accepted, setAccepted] = useState(false);
   const [copied, setCopied] = useState(false);
   const [requoting, setRequoting] = useState(false);
   const [competitors, setCompetitors] = useState<CompetitorOffer[]>([]);
@@ -132,9 +143,6 @@ export default function QuoteResultPage({
         if (res.ok) {
           const data = await res.json();
           setQuote(data);
-          if (data.status === "accepted" || data.status === "shipped") {
-            setAccepted(true);
-          }
         } else {
           const errData = await res.json();
           setError(errData.error || "Failed to load quote");
@@ -149,9 +157,17 @@ export default function QuoteResultPage({
     fetchQuote();
   }, [id]);
 
-  // Fetch competitor prices (AUD quotes only)
+  // Fetch competitor prices (AUD quotes only, while the quote is open)
   useEffect(() => {
-    if (!quote || quote.displayCurrency !== "AUD" || !quote.device) return;
+    if (
+      !quote ||
+      quote.status !== "quoted" ||
+      quote.displayCurrency !== "AUD" ||
+      !quote.device
+    ) {
+      setCompetitors([]);
+      return;
+    }
     const rhexPrice = quote.quotePriceDisplay ?? quote.quotePriceNZD;
     const params = new URLSearchParams({
       make: quote.device.make,
@@ -212,7 +228,6 @@ export default function QuoteResultPage({
       if (res.ok) {
         const data = await res.json();
         setQuote(data);
-        setAccepted(true);
         setShowAcceptForm(false);
         const conversionValue = data.quotePriceDisplay ?? data.quotePriceNZD;
         const conversionCurrency = data.displayCurrency;
@@ -321,7 +336,7 @@ export default function QuoteResultPage({
   };
 
   // Only an open quote can be accepted
-  const isQuoted = quote?.status === "quoted" && !accepted;
+  const isQuoted = quote?.status === "quoted";
 
   // An unaccepted quote past expiresAt, whether or not the status has
   // caught up yet (the quote-expiry cron runs hourly)
@@ -330,6 +345,11 @@ export default function QuoteResultPage({
     (isQuoted && !!quote?.expiresAt && new Date(quote.expiresAt) < new Date());
   // An accepted quote that was never posted (postByAt + 30 days)
   const isClosedUnposted = quote?.status === "expired" && !!quote.acceptedAt;
+  // Accepted and still waiting for (or showing) the shipping label
+  const isAwaitingDevice =
+    quote?.status === "accepted" || quote?.status === "shipped";
+  // The customer has accepted at some point: show the reference and timeline
+  const hasAccepted = !!quote?.acceptedAt && quote.status !== "quoted";
 
   // Loading state
   if (loading) {
@@ -419,8 +439,8 @@ export default function QuoteResultPage({
       </header>
 
       <div className="mx-auto max-w-lg px-4 py-8">
-        {/* Accepted Confirmation */}
-        {accepted && (
+        {/* Accepted / posted: waiting for the device */}
+        {isAwaitingDevice && (
           <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100">
@@ -436,6 +456,41 @@ export default function QuoteResultPage({
                     : quote.hasLabel
                     ? "Your prepaid shipping label is ready below."
                     : "Your quote has been confirmed. We'll email your prepaid shipping label shortly."}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Received — inspection pending */}
+        {quote.status === "received" && (
+          <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <div className="flex items-center gap-2">
+              <Package className="h-5 w-5 shrink-0 text-blue-600" />
+              <div>
+                <p className="font-semibold text-blue-800">Device Received</p>
+                <p className="text-sm text-blue-700">
+                  {quote.receivedAt
+                    ? `Your device arrived on ${formatCustomerDate(quote.receivedAt)}. `
+                    : "Your device has arrived. "}
+                  We&apos;ll inspect it and email you the result.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* On hold — shown as "Under review"; the reason is never shown */}
+        {quote.status === "on_hold" && (
+          <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <div className="flex items-center gap-2">
+              <Search className="h-5 w-5 shrink-0 text-blue-600" />
+              <div>
+                <p className="font-semibold text-blue-800">Under Review</p>
+                <p className="text-sm text-blue-700">
+                  We&apos;re completing some routine checks on your device
+                  before we can finish your trade-in. We&apos;ll contact you if
+                  we need anything from you.
                 </p>
               </div>
             </div>
@@ -568,6 +623,53 @@ export default function QuoteResultPage({
           </div>
         )}
 
+        {/* Cancelled */}
+        {quote.status === "cancelled" && (
+          <div className="mb-6 rounded-xl border bg-muted p-4">
+            <div className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 shrink-0 text-muted-foreground" />
+              <div>
+                <p className="font-semibold">Trade-In Cancelled</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  This trade-in has been cancelled. If you think this is a
+                  mistake, please contact us.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-3"
+              onClick={() => router.push("/sell")}
+            >
+              Get a New Quote
+            </Button>
+          </div>
+        )}
+
+        {/* Paid — terminal */}
+        {quote.status === "paid" && (
+          <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4">
+            <div className="flex items-center gap-2">
+              <Check className="h-5 w-5 shrink-0 text-green-600" />
+              <div>
+                <p className="font-semibold text-green-800">Payment Sent</p>
+                <p className="text-sm text-green-700">
+                  We&apos;ve paid ${payableAmount(quote).amount.toFixed(2)}{" "}
+                  {payableAmount(quote).currency}
+                  {quote.paymentMethod === "payid" && quote.payIdPhone
+                    ? ` to your PayID ${quote.payIdPhone}`
+                    : quote.paymentMethod === "bank_transfer" && quote.bankAccountNumber
+                    ? ` to your bank account ${quote.bankAccountNumber}`
+                    : ""}
+                  {quote.paidAt ? ` on ${formatCustomerDate(quote.paidAt)}` : ""}.
+                  Thanks for trading in with us.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Processing status (inspected, waiting for payment) */}
         {quote.status === "inspected" && (
           <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4">
@@ -638,8 +740,9 @@ export default function QuoteResultPage({
             );
           })()}
 
-          {/* Competitor Comparison */}
-          {competitors.length > 0 && (
+          {/* Competitor Comparison: only for an open quote. After a revision
+              the original price would overstate the difference. */}
+          {isQuoted && !isExpired && competitors.length > 0 && (
             <div className="mb-6 rounded-lg border border-green-200 bg-green-50/50 p-4">
               <p className="text-sm font-medium text-green-800 mb-3">
                 Compare with other trade-in programs
@@ -949,7 +1052,7 @@ export default function QuoteResultPage({
         </div>
 
         {/* Post-Acceptance Details */}
-        {accepted && (
+        {hasAccepted && (
           <div className="mt-6 space-y-4">
             {/* Quote Reference */}
             <div className="rounded-xl border bg-card p-6 shadow-sm">
@@ -978,7 +1081,7 @@ export default function QuoteResultPage({
               </div>
             </div>
 
-            {quote.hasLabel ? (
+            {isAwaitingDevice && quote.hasLabel && (
               <TradeInLabelCard
                 quoteId={quote.id}
                 tradeInRef={quote.tradeInRef}
@@ -988,12 +1091,50 @@ export default function QuoteResultPage({
                 posting={posting}
                 onMarkPosted={handleMarkPosted}
               />
-            ) : (
+            )}
+            {isAwaitingDevice && !quote.hasLabel && (
               <TradeInShippingInstructions quoteId={quote.id} />
             )}
 
+            {/* Timeline (statusHistory, as {step, at} only) */}
+            {quote.timeline && quote.timeline.length > 1 && (
+              <div className="rounded-xl border bg-card p-6 shadow-sm">
+                <div className="mb-4 flex items-center gap-2">
+                  <History className="h-5 w-5 text-primary" />
+                  <h3 className="font-semibold">Timeline</h3>
+                </div>
+                <ol className="space-y-3">
+                  {quote.timeline.map((entry, idx, all) => (
+                    <li key={entry.step} className="flex items-start gap-3 text-sm">
+                      <span
+                        className={cn(
+                          "mt-1.5 h-2 w-2 shrink-0 rounded-full",
+                          idx === all.length - 1 ? "bg-primary" : "bg-muted-foreground/40"
+                        )}
+                      />
+                      <div className="flex flex-1 items-baseline justify-between gap-3">
+                        <span
+                          className={cn(
+                            idx === all.length - 1
+                              ? "font-medium text-foreground"
+                              : "text-muted-foreground"
+                          )}
+                        >
+                          {TIMELINE_STEP_LABELS[entry.step] ?? entry.step}
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {formatCustomerDate(entry.at)}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
             {/* Google Review Prompt */}
-            {process.env.NEXT_PUBLIC_GOOGLE_PLACE_ID && (
+            {process.env.NEXT_PUBLIC_GOOGLE_PLACE_ID &&
+              (isAwaitingDevice || quote.status === "paid") && (
               <div className="rounded-xl border bg-card p-6 shadow-sm text-center">
                 <p className="text-sm text-muted-foreground mb-1">
                   Had a good experience?

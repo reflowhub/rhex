@@ -28,6 +28,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useFX } from "@/lib/use-fx";
+import { quoteStatusBadge, quoteStatusLabel } from "@/lib/quote-status";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -485,7 +486,7 @@ export default function CustomerDetailPage() {
                 </TableHeader>
                 <TableBody>
                   {customer.quotes.map((q) => {
-                    const bp = statusBadgeProps(q.status);
+                    const bp = quoteStatusBadge(q.status);
                     return (
                       <TableRow
                         key={q.id}
@@ -511,7 +512,7 @@ export default function CustomerDetailPage() {
                             variant={bp.variant}
                             className={bp.className}
                           >
-                            {q.status}
+                            {quoteStatusLabel(q.status)}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">

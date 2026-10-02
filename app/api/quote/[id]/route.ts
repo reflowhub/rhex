@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { checkQuoteExpiry } from "@/lib/quote-expiry";
 import { maskTail } from "@/lib/quote-money";
+import { customerTimeline } from "@/lib/quote-timeline";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { serializeTimestamp } from "@/lib/serialize";
 import { transitionQuote, transitionErrorStatus } from "@/lib/transition-quote";
@@ -49,6 +50,10 @@ const PUBLIC_TIMESTAMP_FIELDS = [
   "postByAt",
   "shippedAt",
   "receivedAt",
+  "inspectedAt",
+  "paidAt",
+  "expiredAt",
+  "cancelledAt",
 ] as const;
 
 async function getDeviceSummary(deviceId: unknown) {
@@ -82,6 +87,8 @@ async function toPublicQuote(
   quote.hasLabel =
     typeof data.labelId === "string" &&
     (data.status === "accepted" || data.status === "shipped");
+  // {step, at} only: statusHistory reasons can hold internal notes
+  quote.timeline = customerTimeline(data);
   quote.device = await getDeviceSummary(data.deviceId);
   return quote;
 }

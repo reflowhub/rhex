@@ -88,6 +88,14 @@ export default function TradeInOpsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("awaiting");
+
+  // Open a queue directly from a link (/admin/trade-ins?tab=overdue)
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    if (requested === "awaiting" || requested === "overdue" || requested === "refunds") {
+      setTab(requested);
+    }
+  }, []);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);

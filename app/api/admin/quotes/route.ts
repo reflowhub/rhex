@@ -7,6 +7,7 @@ import { getActivePriceList, getCategoryGrades } from "@/lib/categories";
 import { getTodayFXRate, convertPrice } from "@/lib/fx";
 import { serializeTimestamp } from "@/lib/serialize";
 import { PARTNER_QUOTE_VALIDITY_MS } from "@/lib/quote-validity";
+import { isQuoteStatus } from "@/lib/quote-status";
 
 // ---------------------------------------------------------------------------
 // GET /api/admin/quotes — List all quotes with optional filters
@@ -29,6 +30,9 @@ export async function GET(request: NextRequest) {
 
     // Apply status filter at the query level if provided
     if (statusFilter) {
+      if (!isQuoteStatus(statusFilter)) {
+        return NextResponse.json({ error: "Unknown status" }, { status: 400 });
+      }
       query = query.where("status", "==", statusFilter);
     }
 
@@ -116,6 +120,7 @@ export async function GET(request: NextRequest) {
         imei: data.imei ?? null,
         inspectionGrade: data.inspectionGrade ?? null,
         revisedPriceNZD: data.revisedPriceNZD ?? null,
+        cancelReason: data.cancelReason ?? null,
         sandbox: data.sandbox === true,
       };
     });

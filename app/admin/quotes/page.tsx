@@ -32,6 +32,14 @@ import {
 import { Loader2, Search, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useFX } from "@/lib/use-fx";
 import { GRADES, SELL_GRADE_LABELS } from "@/lib/grades";
+import Link from "next/link";
+import {
+  CANCEL_REASON_LABELS,
+  QUOTE_STATUSES,
+  quoteStatusBadge,
+  quoteStatusLabel,
+  type CancelReason,
+} from "@/lib/quote-status";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,6 +67,7 @@ interface Quote {
   acceptedAt: string | null;
   inspectionGrade: string | null;
   revisedPriceNZD: number | null;
+  cancelReason: CancelReason | null;
   sandbox: boolean;
 }
 
@@ -78,69 +87,18 @@ interface Partner {
 // Constants
 // ---------------------------------------------------------------------------
 
-const STATUSES = [
-  "all",
-  "quoted",
-  "accepted",
-  "shipped",
-  "received",
-  "revised",
-  "inspected",
-  "paid",
-  "returning",
-  "returned",
-  "expired",
-  "cancelled",
-] as const;
+const STATUSES = ["all", ...QUOTE_STATUSES] as const;
 
 type StatusFilter = (typeof STATUSES)[number];
 
 const PAGE_SIZE = 25;
 
-// ---------------------------------------------------------------------------
-// Status badge styling
-// ---------------------------------------------------------------------------
-
-function statusBadgeProps(status: string): {
-  variant: "default" | "secondary" | "outline" | "destructive";
-  className?: string;
-} {
-  switch (status) {
-    case "quoted":
-      return { variant: "default" };
-    case "accepted":
-      return { variant: "secondary" };
-    case "shipped":
-      return { variant: "outline" };
-    case "received":
-      return { variant: "secondary" };
-    case "inspected":
-      return { variant: "default" };
-    case "paid":
-      return {
-        variant: "default",
-        className:
-          "border-transparent bg-green-600 text-white hover:bg-green-600/80",
-      };
-    case "revised":
-      return {
-        variant: "default",
-        className:
-          "border-transparent bg-amber-500 text-white hover:bg-amber-500/80",
-      };
-    case "returning":
-      return {
-        variant: "outline",
-        className: "border-amber-300 text-amber-700",
-      };
-    case "returned":
-      return { variant: "secondary" };
-    case "cancelled":
-      return { variant: "destructive" };
-    default:
-      return { variant: "outline" };
-  }
-}
+// Trade-in ops queues (app/admin/trade-ins)
+const QUEUES = [
+  { tab: "awaiting", label: "Awaiting label" },
+  { tab: "overdue", label: "Overdue" },
+  { tab: "refunds", label: "Labels to refund" },
+] as const;
 
 // ---------------------------------------------------------------------------
 // Component
@@ -390,10 +348,24 @@ export default function QuotesPage() {
                   : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground"
               }`}
             >
-              {status}
+              {status === "all" ? "All" : quoteStatusLabel(status)}
             </button>
           );
         })}
+      </div>
+
+      {/* Queues */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span>Queues:</span>
+        {QUEUES.map((q) => (
+          <Link
+            key={q.tab}
+            href={`/admin/trade-ins?tab=${q.tab}`}
+            className="rounded-full border border-dashed border-border px-3 py-1 font-semibold hover:border-primary/50 hover:text-foreground"
+          >
+            {q.label}
+          </Link>
+        ))}
       </div>
 
       {/* Search input + sandbox toggle */}
@@ -450,7 +422,7 @@ export default function QuotesPage() {
             </TableHeader>
             <TableBody>
               {paginatedQuotes.map((quote) => {
-                const badgeProps = statusBadgeProps(quote.status);
+                const badgeProps = quoteStatusBadge(quote.status);
                 return (
                   <TableRow
                     key={quote.id}
@@ -496,8 +468,13 @@ export default function QuotesPage() {
                           variant={badgeProps.variant}
                           className={badgeProps.className}
                         >
-                          {quote.status}
+                          {quoteStatusLabel(quote.status)}
                         </Badge>
+                        {quote.cancelReason && (
+                          <span className="text-[11px] text-muted-foreground">
+                            {CANCEL_REASON_LABELS[quote.cancelReason] ?? quote.cancelReason}
+                          </span>
+                        )}
                         {quote.sandbox && (
                           <Badge
                             variant="outline"

@@ -3,6 +3,8 @@ import { adminDb } from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getCached, setCache } from "@/lib/analytics-cache";
 import { getTodayFXRate } from "@/lib/fx";
+import { isNotGenuine } from "@/lib/quote-status";
+import { payableAmount } from "@/lib/quote-money";
 
 const GRADE_ORDER = ["A", "B", "C", "D", "E"];
 
@@ -56,6 +58,7 @@ export async function GET(request: NextRequest) {
 
     snapshot.docs.forEach((doc) => {
       const d = doc.data();
+      if (isNotGenuine(d)) return;
       quoteCount++;
 
       // Grade distribution (all quotes)
@@ -80,7 +83,7 @@ export async function GET(request: NextRequest) {
       // Paid quotes (revenue)
       if (d.status === "paid") {
         paidCount++;
-        paidValueNZD += (d.revisedPriceNZD as number) ?? (d.quotePriceNZD as number) ?? 0;
+        paidValueNZD += payableAmount(d).amountNZD;
       }
 
       // Grade revision analysis (inspected or paid quotes)

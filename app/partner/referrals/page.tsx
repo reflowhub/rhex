@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link2, Copy, Check, Loader2 } from "lucide-react";
 import { useFX } from "@/lib/use-fx";
+import { quoteStatusLabel } from "@/lib/quote-status";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -179,7 +180,7 @@ export default function PartnerReferralsPage() {
                           variant="secondary"
                           className="text-xs"
                         >
-                          {status}: {count}
+                          {quoteStatusLabel(status, "public")}: {count}
                         </Badge>
                       ))}
                     </div>

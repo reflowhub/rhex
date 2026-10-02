@@ -3,8 +3,8 @@
  * against the test Firebase project: concurrent transitions, TI- references,
  * commission, audit log, lazy expiry (quoted, accepted, revised), label
  * reminders, sandbox handling, label send/replace/refund, "I've posted
- * it", and money (revised price at the locked FX rate, payout snapshot,
- * customer totalValueNZD). Creates its own data and
+ * it", money (revised price at the locked FX rate, payout snapshot,
+ * customer totalValueNZD) and the customer timeline. Creates its own data and
  * deletes it afterwards, restoring counters/tradeIns to its previous value.
  *
  * Usage: npx tsx scripts/check-quote-transitions.ts   (refuses to run unless
@@ -20,6 +20,9 @@ async function main() {
   const { transitionQuote } = await import("../lib/transition-quote");
   const { checkQuoteExpiry } = await import("../lib/quote-expiry");
   const { sendQuoteLabel, resolveLabelRefund, sendLabelReminder } = await import("../lib/shipping-labels");
+  const { TRADEIN_TERMS_VERSION } = await import("../lib/tradein-terms");
+  const { customerTimeline } = await import("../lib/quote-timeline");
+  const { funnelStage } = await import("../lib/quote-status");
   const adminUser = { uid: "phase1-test", email: "phase1-test@rhex.local" };
   const created: string[] = [];
   const counterRef = adminDb.doc("counters/tradeIns");
@@ -47,7 +50,7 @@ async function main() {
     check("concurrent accept: exactly one succeeds", [a1, a2].filter((r) => r.ok).length === 1);
     let d = (await q.get()).data()!;
     check(`TI reference assigned (${d.tradeInRef})`, /^TI-\d+$/.test(d.tradeInRef));
-    check("terms stored", d.termsVersion === "2026-10-02" && !!d.termsAcceptedAt);
+    check(`terms stored (${d.termsVersion})`, d.termsVersion === TRADEIN_TERMS_VERSION && !!d.termsAcceptedAt);
     check("customer linked", !!d.customerId);
     check("history has one entry", d.statusHistory?.length === 1 && d.statusHistory[0].actor === "customer");
 
@@ -78,6 +81,10 @@ async function main() {
     const po = d.payout ?? {};
     check(`payout snapshot: ${po.amount} ${po.currency} / ${po.amountNZD} NZD, ${po.method} ${po.payIdPhone}, by ${po.paidBy}`, po.amount === 135 && po.currency === "AUD" && po.amountNZD === 150 && po.method === "payid" && po.payIdPhone === "•••• 123" && po.paidBy === adminUser.email && !!po.paidAt);
     check(`history entries: ${d.statusHistory.map((e: { to: string }) => e.to).join(" → ")}`, d.statusHistory.length === 8);
+    const timeline = customerTimeline(d);
+    check(`customer timeline: ${timeline.map((e) => e.step).join(" → ")}`, timeline.map((e) => e.step).join(",") === "quoted,accepted,shipped,received,revised,inspected,on_hold,paid");
+    check("customer timeline carries no actor or reason", !JSON.stringify(timeline).includes("Blacklist") && timeline.every((e) => Object.keys(e).join(",") === "step,at"));
+    check("funnel stage paid", funnelStage(d) === "paid");
     const audit = await adminDb.collection("quoteAuditLog").where("quoteId", "==", q.id).get();
     check(`admin audit entries (${audit.size})`, audit.size === 6);
     check("cancel from paid blocked (D4)", !(await transitionQuote(q.id, "cancelled", { actor: "admin", admin: adminUser, payload: { cancelReason: "other" }, reason: "x" })).ok);

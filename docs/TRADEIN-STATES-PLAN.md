@@ -257,7 +257,7 @@ Cancellations send no customer email. Analytics and funnel metrics leave out `no
 
 ## 6. For the Mode A/B review
 
-- Partner and v1 quote validity (currently 14 days) and whether the 24h rule applies.
+- Partner and v1 quote validity (currently 14 days) and whether the 24h rule applies. Terms §5 (published 3 October 2026) says every Indicative Quote is valid for 24 hours, with no "unless otherwise stated", so partner, v1 and admin-created quotes are currently more generous than the terms.
 - Terms consent for v1 accepts (partners accepting for customers).
 - Who ships for partner quotes; whether partners get RHEX labels; v1 endpoints for label, tracking and "posted".
 - Mode B revision emails (currently sent to `customerEmail` with a partner-portal link).
@@ -298,6 +298,8 @@ Cancellations send no customer email. Analytics and funnel metrics leave out `no
 >
 > If you do not respond within that period, we will treat the revised Final Offer as rejected and return your Device to the address you provided, in accordance with section 15.
 
+Published 3 October 2026 (`termsVersion: "2026-10-03"`) after legal approval, with the §13 reference corrected to §16 (Return of a Device).
+
 Reviewer notes:
-- Confirm the return-of-device clause number (assumed §15).
+- Confirm the return-of-device clause number (assumed §15). Resolved: §16.
 - D12: if the device is better than declared, RHEX pays the Indicative Quote. Consider stating this in §12 or §13.

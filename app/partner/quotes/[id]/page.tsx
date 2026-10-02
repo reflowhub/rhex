@@ -16,6 +16,12 @@ import {
   Package,
 } from "lucide-react";
 import { useFX } from "@/lib/use-fx";
+import {
+  TERMINAL_QUOTE_STATUSES,
+  isQuoteStatus,
+  quoteStatusBadge,
+  quoteStatusLabel,
+} from "@/lib/quote-status";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -56,20 +62,13 @@ interface QuoteDetail {
 // Constants
 // ---------------------------------------------------------------------------
 
-const STATUS_LABELS: Record<string, string> = {
-  quoted: "Quoted",
-  accepted: "Accepted",
-  shipped: "Shipped",
-  received: "Received",
-  revised: "Revised",
-  inspected: "Inspected",
-  paid: "Paid",
-  returning: "Returning",
-  returned: "Returned",
-  cancelled: "Cancelled",
-};
+// Statuses off the main path, shown after the stepper instead of on it
+const OFF_PATH_STATUSES = ["cancelled", "expired"];
 
 function getStepperStatuses(currentStatus: string): string[] {
+  if (currentStatus === "on_hold") {
+    return ["quoted", "accepted", "shipped", "received", "on_hold"];
+  }
   if (currentStatus === "returning" || currentStatus === "returned") {
     return ["quoted", "accepted", "shipped", "received", "revised", "returning", "returned"];
   }
@@ -82,47 +81,6 @@ function getStepperStatuses(currentStatus: string): string[] {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function statusBadgeProps(status: string): {
-  variant: "default" | "secondary" | "outline" | "destructive";
-  className?: string;
-} {
-  switch (status) {
-    case "quoted":
-      return { variant: "default" };
-    case "accepted":
-      return { variant: "secondary" };
-    case "shipped":
-      return { variant: "outline" };
-    case "received":
-      return { variant: "secondary" };
-    case "inspected":
-      return { variant: "default" };
-    case "paid":
-      return {
-        variant: "default",
-        className:
-          "border-transparent bg-emerald-600 text-white hover:bg-emerald-600/80",
-      };
-    case "revised":
-      return {
-        variant: "default",
-        className:
-          "border-transparent bg-amber-500 text-white hover:bg-amber-500/80",
-      };
-    case "returning":
-      return {
-        variant: "outline",
-        className: "border-amber-300 text-amber-700",
-      };
-    case "returned":
-      return { variant: "secondary" };
-    case "cancelled":
-      return { variant: "destructive" };
-    default:
-      return { variant: "outline" };
-  }
-}
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return "\u2014";
@@ -223,11 +181,11 @@ export default function PartnerQuoteDetailPage({
     );
   }
 
-  const badgeProps = statusBadgeProps(quote.status);
+  const badgeProps = quoteStatusBadge(quote.status);
   const isTerminal =
-    quote.status === "paid" ||
-    quote.status === "cancelled" ||
-    quote.status === "returned";
+    quote.status === "expired" ||
+    (isQuoteStatus(quote.status) && TERMINAL_QUOTE_STATUSES.includes(quote.status));
+  const isOffPath = OFF_PATH_STATUSES.includes(quote.status);
   const isModeB = quote.partnerMode === "B";
 
   return (
@@ -248,7 +206,7 @@ export default function PartnerQuoteDetailPage({
         <div className="flex items-center gap-3">
           <h1 className="text-3xl font-bold tracking-tight">Quote</h1>
           <Badge variant={badgeProps.variant} className={badgeProps.className}>
-            {STATUS_LABELS[quote.status] ?? quote.status}
+            {quoteStatusLabel(quote.status, "public")}
           </Badge>
           <Badge
             variant="secondary"
@@ -372,10 +330,9 @@ export default function PartnerQuoteDetailPage({
           <div className="flex items-center gap-1 min-w-max">
             {getStepperStatuses(quote.status).map((step, idx, steps) => {
               const currentIdx = steps.indexOf(quote.status);
-              const isCancelled = quote.status === "cancelled";
-              const isCompleted = !isCancelled && currentIdx > idx;
-              const isCurrent = !isCancelled && quote.status === step;
-              const isFuture = !isCancelled && currentIdx < idx;
+              const isCompleted = !isOffPath && currentIdx > idx;
+              const isCurrent = !isOffPath && quote.status === step;
+              const isFuture = !isOffPath && currentIdx < idx;
 
               return (
                 <React.Fragment key={step}>
@@ -415,15 +372,15 @@ export default function PartnerQuoteDetailPage({
                           : "text-muted-foreground"
                       }`}
                     >
-                      {STATUS_LABELS[step]}
+                      {quoteStatusLabel(step, "public")}
                     </span>
                   </div>
                 </React.Fragment>
               );
             })}
 
-            {/* Cancelled state indicator */}
-            {quote.status === "cancelled" && (
+            {/* Cancelled / expired indicator */}
+            {isOffPath && (
               <>
                 <div className="h-0.5 w-6 sm:w-10 bg-destructive/40" />
                 <div className="flex flex-col items-center gap-1">
@@ -431,7 +388,7 @@ export default function PartnerQuoteDetailPage({
                     <XCircle className="h-4 w-4" />
                   </div>
                   <span className="text-[11px] font-semibold text-destructive whitespace-nowrap">
-                    Cancelled
+                    {quoteStatusLabel(quote.status, "public")}
                   </span>
                 </div>
               </>
@@ -534,6 +491,22 @@ export default function PartnerQuoteDetailPage({
                 Device has been returned.
               </div>
             )}
+            {quote.status === "expired" && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                {quote.acceptedAt
+                  ? "This trade-in was closed because the device wasn't received in time."
+                  : "This quote expired before it was accepted."}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* On hold — shown as "Under review"; the reason is never shown */}
+        {quote.status === "on_hold" && (
+          <div className="mt-4 flex items-center gap-2 text-sm text-blue-700">
+            <Clock className="h-4 w-4" />
+            Under review: RHEX is completing routine checks on this device.
           </div>
         )}
 

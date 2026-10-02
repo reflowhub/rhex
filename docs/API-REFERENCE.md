@@ -300,14 +300,22 @@ curl -H "X-API-Key: rhx_your_key" \
 |--------|---------|
 | `quoted` | Active quote, waiting for acceptance |
 | `accepted` | Customer accepted, device expected |
-| `shipped` | Device shipped to RHEX |
+| `shipped` | Device shipped to RHEX (optional: a quote can go straight from `accepted` to `received`) |
 | `received` | Device received by RHEX |
+| `on_hold` | Under review (e.g. ownership or blacklist checks). Payment is paused. The quote returns to its previous status when the review ends, or moves to `returning` |
 | `revised` | Device inspected, quote revised — awaiting response |
 | `inspected` | Inspection complete (or revision accepted), awaiting payment |
 | `paid` | Trade-in completed, payment processed |
 | `returning` | Revision rejected or expired, device being returned |
 | `returned` | Device returned to customer, trade-in closed |
+| `expired` | Quote not accepted before `expiresAt`, or accepted but the device was never sent. RHEX may still receive a device for an accepted quote that has expired, which moves it to `received` |
 | `cancelled` | Quote cancelled |
+
+> **New status values may be added.** Treat an unknown `status` as "in progress" rather than failing, and don't rely on the order of this table.
+
+**Cancellation:** a quote can only be cancelled before RHEX has the device (`quoted`, `accepted` or `shipped`). Once the device has been received, the trade-in ends as `paid` or `returned`; a `paid` quote can't be cancelled.
+
+**Revisions only go down:** RHEX revises a quote only when the device is worth less than quoted. If it's in better condition than declared, the original quote is paid.
 
 **Revision Fields (present when status is `revised` or later):**
 
@@ -324,7 +332,7 @@ curl -H "X-API-Key: rhx_your_key" \
 | `returningAt` | string \| null | ISO timestamp when return was initiated |
 | `returnedAt` | string \| null | ISO timestamp when device was returned |
 
-When a quote is in `revised` status, the partner must respond before `revisionExpiresAt` (default: 7 days). If no response is received, the quote auto-transitions to `returning` and the device is sent back.
+When a quote is in `revised` status, the partner must respond before `revisionExpiresAt` (**7 days** after the revision). If no response is received, the quote auto-transitions to `returning` and the device is sent back.
 
 ---
 

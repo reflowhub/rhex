@@ -2,15 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getCached, setCache } from "@/lib/analytics-cache";
-
-const STATUS_ORDER = [
-  "quoted",
-  "accepted",
-  "shipped",
-  "received",
-  "inspected",
-  "paid",
-];
+import { FUNNEL_STAGES, funnelStage, isNotGenuine } from "@/lib/quote-status";
 
 export async function GET(request: NextRequest) {
   const adminUser = await requireAdmin(request);
@@ -45,28 +37,29 @@ export async function GET(request: NextRequest) {
     const snapshot = await query.get();
 
     const stageCounts: Record<string, number> = {};
-    STATUS_ORDER.forEach((s) => (stageCounts[s] = 0));
+    FUNNEL_STAGES.forEach((s) => (stageCounts[s] = 0));
     let cancelled = 0;
+    let total = 0;
 
     snapshot.docs.forEach((doc) => {
       const data = doc.data();
-      const status = data.status as string;
-      if (status === "cancelled") {
+      // Bot, fake and test acceptances aren't part of the funnel
+      if (isNotGenuine(data)) return;
+      total++;
+      if (data.status === "cancelled") {
         cancelled++;
         return;
       }
-      // An expired quote reached "quoted", or "accepted" if it was never posted
-      const stage =
-        status === "expired" ? (data.acceptedAt ? "accepted" : "quoted") : status;
-      const idx = STATUS_ORDER.indexOf(stage);
-      if (idx === -1) return;
+      const stage = funnelStage(data);
+      if (!stage) return;
       // Cumulative: a quote in "paid" has passed through all prior stages
+      const idx = FUNNEL_STAGES.indexOf(stage);
       for (let i = 0; i <= idx; i++) {
-        stageCounts[STATUS_ORDER[i]]++;
+        stageCounts[FUNNEL_STAGES[i]]++;
       }
     });
 
-    const stages = STATUS_ORDER.map((status) => ({
+    const stages = FUNNEL_STAGES.map((status) => ({
       status,
       count: stageCounts[status],
     }));
@@ -74,7 +67,7 @@ export async function GET(request: NextRequest) {
     const result = {
       stages,
       cancelled,
-      total: snapshot.docs.length,
+      total,
     };
 
     setCache(cacheKey, result);

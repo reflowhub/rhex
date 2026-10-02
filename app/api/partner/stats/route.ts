@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { requirePartner } from "@/lib/partner-auth";
 import { PartnerSession } from "@/lib/partner-auth";
 import { serializeTimestamp } from "@/lib/serialize";
+import { OPEN_QUOTE_STATUSES, isNotGenuine, isQuoteStatus } from "@/lib/quote-status";
 
 // ---------------------------------------------------------------------------
 // GET /api/partner/stats — Dashboard stats for the authenticated partner
@@ -37,14 +38,9 @@ export async function GET(request: NextRequest) {
 
     quoteDocs.forEach((doc) => {
       const data = doc.data();
+      if (isNotGenuine(data)) return;
       totalQuotes++;
-      if (
-        data.status === "quoted" ||
-        data.status === "accepted" ||
-        data.status === "shipped" ||
-        data.status === "received" ||
-        data.status === "inspected"
-      ) {
+      if (isQuoteStatus(data.status) && OPEN_QUOTE_STATUSES.includes(data.status)) {
         activeQuotes++;
       }
       if (data.status === "paid") paidQuotes++;

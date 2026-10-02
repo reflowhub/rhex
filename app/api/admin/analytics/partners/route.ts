@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getCached, setCache } from "@/lib/analytics-cache";
 import { getTodayFXRate } from "@/lib/fx";
+import { isNotGenuine } from "@/lib/quote-status";
 
 export async function GET(request: NextRequest) {
   const adminUser = await requireAdmin(request);
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
 
     snapshot.docs.forEach((doc) => {
       const d = doc.data();
-      if (d.sandbox === true) return;
+      if (d.sandbox === true || isNotGenuine(d)) return;
       const priceNZD = (d.quotePriceNZD as number) ?? 0;
       const partnerId = d.partnerId as string | undefined;
       const partnerMode = (d.partnerMode as string) ?? "";

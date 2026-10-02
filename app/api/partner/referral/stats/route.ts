@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { requirePartner } from "@/lib/partner-auth";
 import { PartnerSession } from "@/lib/partner-auth";
+import { isNotGenuine } from "@/lib/quote-status";
 
 // ---------------------------------------------------------------------------
 // GET /api/partner/referral/stats — Mode A referral attribution stats
@@ -31,6 +32,7 @@ export async function GET(request: NextRequest) {
 
     quotesSnapshot.docs.forEach((doc) => {
       const data = doc.data();
+      if (isNotGenuine(data)) return;
       totalReferrals++;
       byStatus[data.status] = (byStatus[data.status] ?? 0) + 1;
     });

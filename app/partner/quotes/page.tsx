@@ -16,6 +16,12 @@ import {
 } from "@/components/ui/table";
 import { Loader2, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { useFX } from "@/lib/use-fx";
+import {
+  QUOTE_STATUSES,
+  quoteStatusBadge,
+  quoteStatusLabel,
+  type QuoteStatusBadge,
+} from "@/lib/quote-status";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,16 +52,12 @@ interface QuoteItem {
 // Constants
 // ---------------------------------------------------------------------------
 
+// Single-quote statuses plus "estimated" (bulk quotes only)
 const STATUSES = [
   "all",
   "quoted",
   "estimated",
-  "accepted",
-  "shipped",
-  "received",
-  "inspected",
-  "paid",
-  "cancelled",
+  ...QUOTE_STATUSES.filter((s) => s !== "quoted"),
 ] as const;
 
 type StatusFilter = (typeof STATUSES)[number];
@@ -66,33 +68,8 @@ const PAGE_SIZE = 25;
 // Status badge styling
 // ---------------------------------------------------------------------------
 
-function statusBadgeProps(status: string): {
-  variant: "default" | "secondary" | "outline" | "destructive";
-  className?: string;
-} {
-  switch (status) {
-    case "quoted":
-    case "estimated":
-      return { variant: "default" };
-    case "accepted":
-      return { variant: "secondary" };
-    case "shipped":
-      return { variant: "outline" };
-    case "received":
-      return { variant: "secondary" };
-    case "inspected":
-      return { variant: "default" };
-    case "paid":
-      return {
-        variant: "default",
-        className:
-          "border-transparent bg-emerald-600 text-white hover:bg-emerald-600/80",
-      };
-    case "cancelled":
-      return { variant: "destructive" };
-    default:
-      return { variant: "outline" };
-  }
+function statusBadgeProps(status: string): QuoteStatusBadge {
+  return status === "estimated" ? { variant: "default" } : quoteStatusBadge(status);
 }
 
 // ---------------------------------------------------------------------------
@@ -216,7 +193,7 @@ export default function PartnerQuotesPage() {
                   : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground"
               }`}
             >
-              {status}
+              {status === "all" ? "All" : quoteStatusLabel(status, "public")}
             </button>
           );
         })}
@@ -305,7 +282,7 @@ export default function PartnerQuotesPage() {
                         variant={badgeProps.variant}
                         className={badgeProps.className}
                       >
-                        {item.status}
+                        {quoteStatusLabel(item.status, "public")}
                       </Badge>
                     </TableCell>
                     <TableCell>
