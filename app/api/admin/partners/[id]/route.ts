@@ -6,6 +6,9 @@ import { serializeTimestamp } from "@/lib/serialize";
 import { partnerApiMode } from "@/lib/api-key-auth";
 import {
   PARTNER_MODES,
+  customerEmailSwitches,
+  parseCustomerEmails,
+  parseEmailBrand,
   parseEmailList,
   parseOptionalEmail,
   parseResultWebhook,
@@ -91,6 +94,13 @@ export async function GET(
       },
       sandboxEmailAllowlist: sandboxEmailConfig(data).allowlist,
       sandboxEmailFallback: sandboxEmailConfig(data).fallback,
+      emailBrand: {
+        displayName: data.emailBrand?.displayName ?? null,
+        logoUrl: data.emailBrand?.logoUrl ?? null,
+        supportEmail: data.emailBrand?.supportEmail ?? null,
+        supportPhone: data.emailBrand?.supportPhone ?? null,
+      },
+      customerEmails: customerEmailSwitches(data),
       // Payment
       paymentMethod: data.paymentMethod ?? null,
       payIdPhone: data.payIdPhone ?? null,
@@ -174,7 +184,7 @@ export async function PUT(
       updateData.apiMode = body.apiMode;
     }
 
-    // Mode C: result webhook and sandbox email routing
+    // Mode C: result webhook, sandbox email routing, customer email brand and switches
     try {
       if (body.resultWebhook !== undefined) {
         updateData.resultWebhook = parseResultWebhook(body.resultWebhook);
@@ -187,6 +197,12 @@ export async function PUT(
           body.sandboxEmailFallback,
           "Sandbox fallback inbox"
         );
+      }
+      if (body.emailBrand !== undefined) {
+        updateData.emailBrand = parseEmailBrand(body.emailBrand);
+      }
+      if (body.customerEmails !== undefined) {
+        updateData.customerEmails = parseCustomerEmails(body.customerEmails);
       }
     } catch (err) {
       return NextResponse.json(

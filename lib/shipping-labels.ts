@@ -1,7 +1,7 @@
 import { adminDb } from "@/lib/firebase-admin";
 import type { AdminSession } from "@/lib/admin-auth";
 import { logQuoteAction } from "@/lib/audit-log";
-import { sendQuoteEmail } from "@/lib/quote-email";
+import { deviceLabel, sendQuoteEmail } from "@/lib/quote-email";
 import QuoteLabelEmail from "@/emails/quote-label";
 import QuoteLabelReminderEmail from "@/emails/quote-label-reminder";
 import {
@@ -141,8 +141,9 @@ export async function sendQuoteLabel(
   if (!isModeB(q) && typeof q.customerEmail === "string") {
     const deviceName = await deviceLabel(q.deviceId);
     const tradeInRef = (q.tradeInRef as string) ?? quoteId.slice(0, 8);
-    await sendQuoteEmail(q, {
-      to: q.customerEmail,
+    const to = q.customerEmail;
+    await sendQuoteEmail(q, "label", (brand) => ({
+      to,
       subject: `Your prepaid shipping label (${tradeInRef})`,
       react: QuoteLabelEmail({
         customerName: (q.customerName as string) ?? "there",
@@ -151,22 +152,15 @@ export async function sendQuoteLabel(
         trackingNumber: opts.trackingNumber,
         postBy: formatCustomerDate(outcome.postByAt),
         quoteId,
+        brand,
       }),
       attachments: [
         { filename: `RHEX-label-${tradeInRef}.pdf`, content: opts.pdf },
       ],
-    });
+    }));
   }
 
   return { ok: true, labelId: labelRef.id };
-}
-
-async function deviceLabel(deviceId: unknown): Promise<string> {
-  if (typeof deviceId !== "string" || !deviceId) return "your device";
-  const device = await adminDb.collection("devices").doc(deviceId).get();
-  if (!device.exists) return "your device";
-  const d = device.data()!;
-  return `${d.make} ${d.model} ${d.storage}`.trim();
 }
 
 /**
@@ -194,7 +188,8 @@ export async function sendLabelReminder(
   const tradeInRef = (q.tradeInRef as string) ?? quoteId.slice(0, 8);
   const postBy = toDate(q.postByAt)!;
   const final = reminder === `day${LABEL_REMINDER_DAYS[LABEL_REMINDER_DAYS.length - 1]}`;
-  await sendQuoteEmail(q, {
+  // A reminder switched off for a Mode C partner is still recorded as sent
+  await sendQuoteEmail(q, "labelReminders", async (brand) => ({
     to: q.customerEmail as string,
     subject: final
       ? `Last reminder: post your trade-in by ${formatCustomerDate(postBy)} (${tradeInRef})`
@@ -206,8 +201,9 @@ export async function sendLabelReminder(
       postBy: formatCustomerDate(postBy),
       quoteId,
       final,
+      brand,
     }),
-  });
+  }));
   return reminder;
 }
 

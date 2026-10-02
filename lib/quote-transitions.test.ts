@@ -7,6 +7,7 @@ import {
 import {
   DEFAULT_REVISION_RESPONSE_DAYS,
   allowedTransitions,
+  dueRevisionReminder,
   dueSystemTransition,
   planTransition,
   type QuoteData,
@@ -1175,8 +1176,8 @@ describe("Mode C (RHEX buys; the partner refunds the customer)", () => {
         approvedAt: NOW,
         approvedBy: "ops@reflowhub.com",
       });
-      // No commission, no "Payment sent" email
-      expect(plan.effects).toEqual(["partner_result"]);
+      // No commission; "Approved" replaces the "Payment sent" email
+      expect(plan.effects).toEqual(["approved_email", "partner_result"]);
     });
 
     it("matched device → original AUD price and original grade", () => {
@@ -1236,5 +1237,68 @@ describe("Mode C (RHEX buys; the partner refunds the customer)", () => {
       ctx("admin", { payload: { inspectionGrade: "C", revisedPriceNZD: 100 } })
     );
     expect(plan.effects).toEqual(["revised_email"]);
+  });
+
+  describe("Mode C-only emails", () => {
+    const receive = ctx("admin", { payload: { imei: "356789012345678" } });
+
+    it("received: on arrival, including late, but not on release from hold", () => {
+      expect(planOk(modeC("accepted"), "received", receive).effects).toEqual(["received_email"]);
+      expect(planOk(modeC("shipped"), "received", receive).effects).toEqual(["received_email"]);
+      expect(planOk(modeC("expired", { acceptedAt: past(60) }), "received", receive).effects).toContain("received_email");
+      const released = planOk(modeC("on_hold", { heldFrom: "received" }), "received", ctx("admin", { reason: "Cleared" }));
+      expect(released.effects).not.toContain("received_email");
+    });
+
+    it("returning: declined, expired or returned by RHEX", () => {
+      const revised = modeC("revised", { inspectionGrade: "D", revisedPriceNZD: 100, revisionExpiresAt: future(3) });
+      expect(planOk(revised, "returning", ctx("customer")).effects).toEqual(["returning_email", "partner_result"]);
+      const lapsed = { ...revised, revisionExpiresAt: past() };
+      expect(planOk(lapsed, "returning", ctx("system")).effects).toContain("returning_email");
+      for (const from of ["received", "inspected"] as const) {
+        expect(planOk(modeC(from), "returning", ctx("admin", { reason: "iCloud locked" })).effects).toContain("returning_email");
+      }
+      expect(
+        planOk(modeC("on_hold", { heldFrom: "received" }), "returning", ctx("admin", { reason: "Locked" })).effects
+      ).toContain("returning_email");
+    });
+
+    it("consumer quotes are unchanged", () => {
+      expect(planOk(quote("accepted"), "received", receive).effects).toEqual([]);
+      expect(planOk(quote("received"), "returning", ctx("admin", { reason: "Locked" })).effects).toEqual([]);
+      const paid = planOk(quote("inspected", CUSTOMER_DETAILS), "paid", ctx("admin"));
+      expect(paid.effects).toEqual(["commission", "paid_email"]);
+    });
+  });
+
+  describe("re-quote reminder", () => {
+    const HOUR = 60 * 60 * 1000;
+    const revised = (hoursLeft: number, extra: QuoteData = {}) =>
+      modeC("revised", {
+        revisedAt: past(5),
+        revisionExpiresAt: new Date(NOW.getTime() + hoursLeft * HOUR),
+        ...extra,
+      });
+
+    it("is due within 48 hours of the deadline, once", () => {
+      expect(dueRevisionReminder(revised(49), NOW)).toBe(false);
+      expect(dueRevisionReminder(revised(48), NOW)).toBe(true);
+      expect(dueRevisionReminder(revised(1), NOW)).toBe(true);
+      expect(dueRevisionReminder(revised(-1), NOW)).toBe(false);
+      expect(dueRevisionReminder(revised(10, { remindersSent: { revision: past() } }), NOW)).toBe(false);
+      // Label reminders don't count
+      expect(dueRevisionReminder(revised(10, { remindersSent: { day7: past(20) } }), NOW)).toBe(true);
+    });
+
+    it("waits a day after the offer when the response period is short", () => {
+      expect(dueRevisionReminder(revised(40, { revisedAt: new Date(NOW.getTime() - 8 * HOUR) }), NOW)).toBe(false);
+      expect(dueRevisionReminder(revised(20, { revisedAt: past(1) }), NOW)).toBe(true);
+    });
+
+    it("is Mode C only, and only while revised", () => {
+      const consumer = quote("revised", { revisedAt: past(5), revisionExpiresAt: future(1) });
+      expect(dueRevisionReminder(consumer, NOW)).toBe(false);
+      expect(dueRevisionReminder({ ...revised(10), status: "returning" }, NOW)).toBe(false);
+    });
   });
 });

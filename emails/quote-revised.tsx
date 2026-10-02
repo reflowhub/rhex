@@ -1,14 +1,6 @@
-import {
-  Html,
-  Head,
-  Body,
-  Container,
-  Text,
-  Hr,
-  Section,
-  Column,
-  Row,
-} from "@react-email/components";
+import { Text, Section, Column, Row } from "@react-email/components";
+import type { EmailBrand } from "@/lib/partner-config";
+import TradeInLayout, { styles } from "./trade-in-layout";
 
 interface QuoteRevisedEmailProps {
   customerName: string;
@@ -22,6 +14,10 @@ interface QuoteRevisedEmailProps {
   expiresAt: string;
   deviceChanged: boolean;
   revisedDeviceName?: string;
+  /** Mode C partner brand; null or unset for consumer emails */
+  brand?: EmailBrand | null;
+  /** Mode C: the reminder sent 48 hours before expiresAt */
+  reminder?: boolean;
 }
 
 export default function QuoteRevisedEmail({
@@ -36,94 +32,84 @@ export default function QuoteRevisedEmail({
   expiresAt,
   deviceChanged,
   revisedDeviceName,
+  brand = null,
+  reminder = false,
 }: QuoteRevisedEmailProps) {
   return (
-    <Html>
-      <Head />
-      <Body style={body}>
-        <Container style={container}>
-          <Text style={heading}>rhex</Text>
-          <Text style={paragraph}>Hi {customerName},</Text>
-          <Text style={paragraph}>
-            We&apos;ve received and inspected your device. After inspection, we
-            found that it differs from the original quote. Please review the
-            changes below.
-          </Text>
+    <TradeInLayout
+      brand={brand}
+      footer="If you have any questions, reply to this email or contact us at rhex.app."
+    >
+      <Text style={styles.paragraph}>Hi {customerName},</Text>
+      {reminder ? (
+        <Text style={styles.paragraph}>
+          Just a reminder: we&apos;re waiting for your answer to the revised
+          offer for your device. It ends on <strong>{expiresAt}</strong>.
+        </Text>
+      ) : (
+        <Text style={styles.paragraph}>
+          We&apos;ve received and inspected your device. After inspection, we
+          found that it differs from the original quote. Please review the
+          changes below.
+        </Text>
+      )}
 
-          <Section style={comparisonSection}>
-            <Row>
-              <Column style={comparisonColumn}>
-                <Text style={comparisonLabel}>Original Quote</Text>
-                <Text style={comparisonDevice}>{deviceName}</Text>
-                <Text style={comparisonDetail}>Grade {originalGrade}</Text>
-                <Text style={comparisonPrice}>
-                  ${originalPrice.toFixed(2)} {currency}
-                </Text>
-              </Column>
-              <Column style={comparisonColumn}>
-                <Text style={comparisonLabel}>Revised Quote</Text>
-                <Text style={comparisonDevice}>
-                  {deviceChanged && revisedDeviceName
-                    ? revisedDeviceName
-                    : deviceName}
-                </Text>
-                <Text style={comparisonDetail}>Grade {revisedGrade}</Text>
-                <Text style={comparisonPriceRevised}>
-                  ${revisedPrice.toFixed(2)} {currency}
-                </Text>
-              </Column>
-            </Row>
-          </Section>
+      <Section style={comparisonSection}>
+        <Row>
+          <Column style={comparisonColumn}>
+            <Text style={comparisonLabel}>Original Quote</Text>
+            <Text style={comparisonDevice}>{deviceName}</Text>
+            <Text style={comparisonDetail}>Grade {originalGrade}</Text>
+            <Text style={comparisonPrice}>
+              ${originalPrice.toFixed(2)} {currency}
+            </Text>
+          </Column>
+          <Column style={comparisonColumn}>
+            <Text style={comparisonLabel}>Revised Quote</Text>
+            <Text style={comparisonDevice}>
+              {deviceChanged && revisedDeviceName
+                ? revisedDeviceName
+                : deviceName}
+            </Text>
+            <Text style={comparisonDetail}>Grade {revisedGrade}</Text>
+            <Text style={comparisonPriceRevised}>
+              ${revisedPrice.toFixed(2)} {currency}
+            </Text>
+          </Column>
+        </Row>
+      </Section>
 
-          <Text style={paragraph}>
-            Please accept or reject this revised offer by{" "}
-            <strong>{expiresAt}</strong>. If we don&apos;t hear from you by
-            then, your device will be returned to you.
+      {brand ? (
+        <>
+          <Text style={styles.paragraph}>
+            Please accept or decline this revised offer by{" "}
+            <strong>{expiresAt}</strong>.
           </Text>
+          <Text style={styles.paragraph}>
+            If you accept, {brand.name} will refund{" "}
+            <strong>${revisedPrice.toFixed(2)} {currency}</strong> to your
+            original payment method once your trade-in is approved. If you
+            decline, or we don&apos;t hear from you by then, we&apos;ll post
+            your device back to you at no cost and {brand.name} won&apos;t
+            refund a trade-in value.
+          </Text>
+        </>
+      ) : (
+        <Text style={styles.paragraph}>
+          Please accept or reject this revised offer by{" "}
+          <strong>{expiresAt}</strong>. If we don&apos;t hear from you by
+          then, your device will be returned to you.
+        </Text>
+      )}
 
-          <Text style={{ textAlign: "center" as const, margin: "24px 0" }}>
-            <a href={quoteUrl} style={actionButton}>
-              Review &amp; Respond
-            </a>
-          </Text>
-
-          <Hr style={hr} />
-          <Text style={footer}>
-            If you have any questions, reply to this email or contact us at
-            rhex.app.
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+      <Text style={{ textAlign: "center" as const, margin: "24px 0" }}>
+        <a href={quoteUrl} style={actionButton}>
+          Review &amp; Respond
+        </a>
+      </Text>
+    </TradeInLayout>
   );
 }
-
-const body = {
-  backgroundColor: "#f6f9fc",
-  fontFamily:
-    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-};
-
-const container = {
-  backgroundColor: "#ffffff",
-  margin: "40px auto",
-  padding: "32px",
-  borderRadius: "8px",
-  maxWidth: "480px",
-};
-
-const heading = {
-  fontSize: "20px",
-  fontWeight: "700" as const,
-  color: "#111827",
-  marginBottom: "24px",
-};
-
-const paragraph = {
-  fontSize: "14px",
-  lineHeight: "24px",
-  color: "#374151",
-};
 
 const comparisonSection = {
   margin: "24px 0",
@@ -179,14 +165,4 @@ const actionButton = {
   fontSize: "14px",
   fontWeight: "600" as const,
   textDecoration: "none",
-};
-
-const hr = {
-  borderColor: "#e5e7eb",
-  margin: "24px 0",
-};
-
-const footer = {
-  fontSize: "12px",
-  color: "#9ca3af",
 };

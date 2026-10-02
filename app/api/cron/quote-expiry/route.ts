@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { LABEL_REMINDER_DAYS, POST_BY_DAYS } from "@/lib/label-deadlines";
 import type { QuoteStatus } from "@/lib/quote-status";
-import { LATE_EXPIRY_GRACE_DAYS } from "@/lib/quote-transitions";
+import {
+  LATE_EXPIRY_GRACE_DAYS,
+  REVISION_REMINDER_HOURS,
+} from "@/lib/quote-transitions";
+import { sendRevisionReminder } from "@/lib/revision-reminder";
 import { sendLabelReminder } from "@/lib/shipping-labels";
 import { transitionQuote } from "@/lib/transition-quote";
 
@@ -16,6 +20,7 @@ import { transitionQuote } from "@/lib/transition-quote";
 //   - accepted, label sent, past postByAt + 30 days → expired
 //   - revised past revisionExpiresAt → returning (revisionAutoExpired)
 //   - day-7 and day-12 label reminders (accepted only; `remindersSent`)
+//   - Mode C re-quote reminder 48h before revisionExpiresAt (`remindersSent`)
 // Vercel Cron sends GET; POST is kept for manual runs.
 //
 // Auth: Bearer token matching CRON_SECRET env var.
@@ -112,7 +117,22 @@ async function run(request: NextRequest) {
     deadline
   );
 
-  const summary = { unaccepted, unposted, revisions, reminders };
+  // Revised offers ending within the reminder window (Mode C only, checked per quote)
+  const revisionReminders = await sweep(
+    quotes
+      .where("status", "==", "revised")
+      .where("revisionExpiresAt", ">", now)
+      .where(
+        "revisionExpiresAt",
+        "<=",
+        new Date(now.getTime() + REVISION_REMINDER_HOURS * 60 * 60 * 1000)
+      )
+      .orderBy("revisionExpiresAt"),
+    (doc) => sendRevisionReminder(doc.id, now),
+    deadline
+  );
+
+  const summary = { unaccepted, unposted, revisions, reminders, revisionReminders };
   console.log("quote-expiry:", JSON.stringify(summary));
   return NextResponse.json(summary);
 }

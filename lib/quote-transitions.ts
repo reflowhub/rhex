@@ -54,6 +54,10 @@ export type SideEffect =
   | "paid_email"
   | "expired_email"
   | "returned_email"
+  /** Mode C only: device arrived, going back, approved (replaces paid_email) */
+  | "received_email"
+  | "returning_email"
+  | "approved_email"
   | "queue_label_refund"
   /** Take the quote's value off the linked customer's totalValueNZD */
   | "reverse_customer_value"
@@ -115,6 +119,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const DEFAULT_REVISION_RESPONSE_DAYS = 7;
 /** An accepted quote expires this many days after postByAt (D2) */
 export const LATE_EXPIRY_GRACE_DAYS = 30;
+/** Mode C: re-quote reminder this many hours before revisionExpiresAt */
+export const REVISION_REMINDER_HOURS = 48;
 
 export const STATUS_TIMESTAMP_FIELDS: Record<QuoteStatus, string> = {
   quoted: "createdAt",
@@ -176,6 +182,9 @@ const CUSTOMER_EFFECTS: readonly SideEffect[] = [
   "paid_email",
   "expired_email",
   "returned_email",
+  "received_email",
+  "returning_email",
+  "approved_email",
   "reverse_customer_value",
   "restore_customer_value",
 ];
@@ -468,7 +477,7 @@ function applyReceive(q: QuoteData, ctx: TransitionContext): ApplyResult {
   if (q.status === "expired" || isPast(q.expectedByAt, ctx.now)) {
     fields.lateArrival = true;
   }
-  return { fields };
+  return withModeCEmail({ fields }, q, "received_email");
 }
 
 function applyCancel(q: QuoteData, ctx: TransitionContext): ApplyResult {
@@ -510,6 +519,16 @@ function withLabelRefund(result: ApplyResult, q: QuoteData): ApplyResult {
   };
 }
 
+/** Mode C customers get emails consumer quotes don't (docs/partners/OPPO.md, 2b). */
+function withModeCEmail(
+  result: ApplyResult,
+  q: QuoteData,
+  effect: "received_email" | "returning_email"
+): ApplyResult {
+  if ("error" in result || !isModeC(q)) return result;
+  return { ...result, effects: [...(result.effects ?? []), effect] };
+}
+
 /** A linked customer's totalValueNZD drops when their quote ends unpaid. */
 function withCustomerValue(
   result: ApplyResult,
@@ -532,10 +551,10 @@ function applyRelease(_q: QuoteData, ctx: TransitionContext): ApplyResult {
   return { fields: { releaseNote: note } };
 }
 
-function applyAdminReturn(_q: QuoteData, ctx: TransitionContext): ApplyResult {
+function applyAdminReturn(q: QuoteData, ctx: TransitionContext): ApplyResult {
   const reason = str(ctx.reason);
   if (!reason) return { error: "A reason is required to return the device" };
-  return { fields: { returnReason: reason } };
+  return withModeCEmail({ fields: { returnReason: reason } }, q, "returning_email");
 }
 
 /** returning → returned: the customer is emailed, with the return tracking number if given. */
@@ -776,10 +795,14 @@ export const TRANSITIONS: readonly Rule[] = [
       }
       return revisionOpen(q, ctx);
     },
-    apply: (_q, ctx) =>
-      ctx.actor === "system"
-        ? { fields: { revisionAutoExpired: true } }
-        : { fields: { revisionRejectedAt: ctx.now } },
+    apply: (q, ctx) =>
+      withModeCEmail(
+        ctx.actor === "system"
+          ? { fields: { revisionAutoExpired: true } }
+          : { fields: { revisionRejectedAt: ctx.now } },
+        q,
+        "returning_email"
+      ),
   },
 
   {
@@ -797,6 +820,7 @@ export const TRANSITIONS: readonly Rule[] = [
             fields: {
               settlement: partnerSettlementSnapshot(q, ctx.now, ctx.actorId ?? null),
             },
+            effects: ["approved_email"],
           }
         : {
             fields: { payout: payoutSnapshot(q, ctx.now, ctx.actorId ?? null) },
@@ -871,6 +895,23 @@ export function dueSystemTransition(
   now: Date = new Date()
 ): QuoteStatus | null {
   return allowedTransitions(q, "system", now)[0] ?? null;
+}
+
+/**
+ * Mode C: whether the re-quote reminder is due, REVISION_REMINDER_HOURS
+ * before the revised offer ends. Sent once (`remindersSent.revision`), and
+ * not within a day of the offer itself if the response period is short.
+ */
+export function dueRevisionReminder(q: QuoteData, now: Date = new Date()): boolean {
+  if (q.status !== "revised" || !isModeC(q)) return false;
+  const expires = toDate(q.revisionExpiresAt);
+  if (!expires) return false;
+  const left = expires.getTime() - now.getTime();
+  if (left <= 0 || left > REVISION_REMINDER_HOURS * 60 * 60 * 1000) return false;
+  const revisedAt = toDate(q.revisedAt);
+  if (revisedAt && now.getTime() - revisedAt.getTime() < DAY_MS) return false;
+  const sent = (q.remindersSent ?? {}) as Record<string, unknown>;
+  return !sent.revision;
 }
 
 /** Validate a transition and work out what it writes. */

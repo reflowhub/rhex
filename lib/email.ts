@@ -22,11 +22,13 @@ export async function sendEmail({
   subject,
   react,
   attachments,
+  replyTo,
 }: {
   to: string;
   subject: string;
   react: ReactElement;
   attachments?: EmailAttachment[];
+  replyTo?: string;
 }) {
   if (!resend) {
     console.log(`[email] skipped (no API key): "${subject}" → ${to}`);
@@ -40,6 +42,7 @@ export async function sendEmail({
       subject,
       react,
       ...(attachments?.length && { attachments }),
+      ...(replyTo && { replyTo }),
     });
 
     if (error) {
