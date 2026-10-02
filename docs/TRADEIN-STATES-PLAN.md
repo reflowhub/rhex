@@ -38,7 +38,7 @@ Found during planning:
 | ID | Decision |
 |---|---|
 | D1 | Public quotes (`/sell` and the embed) are valid for **24 hours** (`quoted → expired`). Partner portal, v1 API and admin-created quotes keep 14 days until the Mode A/B review. |
-| D2 | **Post-by deadline:** the customer must lodge the device with RHEX's label within **14 days of the label being sent** (`postByAt`). There is an internal transit allowance of **10 days** (`expectedByAt` = `postByAt` + 10d); later arrivals get a `lateArrival` flag and an admin checks the first-scan date. Lodged late → admin chooses honour or reassess (`lateDecision`). Never received → `accepted → expired` at `postByAt` + 30 days; an admin may still receive an expired quote if it had been accepted. |
+| D2 | **Post-by deadline:** the customer must lodge the device with RHEX's label within **14 days of the label being sent** (`postByAt`). There is an internal transit allowance of **10 days** (`expectedByAt` = `postByAt` + 10d); later arrivals get a `lateArrival` flag and an admin checks the first-scan date. Lodged late → admin chooses honour or reassess (`lateDecision`: `on_time`, `honour` or `reassess`, recorded at inspection with an optional note). Never received → `accepted → expired` at `postByAt` + 30 days; an admin may still receive an expired quote if it had been accepted. |
 | D3 | Revision response window: **7 days**. Held in admin settings, not an env var. No response = rejection → `returning`. |
 | D4 | No `paid → cancelled`. |
 | D5 | Cancellation is allowed only from `quoted`, `accepted` and `shipped`. Once RHEX holds the device, the quote ends as `returned` (sole exception: `on_hold → cancelled` when the device is surrendered to authorities). |
@@ -85,8 +85,8 @@ cancelled ◄────────────────┘                
 | shipped → received | admin | IMEI/serial entered | set `lateArrival` if past `expectedByAt` |
 | shipped → cancelled | admin | `cancelReason` (e.g. `lost_in_transit`) | none (scanned labels aren't refundable) |
 | expired → received | admin | quote had been accepted; IMEI/serial | `lateArrival: true` |
-| received → inspected | admin | `inspectionGrade`; pays original quote (D12) | none |
-| received → revised | admin | `inspectionGrade`; `revisedPriceNZD` < `quotePriceNZD` | `revisedPriceDisplay` at locked FX; `revisionExpiresAt` = +7d; revised email |
+| received → inspected | admin | `inspectionGrade`; pays original quote (D12); `lateDecision` if `lateArrival` (D2) | none |
+| received → revised | admin | `inspectionGrade`; `revisedPriceNZD` < `quotePriceNZD`; `lateDecision` if `lateArrival` (D2) | `revisedPriceDisplay` at locked FX; `revisionExpiresAt` = +7d; revised email |
 | received → returning | admin | reason (e.g. rejected device, §14) | none |
 | received / inspected → on_hold | admin | reason | store `heldFrom` |
 | on_hold → held-from state | admin | release note | none |
@@ -236,12 +236,7 @@ Cancellations send no customer email. Analytics and funnel metrics leave out `no
 
 ## 5. Verification
 
-**Preview deployments use production services** (checked 2026-10-02). The Firebase, Resend and Stripe secret-key variables each have a single entry shared by Development, Preview and Production. GA, Clarity and Google Ads IDs are set for Preview too. So testing on a preview:
-- writes real Firestore data
-- sends real emails
-- fires analytics and ad conversion events
-
-`CRON_SECRET` is production-only, and Vercel crons only run on production. Until Preview gets its own Firebase project (e.g. rhw-dev) and its own Resend key, test with sandbox data and your own email address, and accept that test acceptances record ad conversions.
+**Test environment** (since 2026-10-02). Preview, Development and local `.env.local` use the `rhex-test` Firebase project and a Stripe test key; production credentials are in `.env.prod.local` for scripts run against production on purpose. GA, Clarity and Google Ads IDs are production-only. Previews share production's Resend key, so they send real emails (use your own address); Development and local have no Resend key and skip emails. Preview has no `STRIPE_WEBHOOK_SECRET`. `CRON_SECRET` is production-only, and Vercel crons only run on production.
 
 - **vitest:** the transition table and guards (Phase 1).
 - **Concurrency script** against dev Firestore: the same transition called twice at once → exactly one succeeds, one email, one commission entry.

@@ -11,6 +11,7 @@ import {
   type CancelReason,
   type QuoteActor,
   type QuoteStatus,
+  isLateDecision,
   isQuoteStatus,
 } from "@/lib/quote-status";
 import {
@@ -181,6 +182,29 @@ function revisedDeviceFields(
       revisedDeviceMake: make,
       revisedDeviceModel: model,
       revisedDeviceStorage: storage,
+    },
+  };
+}
+
+/**
+ * A late arrival can't be inspected until an admin has checked the first-scan
+ * date and recorded on time, honour or reassess (D2, terms §5).
+ */
+function lateDecisionFields(
+  q: QuoteData,
+  payload: Record<string, unknown>
+): { error: string } | { fields: Record<string, unknown> } {
+  if (q.lateArrival !== true || q.lateDecision) return { fields: {} };
+  if (!isLateDecision(payload.lateDecision)) {
+    return {
+      error:
+        "This device arrived late. Check the first-scan date in tracking, then choose on time, honour or reassess",
+    };
+  }
+  return {
+    fields: {
+      lateDecision: payload.lateDecision,
+      lateDecisionNote: str(payload.lateDecisionNote),
     },
   };
 }
@@ -367,12 +391,14 @@ function applyAdminReturn(_q: QuoteData, ctx: TransitionContext): ApplyResult {
 
 /** received → inspected: pays the original quote (D12). */
 function applyInspectAtOriginal(
-  _q: QuoteData,
+  q: QuoteData,
   ctx: TransitionContext
 ): ApplyResult {
   const p = ctx.payload ?? {};
   const grade = inspectionGrade(p);
   if (!grade) return { error: "inspectionGrade is required" };
+  const late = lateDecisionFields(q, p);
+  if ("error" in late) return late;
   if (p.revisedPriceNZD !== undefined && p.revisedPriceNZD !== null) {
     return {
       error:
@@ -381,7 +407,7 @@ function applyInspectAtOriginal(
   }
   const device = revisedDeviceFields(p);
   if ("error" in device) return device;
-  return { fields: { inspectionGrade: grade, ...device.fields } };
+  return { fields: { inspectionGrade: grade, ...late.fields, ...device.fields } };
 }
 
 /** received → revised: revisions only go down (D12). */
@@ -389,6 +415,8 @@ function applyRevise(q: QuoteData, ctx: TransitionContext): ApplyResult {
   const p = ctx.payload ?? {};
   const grade = inspectionGrade(p);
   if (!grade) return { error: "inspectionGrade is required" };
+  const late = lateDecisionFields(q, p);
+  if ("error" in late) return late;
 
   const price =
     typeof p.revisedPriceNZD === "string"
@@ -429,6 +457,7 @@ function applyRevise(q: QuoteData, ctx: TransitionContext): ApplyResult {
       revisedPriceNZD,
       revisedPriceDisplay,
       revisionExpiresAt: new Date(ctx.now.getTime() + days * DAY_MS),
+      ...late.fields,
       ...device.fields,
     },
     effects: ["revised_email"],

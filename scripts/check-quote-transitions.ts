@@ -4,7 +4,7 @@
  * commission, audit log, lazy expiry (quoted, accepted, revised), label
  * reminders, sandbox handling, label send/replace/refund, "I've posted
  * it", money (revised price at the locked FX rate, payout snapshot,
- * customer totalValueNZD) and the customer timeline. Creates its own data and
+ * customer totalValueNZD), late-arrival decisions and the customer timeline. Creates its own data and
  * deletes it afterwards, restoring counters/tradeIns to its previous value.
  *
  * Usage: npx tsx scripts/check-quote-transitions.ts   (refuses to run unless
@@ -148,6 +148,11 @@ async function main() {
     const unLabel = ul.ok ? (await adminDb.collection("shippingLabels").doc(ul.labelId).get()).data() : null;
     check("expired quote's label queued for refund", unLabel?.refundState === "pending");
     check("expired-after-acceptance can still be received", (await transitionQuote(un.id, "received", { actor: "admin", admin: adminUser, payload: { imei: "356789012345678" } })).ok && (await un.get()).data()!.lateArrival === true);
+    const noDecision = await transitionQuote(un.id, "inspected", { actor: "admin", admin: adminUser, payload: { inspectionGrade: "A" } });
+    check(`late arrival can't be inspected without a decision (${!noDecision.ok && noDecision.message})`, !noDecision.ok && noDecision.code === "guard_failed");
+    check("late arrival inspected with reassess", (await transitionQuote(un.id, "inspected", { actor: "admin", admin: adminUser, payload: { inspectionGrade: "A", lateDecision: "reassess", lateDecisionNote: "First scan day 20" } })).ok);
+    const und = (await un.get()).data()!;
+    check(`late decision stored (${und.lateDecision}, ${und.lateDecisionNote})`, und.lateDecision === "reassess" && und.lateDecisionNote === "First scan day 20");
 
     const rm = await mkQuote();
     await transitionQuote(rm.id, "accepted", { actor: "customer", payload: details });

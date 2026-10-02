@@ -128,6 +128,27 @@ export const CANCEL_REASON_LABELS: Record<CancelReason, string> = {
   other: "Other",
 };
 
+/**
+ * What an admin decided for a late arrival (D2, terms §5), recorded at
+ * inspection after checking the parcel's first-scan date.
+ */
+export const LATE_DECISIONS = ["on_time", "honour", "reassess"] as const;
+
+export type LateDecision = (typeof LATE_DECISIONS)[number];
+
+export const LATE_DECISION_LABELS: Record<LateDecision, string> = {
+  on_time: "Lodged on time (carrier delay)",
+  honour: "Lodged late: honour the quote",
+  reassess: "Lodged late: reassess at current pricing",
+};
+
+export function isLateDecision(value: unknown): value is LateDecision {
+  return (
+    typeof value === "string" &&
+    (LATE_DECISIONS as readonly string[]).includes(value)
+  );
+}
+
 /** Bot, scraping, fake or test acceptances: left out of analytics and funnels. */
 export function isNotGenuine(q: { status?: unknown; cancelReason?: unknown }): boolean {
   return q.status === "cancelled" && q.cancelReason === "not_genuine";

@@ -461,6 +461,52 @@ describe("receiving", () => {
   });
 });
 
+describe("late arrivals (D2)", () => {
+  const late = quote("received", { lateArrival: true });
+  const inspect = (q: QuoteData, to: "inspected" | "revised", payload: Record<string, unknown>) =>
+    planTransition(q, to, ctx("admin", { payload }));
+
+  it("can't be inspected or revised without a decision", () => {
+    expect(inspect(late, "inspected", { inspectionGrade: "A" })).toMatchObject({
+      ok: false,
+      code: "guard_failed",
+    });
+    expect(
+      inspect(late, "revised", { inspectionGrade: "C", revisedPriceNZD: 150, lateDecision: "maybe" }).ok
+    ).toBe(false);
+  });
+
+  it("stores the decision and note with the inspection", () => {
+    const plan = inspect(late, "inspected", {
+      inspectionGrade: "A",
+      lateDecision: "on_time",
+      lateDecisionNote: " First scan 14 Oct ",
+    });
+    expect(plan.ok && plan.update).toMatchObject({
+      lateDecision: "on_time",
+      lateDecisionNote: "First scan 14 Oct",
+    });
+    const revised = inspect(late, "revised", {
+      inspectionGrade: "C",
+      revisedPriceNZD: 150,
+      lateDecision: "reassess",
+    });
+    expect(revised.ok && revised.update.lateDecision).toBe("reassess");
+  });
+
+  it("isn't asked for on time arrivals, or twice", () => {
+    const onTime = inspect(quote("received"), "inspected", {
+      inspectionGrade: "A",
+      lateDecision: "honour",
+    });
+    expect(onTime.ok && onTime.update.lateDecision).toBeUndefined();
+    const decided = inspect(quote("received", { lateArrival: true, lateDecision: "honour" }), "inspected", {
+      inspectionGrade: "A",
+    });
+    expect(decided.ok && decided.update.lateDecision).toBeUndefined();
+  });
+});
+
 describe("cancellation", () => {
   const cancel = (q: QuoteData, cancelReason?: string, reason?: string) =>
     planTransition(q, "cancelled", ctx("admin", { payload: { cancelReason }, reason }));

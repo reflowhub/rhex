@@ -52,8 +52,11 @@ import DeviceSearchSelect, {
 import {
   CANCEL_REASONS,
   CANCEL_REASON_LABELS,
+  LATE_DECISIONS,
+  LATE_DECISION_LABELS,
   QUOTE_STATUS_LABELS as STATUS_LABELS,
   type CancelReason,
+  type LateDecision,
   type QuoteStatus,
 } from "@/lib/quote-status";
 
@@ -106,6 +109,8 @@ interface Quote {
   receivedImei?: string | null;
   receivedSerial?: string | null;
   lateArrival?: boolean | null;
+  lateDecision?: LateDecision | null;
+  lateDecisionNote?: string | null;
   customerId?: string;
   partnerId?: string;
   partnerName?: string;
@@ -370,6 +375,8 @@ export default function QuoteDetailPage() {
   const [inspectionOpen, setInspectionOpen] = useState(false);
   const [inspectionGrade, setInspectionGrade] = useState<Grade | "">("");
   const [revisedPrice, setRevisedPrice] = useState("");
+  const [lateDecision, setLateDecision] = useState<LateDecision | "">("");
+  const [lateDecisionNote, setLateDecisionNote] = useState("");
   const [changeDevice, setChangeDevice] = useState(false);
   const [revisedDevice, setRevisedDevice] = useState<SelectedDevice | null>(
     null
@@ -497,6 +504,8 @@ export default function QuoteDetailPage() {
   const openInspection = () => {
     setInspectionGrade("");
     setRevisedPrice("");
+    setLateDecision("");
+    setLateDecisionNote("");
     setChangeDevice(false);
     setRevisedDevice(null);
     setActionError(null);
@@ -537,6 +546,10 @@ export default function QuoteDetailPage() {
     if (!quote || !inspectionGrade) return;
     const body: Record<string, unknown> = { inspectionGrade };
     if (target === "revised") body.revisedPriceNZD = parseFloat(revisedPrice);
+    if (needsLateDecision) {
+      body.lateDecision = lateDecision;
+      body.lateDecisionNote = lateDecisionNote.trim() || undefined;
+    }
     if (changeDevice && revisedDevice) {
       body.revisedDeviceId = revisedDevice.id;
       body.revisedDeviceMake = revisedDevice.make;
@@ -547,6 +560,9 @@ export default function QuoteDetailPage() {
     if (ok) setInspectionOpen(false);
   };
 
+  // A late arrival needs an on time / honour / reassess decision (D2)
+  const needsLateDecision = !!quote?.lateArrival && !quote.lateDecision;
+  const lateDecisionMissing = needsLateDecision && lateDecision === "";
   const gradeChanged =
     inspectionGrade !== "" && !!quote && inspectionGrade !== quote.grade;
   const hasMismatch =
@@ -630,8 +646,13 @@ export default function QuoteDetailPage() {
             {STATUS_LABELS[quote.status] ?? quote.status}
           </Badge>
           {quote.lateArrival && (
-            <Badge variant="outline" className="border-amber-500 text-amber-600">
+            <Badge
+              variant="outline"
+              className="border-amber-500 text-amber-600"
+              title={quote.lateDecisionNote ?? undefined}
+            >
               Late arrival
+              {quote.lateDecision && ` · ${LATE_DECISION_LABELS[quote.lateDecision]}`}
             </Badge>
           )}
           {quote.sandbox && (
@@ -1363,6 +1384,53 @@ export default function QuoteDetailPage() {
               </p>
             </div>
 
+            {/* Late arrival decision (D2, terms §5) */}
+            {needsLateDecision && (
+              <div className="grid gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:bg-amber-950/30">
+                <p className="font-medium text-amber-800 dark:text-amber-300">
+                  Late arrival
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Post by {formatDate(quote.postByAt)}. Check the first scan
+                  {quote.trackingNumber ? (
+                    <>
+                      {" "}in{" "}
+                      <a
+                        href={`https://auspost.com.au/mypost/track/#/details/${encodeURIComponent(quote.trackingNumber)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline"
+                      >
+                        AusPost tracking
+                      </a>
+                    </>
+                  ) : null}
+                  . Lodged by the post-by date counts as on time; otherwise
+                  honour the quote or reassess at current pricing.
+                </p>
+                <Select
+                  value={lateDecision}
+                  onValueChange={(val) => setLateDecision(val as LateDecision)}
+                >
+                  <SelectTrigger id="late-decision">
+                    <SelectValue placeholder="Choose..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LATE_DECISIONS.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {LATE_DECISION_LABELS[d]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="Note, e.g. first scan date (optional)"
+                  value={lateDecisionNote}
+                  onChange={(e) => setLateDecisionNote(e.target.value)}
+                />
+              </div>
+            )}
+
             {/* Inspection grade select */}
             <div className="grid gap-2">
               <Label htmlFor="inspection-grade">Inspection Grade</Label>
@@ -1494,6 +1562,7 @@ export default function QuoteDetailPage() {
               disabled={
                 !inspectionGrade ||
                 actionLoading ||
+                lateDecisionMissing ||
                 (changeDevice && !revisedDevice)
               }
             >
@@ -1505,7 +1574,7 @@ export default function QuoteDetailPage() {
             {hasMismatch && (
               <Button
                 onClick={() => handleInspection("revised")}
-                disabled={!revisedPriceValid || actionLoading}
+                disabled={!revisedPriceValid || actionLoading || lateDecisionMissing}
               >
                 {actionLoading && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

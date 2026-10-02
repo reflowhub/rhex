@@ -54,6 +54,8 @@ const PLAIN_FIELDS = [
   "receivedImei",
   "receivedSerial",
   "lateArrival",
+  "lateDecision",
+  "lateDecisionNote",
   "inspectionGrade",
   "revisedPriceNZD",
   "revisedPriceDisplay",
