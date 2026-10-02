@@ -80,6 +80,7 @@ Reuse the consumer trade-in flow (labels, reminders, receiving, expiry, re-quote
 
 ## Still open
 
+- **2b email copy:** Terence to review the Mode C email wording on Monday 5 October 2026. It ships as drafted, and wording changes follow as small fixes before launch.
 - **Never arrived:** OPPO to confirm `accepted: false` with the original price and grade (the setting is on until then). It can be turned off in admin without a deploy.
 - **Customer emails:** OPPO may want RHEX to email customers only for re-quotes and send the rest itself. Its answer sets its email switches in admin (all on until then). OPPO's logo URL (https PNG) for the email header.
 - **Logistics:** OPPO decides on 5 October 2026 whether it takes over inbound labels (eParcel) and charges Reflow through settlement.
