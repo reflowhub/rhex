@@ -58,6 +58,30 @@ export async function logPriceAudit(params: {
 }
 
 // ---------------------------------------------------------------------------
+// logQuoteTransition — Record an admin status change on a trade-in quote
+// ---------------------------------------------------------------------------
+
+export async function logQuoteTransition(params: {
+  adminUid: string;
+  adminEmail: string;
+  quoteId: string;
+  from: string;
+  to: string;
+  reason: string | null;
+  details: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    await adminDb.collection("quoteAuditLog").add({
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      ...params,
+    });
+  } catch (error) {
+    // Audit logging should never fail the primary operation
+    console.error("Failed to write quote audit log:", error);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // createPriceSnapshot — Capture full price list state before overwrite
 // ---------------------------------------------------------------------------
 

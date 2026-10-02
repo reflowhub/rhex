@@ -1,5 +1,7 @@
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
+import { transitionQuote } from "@/lib/transition-quote";
+import { updateIfStatus } from "@/lib/status-transition";
 
 /**
  * Apply revision expiry to an already-fetched quote or bulk quote.
@@ -25,12 +27,23 @@ export async function applyRevisionExpiry(
     : new Date(expiresAt);
   if (expiryDate > new Date()) return data;
 
-  // Expired — auto-transition to returning
-  await doc.ref.update({
+  // Single quotes go through the transition module
+  if (doc.ref.parent.id === "quotes") {
+    const result = await transitionQuote(doc.id, "returning", {
+      actor: "system",
+    });
+    if (result.ok) return result.quote;
+    // Lost a race with another transition; return what's stored now
+    return (await doc.ref.get()).data();
+  }
+
+  // Bulk quotes (lib/status-transition.ts)
+  const moved = await updateIfStatus(doc.ref, "revised", {
     status: "returning",
     returningAt: admin.firestore.FieldValue.serverTimestamp(),
     revisionAutoExpired: true,
   });
+  if (!moved) return (await doc.ref.get()).data();
 
   return {
     ...data,
@@ -55,7 +68,7 @@ export async function checkRevisionExpiry(
   const doc = await adminDb.collection(collection).doc(docId).get();
   if (!doc.exists) return false;
 
-  const before = doc.data()!.status;
+  const before = doc.data()!;
   const after = await applyRevisionExpiry(doc);
-  return before !== after?.status;
+  return before.status !== after?.status;
 }

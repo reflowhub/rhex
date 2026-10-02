@@ -71,7 +71,7 @@ cancelled ◄────────────────┘                
 
 ### Transition table
 
-`lib/quote-transitions.ts` becomes the only code that changes a quote's status. Actors: `customer` (public link), `partner` (portal), `apiKey` (v1), `admin`, `system` (cron, or the expiry check when a quote is opened).
+`lib/quote-transitions.ts` (pure rules) and `lib/transition-quote.ts` (`transitionQuote`: transaction and side effects) become the only code that changes a quote's status. Actors: `customer` (public link), `partner` (portal), `apiKey` (v1), `admin`, `system` (cron, or the expiry check when a quote is opened).
 
 | From → To | Actors | Guard | Side effects (after commit, only for the call that made the change) |
 |---|---|---|---|
@@ -149,7 +149,7 @@ Cancellations send no customer email. Analytics and funnel metrics leave out `no
 
 ### Phase 1: transition module & state model (findings 6, 7; D4, D5, D11, D12)
 
-1. `lib/quote-transitions.ts`: the transition table above, guards, `transitionQuote(id, to, {actor, payload})` inside a transaction, `statusHistory`, side effects after commit, audit log for admins.
+1. `lib/quote-transitions.ts`: the transition table above and guards, as pure functions (`planTransition`, `allowedTransitions`). `lib/transition-quote.ts`: `transitionQuote(id, to, {actor, payload})` inside a transaction, `statusHistory`, side effects after commit, audit log for admins (`quoteAuditLog`).
 2. Shared `QUOTE_STATUSES` and labels in `lib/quote-status.ts`.
 3. Move every status write onto the module: public quote PUT, v1 accept/respond, partner respond, admin PUT, `applyRevisionExpiry`. `lib/status-transition.ts` stays for bulk quotes.
 4. **Guards:** IMEI/serial required at `received`; `revised` requires grade and a price below the original; inspection and revision fields can only be written during the `received → revised/inspected` step.

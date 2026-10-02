@@ -19,15 +19,6 @@ export async function onQuotePaid(
   const partnerId = quoteData.partnerId as string | undefined;
   if (!partnerId) return;
 
-  // Check for duplicate — don't create commission twice
-  const existing = await adminDb
-    .collection("commissionLedger")
-    .where("quoteId", "==", quoteId)
-    .limit(1)
-    .get();
-
-  if (!existing.empty) return;
-
   // Fetch partner config
   const partnerDoc = await adminDb.collection("partners").doc(partnerId).get();
   if (!partnerDoc.exists) return;
@@ -74,19 +65,28 @@ export async function onQuotePaid(
 
   if (commissionAmount <= 0) return;
 
-  await adminDb.collection("commissionLedger").add({
-    partnerId,
-    quoteId,
-    bulkQuoteId: null,
-    deviceCount,
-    quoteTotal,
-    commissionAmount,
-    status: "pending",
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    paidAt: null,
-    payoutId: null,
-  });
+  // One ledger entry per quote: create() fails if it already exists, so a
+  // repeated call can't duplicate the commission
+  try {
+    await adminDb.collection("commissionLedger").doc(`quote_${quoteId}`).create({
+      partnerId,
+      quoteId,
+      bulkQuoteId: null,
+      deviceCount,
+      quoteTotal,
+      commissionAmount,
+      status: "pending",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      paidAt: null,
+      payoutId: null,
+    });
+  } catch (error) {
+    if ((error as { code?: number }).code === ALREADY_EXISTS) return;
+    throw error;
+  }
 }
+
+const ALREADY_EXISTS = 6; // gRPC status code
 
 /**
  * Called when a bulk quote transitions to "paid" status.

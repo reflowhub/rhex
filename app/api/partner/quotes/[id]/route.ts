@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import admin from "@/lib/firebase-admin";
 import { requirePartner } from "@/lib/partner-auth";
 import { PartnerSession } from "@/lib/partner-auth";
-import { updateIfStatus } from "@/lib/status-transition";
+import { transitionQuote } from "@/lib/transition-quote";
 import { applyRevisionExpiry } from "@/lib/revision-expiry";
 import { serializeTimestamp } from "@/lib/serialize";
 
@@ -140,44 +139,19 @@ export async function PUT(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const data = quoteDoc.data()!;
-
-    if (data.status !== "revised") {
+    const transition = await transitionQuote(
+      id,
+      action === "accept_revision" ? "inspected" : "returning",
+      { actor: "partner", actorId: partner.id }
+    );
+    if (!transition.ok) {
+      const error =
+        transition.code === "invalid_transition"
+          ? "Quote is not in revised status"
+          : transition.message;
       return NextResponse.json(
-        { error: "Quote is not in revised status" },
-        { status: 400 }
-      );
-    }
-
-    // Check expiry
-    if (data.revisionExpiresAt?.toDate) {
-      if (data.revisionExpiresAt.toDate() < new Date()) {
-        return NextResponse.json(
-          { error: "Revision response period has expired" },
-          { status: 400 }
-        );
-      }
-    }
-
-    const updateData: Record<string, unknown> = {};
-
-    if (action === "accept_revision") {
-      updateData.status = "inspected";
-      updateData.revisionAcceptedAt =
-        admin.firestore.FieldValue.serverTimestamp();
-    } else {
-      updateData.status = "returning";
-      updateData.returningAt =
-        admin.firestore.FieldValue.serverTimestamp();
-      updateData.revisionRejectedAt =
-        admin.firestore.FieldValue.serverTimestamp();
-    }
-
-    // Only one concurrent request can respond to the revision
-    if (!(await updateIfStatus(quoteRef, "revised", updateData))) {
-      return NextResponse.json(
-        { error: "Quote is not in revised status" },
-        { status: 400 }
+        { error },
+        { status: transition.code === "not_found" ? 404 : 400 }
       );
     }
 

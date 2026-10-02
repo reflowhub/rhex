@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -33,27 +34,24 @@ import {
   ClipboardCheck,
   Clock,
   Package,
+  History,
+  PauseCircle,
 } from "lucide-react";
 import { useFX } from "@/lib/use-fx";
 import DeviceSearchSelect, {
   SelectedDevice,
 } from "@/components/admin/device-search-select";
+import {
+  CANCEL_REASONS,
+  CANCEL_REASON_LABELS,
+  QUOTE_STATUS_LABELS as STATUS_LABELS,
+  type CancelReason,
+  type QuoteStatus,
+} from "@/lib/quote-status";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-type QuoteStatus =
-  | "quoted"
-  | "accepted"
-  | "shipped"
-  | "received"
-  | "revised"
-  | "inspected"
-  | "paid"
-  | "returning"
-  | "returned"
-  | "cancelled";
 
 type Grade = "A" | "B" | "C" | "D" | "E";
 
@@ -64,6 +62,15 @@ interface QuoteDevice {
   storage: string;
 }
 
+interface StatusHistoryEntry {
+  from: QuoteStatus;
+  to: QuoteStatus;
+  actor: string;
+  actorId: string | null;
+  at: string | null;
+  reason: string | null;
+}
+
 interface Quote {
   id: string;
   deviceId: string;
@@ -72,18 +79,23 @@ interface Quote {
   quotePriceNZD: number;
   displayCurrency: string;
   status: QuoteStatus;
+  tradeInRef?: string | null;
   createdAt: string;
   expiresAt: string;
   acceptedAt?: string;
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string;
+  shippingAddress?: string;
   paymentMethod?: "payid" | "bank_transfer";
   payIdPhone?: string;
   bankBSB?: string;
   bankAccountNumber?: string;
   bankAccountName?: string;
   imei?: string;
+  receivedImei?: string | null;
+  receivedSerial?: string | null;
+  lateArrival?: boolean | null;
   customerId?: string;
   partnerId?: string;
   partnerName?: string;
@@ -97,14 +109,58 @@ interface Quote {
   revisedAt?: string;
   revisionExpiresAt?: string;
   revisionAutoExpired?: boolean;
+  revisionForceAccepted?: boolean | null;
   returningAt?: string;
   returnedAt?: string;
+  heldFrom?: QuoteStatus | null;
+  holdReason?: string | null;
+  returnReason?: string | null;
+  cancelReason?: CancelReason | null;
+  cancelNote?: string | null;
   platform?: string;
   geoCountry?: string;
   geoCity?: string;
   geoRegion?: string;
   sandbox?: boolean;
+  statusHistory: StatusHistoryEntry[];
+  allowedTransitions: QuoteStatus[];
 }
+
+/** Dialogs that collect input before a transition. */
+type ReasonDialogKind = "hold" | "release" | "return" | "force";
+
+const REASON_DIALOGS: Record<
+  ReasonDialogKind,
+  { title: string; description: string; label: string; submit: string }
+> = {
+  hold: {
+    title: "Put Quote On Hold",
+    description:
+      "Use for ownership, blacklist or fraud checks (terms §3). Payment is blocked while the quote is on hold.",
+    label: "Reason",
+    submit: "Put On Hold",
+  },
+  release: {
+    title: "Release Hold",
+    description: "The quote goes back to the status it was held from.",
+    label: "Release note",
+    submit: "Release Hold",
+  },
+  return: {
+    title: "Return Device",
+    description:
+      "The quote moves to Returning and the device is sent back to the customer.",
+    label: "Reason",
+    submit: "Return Device",
+  },
+  force: {
+    title: "Accept Revision on Customer's Behalf",
+    description:
+      "Moves the quote to Inspected at the revised price. Record why you're accepting for the customer.",
+    label: "Reason",
+    submit: "Accept Revision",
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -112,31 +168,39 @@ interface Quote {
 
 const GRADES: Grade[] = ["A", "B", "C", "D", "E"];
 
-const STATUS_LABELS: Record<QuoteStatus, string> = {
-  quoted: "Quoted",
-  accepted: "Accepted",
-  shipped: "Shipped",
-  received: "Received",
-  revised: "Revised",
-  inspected: "Inspected",
-  paid: "Paid",
-  returning: "Returning",
-  returned: "Returned",
-  cancelled: "Cancelled",
-};
+const HAPPY_PATH: QuoteStatus[] = [
+  "quoted",
+  "accepted",
+  "shipped",
+  "received",
+  "inspected",
+  "paid",
+];
 
-/** Build the stepper steps dynamically based on the path the quote took. */
-function getStepperStatuses(currentStatus: QuoteStatus): QuoteStatus[] {
-  if (
-    currentStatus === "returning" ||
-    currentStatus === "returned"
-  ) {
-    return ["quoted", "accepted", "shipped", "received", "revised", "returning", "returned"];
+/** Build the stepper steps from the path the quote took. */
+function getStepperStatuses(quote: Quote): QuoteStatus[] {
+  const status =
+    quote.status === "on_hold" && quote.heldFrom ? quote.heldFrom : quote.status;
+  const upToReceived: QuoteStatus[] = ["quoted", "accepted", "shipped", "received"];
+  const wasRevised = !!quote.revisedAt;
+
+  if (status === "expired") {
+    return quote.acceptedAt
+      ? ["quoted", "accepted", "expired"]
+      : ["quoted", "expired"];
   }
-  if (currentStatus === "revised") {
-    return ["quoted", "accepted", "shipped", "received", "revised", "inspected", "paid"];
+  if (status === "returning" || status === "returned") {
+    return [
+      ...upToReceived,
+      ...(wasRevised ? (["revised"] as QuoteStatus[]) : []),
+      "returning",
+      "returned",
+    ];
   }
-  return ["quoted", "accepted", "shipped", "received", "inspected", "paid"];
+  if (status === "revised" || wasRevised) {
+    return [...upToReceived, "revised", "inspected", "paid"];
+  }
+  return HAPPY_PATH;
 }
 
 // ---------------------------------------------------------------------------
@@ -148,23 +212,19 @@ function getStatusBadgeVariant(
 ): "default" | "secondary" | "outline" | "destructive" {
   switch (status) {
     case "quoted":
+    case "revised":
+    case "inspected":
+    case "paid":
       return "default";
     case "accepted":
+    case "received":
+    case "returned":
+    case "expired":
       return "secondary";
     case "shipped":
-      return "outline";
-    case "received":
-      return "secondary";
-    case "revised":
-      return "default";
-    case "inspected":
-      return "default";
-    case "paid":
-      return "default"; // we override className for green
     case "returning":
+    case "on_hold":
       return "outline";
-    case "returned":
-      return "secondary";
     case "cancelled":
       return "destructive";
   }
@@ -180,11 +240,14 @@ function getStatusBadgeClassName(status: QuoteStatus): string {
   if (status === "returning") {
     return "border-amber-300 text-amber-700";
   }
+  if (status === "on_hold") {
+    return "border-red-300 text-red-700";
+  }
   return "";
 }
 
 function formatDate(iso: string | undefined | null): string {
-  if (!iso) return "\u2014";
+  if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-NZ", {
     year: "numeric",
     month: "short",
@@ -192,44 +255,6 @@ function formatDate(iso: string | undefined | null): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-/** Returns the next logical status for a forward transition, or null if no action. */
-function getNextStatus(current: QuoteStatus): QuoteStatus | null {
-  const FORWARD: QuoteStatus[] = [
-    "quoted", "accepted", "shipped", "received", "inspected", "paid",
-  ];
-  const idx = FORWARD.indexOf(current);
-  if (idx === -1 || idx >= FORWARD.length - 1) return null;
-  return FORWARD[idx + 1];
-}
-
-/** Label for the primary action button based on current status. */
-function getActionLabel(current: QuoteStatus): string | null {
-  switch (current) {
-    case "quoted":
-      return "Mark Accepted";
-    case "accepted":
-      return "Mark Shipped";
-    case "shipped":
-      return "Mark Received";
-    case "received":
-      return "Begin Inspection";
-    case "inspected":
-      return "Mark Paid";
-    case "returning":
-      return "Mark Returned";
-    default:
-      return null;
-  }
-}
-
-/** Variant for the primary action button. */
-function getActionVariant(
-  current: QuoteStatus
-): "default" | "secondary" | "outline" {
-  if (current === "quoted") return "secondary";
-  return "default";
 }
 
 // ---------------------------------------------------------------------------
@@ -248,16 +273,43 @@ export default function QuoteDetailPage() {
 
   // ---- action state -------------------------------------------------------
   const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // ---- cancel dialog state ------------------------------------------------
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelReason, setCancelReason] = useState<CancelReason | "">("");
+  const [cancelNote, setCancelNote] = useState("");
+
+  // ---- reason dialog state (hold / release / return / force) --------------
+  const [reasonDialog, setReasonDialog] = useState<{
+    kind: ReasonDialogKind;
+    target: QuoteStatus;
+  } | null>(null);
+  const [reasonText, setReasonText] = useState("");
+
+  // ---- receive dialog state -----------------------------------------------
+  const [receiveTarget, setReceiveTarget] = useState<QuoteStatus | null>(null);
+  const [receiveImei, setReceiveImei] = useState("");
+  const [receiveSerial, setReceiveSerial] = useState("");
+
+  // ---- accept dialog state ------------------------------------------------
+  const [acceptOpen, setAcceptOpen] = useState(false);
+  const [acceptForm, setAcceptForm] = useState({
+    customerName: "",
+    customerEmail: "",
+    customerPhone: "",
+    shippingAddress: "",
+    paymentMethod: "",
+    payIdPhone: "",
+    bankBSB: "",
+    bankAccountNumber: "",
+    bankAccountName: "",
+  });
 
   // ---- inspection dialog state --------------------------------------------
   const [inspectionOpen, setInspectionOpen] = useState(false);
   const [inspectionGrade, setInspectionGrade] = useState<Grade | "">("");
   const [revisedPrice, setRevisedPrice] = useState("");
-  const [inspectionLoading, setInspectionLoading] = useState(false);
   const [changeDevice, setChangeDevice] = useState(false);
   const [revisedDevice, setRevisedDevice] = useState<SelectedDevice | null>(
     null
@@ -282,112 +334,136 @@ export default function QuoteDetailPage() {
     fetchQuote();
   }, [fetchQuote]);
 
-  // ---- update quote helper ------------------------------------------------
-  const updateQuote = async (
-    body: Record<string, unknown>
+  // ---- transition helper --------------------------------------------------
+  /** Move the quote to `status`; returns true on success. */
+  const transition = async (
+    status: QuoteStatus,
+    fields: Record<string, unknown> = {}
   ): Promise<boolean> => {
-    const res = await fetch(`/api/admin/quotes/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
-      const updated = await res.json();
-      setQuote((prev) => (prev ? { ...prev, ...updated } : prev));
-      return true;
-    }
-    return false;
-  };
-
-  // ---- advance status (non-inspection) ------------------------------------
-  const handleAdvanceStatus = async () => {
-    if (!quote) return;
-    // "returning" transitions to "returned"
-    if (quote.status === "returning") {
-      setActionLoading(true);
-      try {
-        await updateQuote({ status: "returned" });
-      } finally {
-        setActionLoading(false);
-      }
-      return;
-    }
-    const next = getNextStatus(quote.status);
-    if (!next || quote.status === "received") return; // "received" uses inspection dialog
     setActionLoading(true);
+    setActionError(null);
     try {
-      await updateQuote({ status: next });
+      const res = await fetch(`/api/admin/quotes/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, ...fields }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionError(data.error ?? "Failed to update quote");
+        return false;
+      }
+      setQuote(data);
+      return true;
+    } catch {
+      setActionError("Failed to update quote");
+      return false;
     } finally {
       setActionLoading(false);
     }
   };
 
-  // ---- cancel quote -------------------------------------------------------
-  const handleCancel = async () => {
-    setCancelLoading(true);
-    try {
-      const ok = await updateQuote({ status: "cancelled" });
-      if (ok) setCancelOpen(false);
-    } finally {
-      setCancelLoading(false);
-    }
+  // ---- open dialogs -------------------------------------------------------
+  const openReasonDialog = (kind: ReasonDialogKind, target: QuoteStatus) => {
+    setReasonText("");
+    setActionError(null);
+    setReasonDialog({ kind, target });
   };
 
-  // ---- open inspection dialog ---------------------------------------------
-  const openInspection = () => {
+  const openReceive = (target: QuoteStatus) => {
+    setReceiveImei(quote?.imei ?? "");
+    setReceiveSerial("");
+    setActionError(null);
+    setReceiveTarget(target);
+  };
+
+  const openAccept = () => {
     if (!quote) return;
+    setAcceptForm({
+      customerName: quote.customerName ?? "",
+      customerEmail: quote.customerEmail ?? "",
+      customerPhone: quote.customerPhone ?? "",
+      shippingAddress: quote.shippingAddress ?? "",
+      paymentMethod: quote.paymentMethod ?? "",
+      payIdPhone: quote.payIdPhone ?? "",
+      bankBSB: quote.bankBSB ?? "",
+      bankAccountNumber: quote.bankAccountNumber ?? "",
+      bankAccountName: quote.bankAccountName ?? "",
+    });
+    setActionError(null);
+    setAcceptOpen(true);
+  };
+
+  const openCancel = () => {
+    setCancelReason(quote?.status === "on_hold" ? "surrendered" : "");
+    setCancelNote("");
+    setActionError(null);
+    setCancelOpen(true);
+  };
+
+  const openInspection = () => {
     setInspectionGrade("");
     setRevisedPrice("");
     setChangeDevice(false);
     setRevisedDevice(null);
+    setActionError(null);
     setInspectionOpen(true);
   };
 
-  // ---- submit inspection --------------------------------------------------
-  const handleInspection = async () => {
+  // ---- submit handlers ----------------------------------------------------
+  const handleReasonSubmit = async () => {
+    if (!reasonDialog) return;
+    const ok = await transition(reasonDialog.target, { reason: reasonText });
+    if (ok) setReasonDialog(null);
+  };
+
+  const handleReceive = async () => {
+    if (!receiveTarget) return;
+    const ok = await transition(receiveTarget, {
+      imei: receiveImei.trim() || undefined,
+      serialNumber: receiveSerial.trim() || undefined,
+    });
+    if (ok) setReceiveTarget(null);
+  };
+
+  const handleAccept = async () => {
+    const ok = await transition("accepted", acceptForm);
+    if (ok) setAcceptOpen(false);
+  };
+
+  const handleCancel = async () => {
+    const ok = await transition("cancelled", {
+      cancelReason,
+      reason: cancelNote,
+    });
+    if (ok) setCancelOpen(false);
+  };
+
+  /** Submit the inspection as "inspected" (original quote) or "revised". */
+  const handleInspection = async (target: "inspected" | "revised") => {
     if (!quote || !inspectionGrade) return;
-    setInspectionLoading(true);
-    try {
-      const hasMismatch =
-        gradeChanged || (changeDevice && revisedDevice !== null);
-      const targetStatus = hasMismatch ? "revised" : "inspected";
-
-      const body: Record<string, unknown> = {
-        status: targetStatus,
-        inspectionGrade,
-      };
-
-      if (hasMismatch && revisedPrice !== "") {
-        const parsed = parseFloat(revisedPrice);
-        if (!isNaN(parsed) && parsed >= 0) {
-          body.revisedPriceNZD = parsed;
-        }
-      }
-
-      if (changeDevice && revisedDevice) {
-        body.revisedDeviceId = revisedDevice.id;
-        body.revisedDeviceMake = revisedDevice.make;
-        body.revisedDeviceModel = revisedDevice.model;
-        body.revisedDeviceStorage = revisedDevice.storage;
-      }
-
-      const ok = await updateQuote(body);
-      if (ok) setInspectionOpen(false);
-    } finally {
-      setInspectionLoading(false);
+    const body: Record<string, unknown> = { inspectionGrade };
+    if (target === "revised") body.revisedPriceNZD = parseFloat(revisedPrice);
+    if (changeDevice && revisedDevice) {
+      body.revisedDeviceId = revisedDevice.id;
+      body.revisedDeviceMake = revisedDevice.make;
+      body.revisedDeviceModel = revisedDevice.model;
+      body.revisedDeviceStorage = revisedDevice.storage;
     }
+    const ok = await transition(target, body);
+    if (ok) setInspectionOpen(false);
   };
 
   const gradeChanged =
     inspectionGrade !== "" && !!quote && inspectionGrade !== quote.grade;
   const hasMismatch =
     gradeChanged || (changeDevice && revisedDevice !== null);
-
-  // ---- determine if the quote is in a terminal state ----------------------
-  const isTerminal =
-    quote?.status === "paid" ||
-    quote?.status === "cancelled" ||
-    quote?.status === "returned";
+  const parsedRevisedPrice = parseFloat(revisedPrice);
+  const revisedPriceValid =
+    !isNaN(parsedRevisedPrice) &&
+    parsedRevisedPrice >= 0 &&
+    !!quote &&
+    parsedRevisedPrice < quote.quotePriceNZD;
 
   // ---- render: loading ----------------------------------------------------
   if (loading) {
@@ -420,6 +496,10 @@ export default function QuoteDetailPage() {
     );
   }
 
+  const allowed = quote.allowedTransitions ?? [];
+  const can = (target: QuoteStatus) => allowed.includes(target);
+  const deviceSummary = `${quote.device.make} ${quote.device.model} (${quote.device.storage})`;
+
   // ---- render: main -------------------------------------------------------
   return (
     <div>
@@ -437,16 +517,21 @@ export default function QuoteDetailPage() {
       </Button>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-3xl font-bold tracking-tight">
-            Quote {quote.id}
+            {quote.tradeInRef ?? `Quote ${quote.id}`}
           </h1>
           <Badge
             variant={getStatusBadgeVariant(quote.status)}
             className={getStatusBadgeClassName(quote.status)}
           >
-            {STATUS_LABELS[quote.status]}
+            {STATUS_LABELS[quote.status] ?? quote.status}
           </Badge>
+          {quote.lateArrival && (
+            <Badge variant="outline" className="border-amber-500 text-amber-600">
+              Late arrival
+            </Badge>
+          )}
           {quote.sandbox && (
             <Badge
               variant="outline"
@@ -457,6 +542,11 @@ export default function QuoteDetailPage() {
           )}
         </div>
       </div>
+      {quote.tradeInRef && (
+        <p className="mt-1 font-mono text-xs text-muted-foreground">
+          Quote {quote.id}
+        </p>
+      )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         {/* -------------------------------------------------------------- */}
@@ -635,6 +725,12 @@ export default function QuoteDetailPage() {
                   <dd>{quote.customerPhone}</dd>
                 </div>
               )}
+              {quote.shippingAddress && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted-foreground">Address</dt>
+                  <dd className="text-right">{quote.shippingAddress}</dd>
+                </div>
+              )}
 
               {/* Payment details */}
               {quote.paymentMethod && (
@@ -750,11 +846,15 @@ export default function QuoteDetailPage() {
         {/* Progress stepper */}
         <div className="mb-6 overflow-x-auto">
           <div className="flex items-center gap-1 min-w-max">
-            {getStepperStatuses(quote.status).map((step, idx, steps) => {
-              const currentIdx = steps.indexOf(quote.status);
+            {getStepperStatuses(quote).map((step, idx, steps) => {
+              const position =
+                quote.status === "on_hold" && quote.heldFrom
+                  ? quote.heldFrom
+                  : quote.status;
+              const currentIdx = steps.indexOf(position);
               const isCancelled = quote.status === "cancelled";
               const isCompleted = !isCancelled && currentIdx > idx;
-              const isCurrent = !isCancelled && quote.status === step;
+              const isCurrent = !isCancelled && position === step;
               const isFuture = !isCancelled && currentIdx < idx;
 
               return (
@@ -823,95 +923,192 @@ export default function QuoteDetailPage() {
           </div>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Primary action */}
-          {!isTerminal && getActionLabel(quote.status) && (
-            <>
-              {quote.status === "received" ? (
-                <Button onClick={openInspection}>
-                  <ClipboardCheck className="mr-2 h-4 w-4" />
-                  Begin Inspection
-                </Button>
-              ) : (
-                <Button
-                  variant={getActionVariant(quote.status)}
-                  onClick={handleAdvanceStatus}
-                  disabled={actionLoading}
-                >
-                  {actionLoading && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  {getActionLabel(quote.status)}
-                </Button>
-              )}
-            </>
+        {/* Status messages */}
+        <div className="mb-4 space-y-2 text-sm empty:hidden">
+          {quote.status === "on_hold" && (
+            <div className="flex items-start gap-2 text-red-700">
+              <PauseCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                On hold from {STATUS_LABELS[quote.heldFrom ?? "received"]}:{" "}
+                {quote.holdReason}. Payment is blocked until the hold is
+                released.
+              </span>
+            </div>
           )}
-
-          {/* Revised — waiting for response */}
           {quote.status === "revised" && (
-            <>
-              <div className="flex items-center gap-2 text-sm text-amber-600">
-                <Clock className="h-4 w-4" />
-                Waiting for customer/partner response
-                {quote.revisionExpiresAt && (
-                  <span className="text-muted-foreground">
-                    (expires {formatDate(quote.revisionExpiresAt)})
-                  </span>
-                )}
-              </div>
-              <Button
-                variant="secondary"
-                onClick={async () => {
-                  setActionLoading(true);
-                  try {
-                    await updateQuote({ status: "inspected" });
-                  } finally {
-                    setActionLoading(false);
-                  }
-                }}
-                disabled={actionLoading}
-              >
-                {actionLoading && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Force Accept (on behalf of customer)
-              </Button>
-            </>
+            <div className="flex items-center gap-2 text-amber-600">
+              <Clock className="h-4 w-4" />
+              Waiting for customer/partner response
+              {quote.revisionExpiresAt && (
+                <span className="text-muted-foreground">
+                  (expires {formatDate(quote.revisionExpiresAt)})
+                </span>
+              )}
+            </div>
           )}
-
-          {/* Terminal state messages */}
+          {quote.status === "returning" && quote.returnReason && (
+            <div className="flex items-center gap-2 text-amber-700">
+              <Package className="h-4 w-4" />
+              Returning: {quote.returnReason}
+            </div>
+          )}
           {quote.status === "paid" && (
-            <div className="flex items-center gap-2 text-sm text-emerald-600">
+            <div className="flex items-center gap-2 text-emerald-600">
               <CheckCircle2 className="h-4 w-4" />
               Quote completed — payment has been made.
             </div>
           )}
           {quote.status === "cancelled" && (
-            <div className="flex items-center gap-2 text-sm text-destructive">
-              <XCircle className="h-4 w-4" />
-              This quote has been cancelled.
+            <div className="flex items-start gap-2 text-destructive">
+              <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                This quote has been cancelled
+                {quote.cancelReason &&
+                  `: ${CANCEL_REASON_LABELS[quote.cancelReason] ?? quote.cancelReason}`}
+                {quote.cancelNote && ` — ${quote.cancelNote}`}
+              </span>
             </div>
           )}
           {quote.status === "returned" && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-muted-foreground">
               <Package className="h-4 w-4" />
               Device has been returned to customer.
             </div>
           )}
+          {quote.status === "expired" && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Clock className="h-4 w-4" />
+              This quote has expired.
+              {can("received") && " If the device arrives, it can still be received."}
+            </div>
+          )}
+        </div>
 
-          {/* Cancel button — available for non-terminal statuses */}
-          {!isTerminal && (
+        {/* Action buttons (from the transitions this admin may make) */}
+        <div className="flex flex-wrap items-center gap-3">
+          {can("accepted") && (
+            <Button variant="secondary" onClick={openAccept}>
+              Mark Accepted
+            </Button>
+          )}
+          {can("shipped") && (
+            <Button
+              onClick={() => transition("shipped")}
+              disabled={actionLoading}
+            >
+              {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Mark Shipped
+            </Button>
+          )}
+          {can("received") && quote.status !== "on_hold" && (
+            <Button onClick={() => openReceive("received")}>
+              Mark Received
+            </Button>
+          )}
+          {quote.status === "received" && (can("inspected") || can("revised")) && (
+            <Button onClick={openInspection}>
+              <ClipboardCheck className="mr-2 h-4 w-4" />
+              Begin Inspection
+            </Button>
+          )}
+          {quote.status === "on_hold" && quote.heldFrom && can(quote.heldFrom) && (
+            <Button
+              onClick={() => openReasonDialog("release", quote.heldFrom!)}
+            >
+              Release Hold
+            </Button>
+          )}
+          {quote.status === "revised" && can("inspected") && (
+            <Button
+              variant="secondary"
+              onClick={() => openReasonDialog("force", "inspected")}
+            >
+              Force Accept (on behalf of customer)
+            </Button>
+          )}
+          {can("paid") && (
+            <Button onClick={() => transition("paid")} disabled={actionLoading}>
+              {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Mark Paid
+            </Button>
+          )}
+          {can("returned") && (
+            <Button
+              onClick={() => transition("returned")}
+              disabled={actionLoading}
+            >
+              {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Mark Returned
+            </Button>
+          )}
+          {can("on_hold") && (
+            <Button
+              variant="outline"
+              onClick={() => openReasonDialog("hold", "on_hold")}
+            >
+              <PauseCircle className="mr-2 h-4 w-4" />
+              Put On Hold
+            </Button>
+          )}
+          {can("returning") && (
+            <Button
+              variant="outline"
+              onClick={() => openReasonDialog("return", "returning")}
+            >
+              Return Device
+            </Button>
+          )}
+          {can("cancelled") && (
             <Button
               variant="destructive"
               className="ml-auto"
-              onClick={() => setCancelOpen(true)}
+              onClick={openCancel}
             >
               Cancel Quote
             </Button>
           )}
         </div>
+
+        {actionError && (
+          <p className="mt-3 text-sm text-destructive">{actionError}</p>
+        )}
       </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* 4b. Status History                                                */}
+      {/* ---------------------------------------------------------------- */}
+      {quote.statusHistory.length > 0 && (
+        <div className="mt-6 rounded-lg border border-border bg-card p-6">
+          <div className="mb-4 flex items-center gap-2">
+            <History className="h-5 w-5 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">History</h2>
+          </div>
+          <ol className="space-y-3 text-sm">
+            {[...quote.statusHistory].reverse().map((entry, idx) => (
+              <li key={idx} className="flex flex-col gap-0.5 sm:flex-row sm:gap-4">
+                <span className="shrink-0 text-muted-foreground sm:w-44">
+                  {formatDate(entry.at)}
+                </span>
+                <span>
+                  <span className="font-medium">
+                    {STATUS_LABELS[entry.from] ?? entry.from} →{" "}
+                    {STATUS_LABELS[entry.to] ?? entry.to}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    by {entry.actorId ?? entry.actor}
+                  </span>
+                  {entry.reason && (
+                    <span className="block text-muted-foreground">
+                      {entry.reason}
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       {/* ---------------------------------------------------------------- */}
       {/* 5. Inspection Dialog                                              */}
@@ -921,19 +1118,17 @@ export default function QuoteDetailPage() {
           <DialogHeader>
             <DialogTitle>Device Inspection</DialogTitle>
             <DialogDescription>
-              Inspect the device and assign a grade. If the grade or device
-              differs from the original, the quote will be sent for
-              customer/partner approval with a revised price.
+              Inspect the device and assign a grade. If it&apos;s worth less
+              than quoted, send a revised offer for the customer/partner to
+              accept. If it&apos;s as good or better, we pay the original
+              quote.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
             {/* Device summary */}
             <div className="rounded-md border border-border bg-muted/50 p-3 text-sm">
-              <p className="font-medium">
-                {quote.device.make} {quote.device.model} ({quote.device.storage}
-                )
-              </p>
+              <p className="font-medium">{deviceSummary}</p>
               <p className="mt-1 text-muted-foreground">
                 Original: Grade {quote.grade} &mdash;{" "}
                 {fxFormatPrice(quote.quotePriceNZD, "AUD")}
@@ -995,10 +1190,13 @@ export default function QuoteDetailPage() {
                   <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
                   <p className="text-xs text-muted-foreground">
                     {gradeChanged && changeDevice && revisedDevice
-                      ? `Grade changed from ${quote.grade} to ${inspectionGrade} and device changed. Enter the revised quote price.`
+                      ? `Grade changed from ${quote.grade} to ${inspectionGrade} and device changed.`
                       : gradeChanged
-                      ? `Grade changed from ${quote.grade} to ${inspectionGrade}. Enter the revised quote price.`
-                      : `Device changed from original. Enter the revised quote price.`}
+                      ? `Grade changed from ${quote.grade} to ${inspectionGrade}.`
+                      : `Device changed from original.`}{" "}
+                    A revised offer must be below the original{" "}
+                    {quote.quotePriceNZD.toFixed(2)} NZD. If the device is as
+                    good or better, confirm at the original quote.
                   </p>
                 </div>
                 <Input
@@ -1010,7 +1208,16 @@ export default function QuoteDetailPage() {
                   value={revisedPrice}
                   onChange={(e) => setRevisedPrice(e.target.value)}
                 />
+                {revisedPrice !== "" && !revisedPriceValid && (
+                  <p className="text-xs text-destructive">
+                    Enter a price below {quote.quotePriceNZD.toFixed(2)} NZD.
+                  </p>
+                )}
               </div>
+            )}
+
+            {actionError && (
+              <p className="text-sm text-destructive">{actionError}</p>
             )}
           </div>
 
@@ -1018,58 +1225,334 @@ export default function QuoteDetailPage() {
             <Button
               variant="outline"
               onClick={() => setInspectionOpen(false)}
-              disabled={inspectionLoading}
+              disabled={actionLoading}
             >
               Cancel
             </Button>
             <Button
-              onClick={handleInspection}
+              variant={hasMismatch ? "outline" : "default"}
+              onClick={() => handleInspection("inspected")}
               disabled={
                 !inspectionGrade ||
-                inspectionLoading ||
-                (hasMismatch && revisedPrice === "") ||
+                actionLoading ||
                 (changeDevice && !revisedDevice)
               }
             >
-              {inspectionLoading && (
+              {actionLoading && !hasMismatch && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Complete Inspection
+              {hasMismatch ? "Confirm at Original Quote" : "Complete Inspection"}
+            </Button>
+            {hasMismatch && (
+              <Button
+                onClick={() => handleInspection("revised")}
+                disabled={!revisedPriceValid || actionLoading}
+              >
+                {actionLoading && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Send Revised Offer
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Accept Dialog                                                     */}
+      {/* ---------------------------------------------------------------- */}
+      <Dialog open={acceptOpen} onOpenChange={setAcceptOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Accept Quote</DialogTitle>
+            <DialogDescription>
+              Confirm the customer&apos;s contact and payout details. No email
+              is sent for admin acceptances.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            {(
+              [
+                ["customerName", "Name"],
+                ["customerEmail", "Email"],
+                ["customerPhone", "Phone"],
+                ["shippingAddress", "Shipping address"],
+              ] as const
+            ).map(([field, label]) => (
+              <div key={field} className="grid gap-1.5">
+                <Label htmlFor={`accept-${field}`}>{label}</Label>
+                <Input
+                  id={`accept-${field}`}
+                  value={acceptForm[field]}
+                  onChange={(e) =>
+                    setAcceptForm((f) => ({ ...f, [field]: e.target.value }))
+                  }
+                />
+              </div>
+            ))}
+            <div className="grid gap-1.5">
+              <Label>
+                Payment method
+                {quote.partnerMode === "B" && " (optional for Mode B)"}
+              </Label>
+              <Select
+                value={acceptForm.paymentMethod}
+                onValueChange={(val) =>
+                  setAcceptForm((f) => ({ ...f, paymentMethod: val }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select payment method" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="payid">PayID</SelectItem>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {acceptForm.paymentMethod === "payid" && (
+              <div className="grid gap-1.5">
+                <Label htmlFor="accept-payid">PayID phone</Label>
+                <Input
+                  id="accept-payid"
+                  value={acceptForm.payIdPhone}
+                  onChange={(e) =>
+                    setAcceptForm((f) => ({ ...f, payIdPhone: e.target.value }))
+                  }
+                />
+              </div>
+            )}
+            {acceptForm.paymentMethod === "bank_transfer" &&
+              (
+                [
+                  ["bankBSB", "BSB"],
+                  ["bankAccountNumber", "Account number"],
+                  ["bankAccountName", "Account name"],
+                ] as const
+              ).map(([field, label]) => (
+                <div key={field} className="grid gap-1.5">
+                  <Label htmlFor={`accept-${field}`}>{label}</Label>
+                  <Input
+                    id={`accept-${field}`}
+                    value={acceptForm[field]}
+                    onChange={(e) =>
+                      setAcceptForm((f) => ({ ...f, [field]: e.target.value }))
+                    }
+                  />
+                </div>
+              ))}
+            {actionError && (
+              <p className="text-sm text-destructive">{actionError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setAcceptOpen(false)}
+              disabled={actionLoading}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleAccept} disabled={actionLoading}>
+              {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Accept Quote
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* ---------------------------------------------------------------- */}
-      {/* Cancel Confirmation Dialog                                        */}
+      {/* Receive Dialog                                                    */}
+      {/* ---------------------------------------------------------------- */}
+      <Dialog
+        open={receiveTarget !== null}
+        onOpenChange={(open) => !open && setReceiveTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Receive Device</DialogTitle>
+            <DialogDescription>
+              Enter the IMEI or serial number of the device in the parcel.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <div className="rounded-md border border-border bg-muted/50 p-3 text-sm">
+              <p className="font-medium">{deviceSummary}</p>
+              <p className="mt-1 text-muted-foreground">
+                {quote.customerName ?? "No customer name"}
+                {quote.imei && ` · Quoted IMEI ${quote.imei}`}
+              </p>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="receive-imei">IMEI</Label>
+              <Input
+                id="receive-imei"
+                value={receiveImei}
+                inputMode="numeric"
+                maxLength={15}
+                onChange={(e) =>
+                  setReceiveImei(e.target.value.replace(/\D/g, "").slice(0, 15))
+                }
+              />
+              {quote.imei &&
+                receiveImei.length === 15 &&
+                receiveImei !== quote.imei && (
+                  <p className="flex items-center gap-1 text-xs text-amber-600">
+                    <AlertTriangle className="h-3 w-3" />
+                    Doesn&apos;t match the IMEI on the quote ({quote.imei}).
+                  </p>
+                )}
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="receive-serial">Serial number (if no IMEI)</Label>
+              <Input
+                id="receive-serial"
+                value={receiveSerial}
+                onChange={(e) => setReceiveSerial(e.target.value)}
+              />
+            </div>
+            {actionError && (
+              <p className="text-sm text-destructive">{actionError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setReceiveTarget(null)}
+              disabled={actionLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleReceive}
+              disabled={
+                actionLoading ||
+                (receiveImei.length !== 15 && !receiveSerial.trim())
+              }
+            >
+              {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Mark Received
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Reason Dialog (hold / release / return / force accept)            */}
+      {/* ---------------------------------------------------------------- */}
+      <Dialog
+        open={reasonDialog !== null}
+        onOpenChange={(open) => !open && setReasonDialog(null)}
+      >
+        {reasonDialog && (
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{REASON_DIALOGS[reasonDialog.kind].title}</DialogTitle>
+              <DialogDescription>
+                {REASON_DIALOGS[reasonDialog.kind].description}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2 py-2">
+              <Label htmlFor="reason-text">
+                {REASON_DIALOGS[reasonDialog.kind].label}
+              </Label>
+              <Textarea
+                id="reason-text"
+                value={reasonText}
+                onChange={(e) => setReasonText(e.target.value)}
+              />
+              {actionError && (
+                <p className="text-sm text-destructive">{actionError}</p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setReasonDialog(null)}
+                disabled={actionLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleReasonSubmit}
+                disabled={actionLoading || !reasonText.trim()}
+              >
+                {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {REASON_DIALOGS[reasonDialog.kind].submit}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Cancel Dialog                                                     */}
       {/* ---------------------------------------------------------------- */}
       <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Cancel Quote</DialogTitle>
             <DialogDescription>
-              Are you sure you want to cancel this quote for{" "}
-              <span className="font-semibold">
-                {quote.device.make} {quote.device.model} ({quote.device.storage}
-                )
-              </span>
-              ? This action cannot be undone.
+              Cancel this quote for{" "}
+              <span className="font-semibold">{deviceSummary}</span>? This
+              can&apos;t be undone and no email is sent to the customer.
             </DialogDescription>
           </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <div className="grid gap-1.5">
+              <Label>Reason</Label>
+              <Select
+                value={cancelReason}
+                onValueChange={(val) => setCancelReason(val as CancelReason)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a reason" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CANCEL_REASONS.filter((r) =>
+                    quote.status === "on_hold"
+                      ? r === "surrendered"
+                      : r !== "surrendered"
+                  ).map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {CANCEL_REASON_LABELS[r]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="cancel-note">
+                Note{cancelReason === "other" ? "" : " (optional)"}
+              </Label>
+              <Textarea
+                id="cancel-note"
+                value={cancelNote}
+                onChange={(e) => setCancelNote(e.target.value)}
+              />
+            </div>
+            {actionError && (
+              <p className="text-sm text-destructive">{actionError}</p>
+            )}
+          </div>
           <DialogFooter>
             <Button
               variant="outline"
               onClick={() => setCancelOpen(false)}
-              disabled={cancelLoading}
+              disabled={actionLoading}
             >
               Keep Quote
             </Button>
             <Button
               variant="destructive"
               onClick={handleCancel}
-              disabled={cancelLoading}
+              disabled={
+                actionLoading ||
+                !cancelReason ||
+                (cancelReason === "other" && !cancelNote.trim())
+              }
             >
-              {cancelLoading && (
+              {actionLoading && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Cancel Quote

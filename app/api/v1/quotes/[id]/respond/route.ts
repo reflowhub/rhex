@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import admin from "@/lib/firebase-admin";
 import { requireApiKey, ApiKeyPartner, canAccess } from "@/lib/api-key-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { updateIfStatus } from "@/lib/status-transition";
+import { transitionQuote } from "@/lib/transition-quote";
 
 // ---------------------------------------------------------------------------
 // PUT /api/v1/quotes/[id]/respond — Accept or reject a revised quote
@@ -46,43 +45,20 @@ export async function PUT(
       return NextResponse.json({ error: "Quote not found" }, { status: 404 });
     }
 
-    const data = quoteDoc.data()!;
-
-    if (data.status !== "revised") {
+    const transition = await transitionQuote(
+      id,
+      action === "accept" ? "inspected" : "returning",
+      { actor: "apiKey", actorId: partner.apiKeyId }
+    );
+    if (!transition.ok) {
+      // v1 contract: every rejected response is a 400
+      const error =
+        transition.code === "invalid_transition"
+          ? "Quote is not in revised status"
+          : transition.message;
       return NextResponse.json(
-        { error: "Quote is not in revised status" },
-        { status: 400 }
-      );
-    }
-
-    // Check expiry
-    if (data.revisionExpiresAt?.toDate) {
-      if (data.revisionExpiresAt.toDate() < new Date()) {
-        return NextResponse.json(
-          { error: "Revision response period has expired" },
-          { status: 400 }
-        );
-      }
-    }
-
-    const updateData: Record<string, unknown> = {};
-
-    if (action === "accept") {
-      updateData.status = "inspected";
-      updateData.revisionAcceptedAt =
-        admin.firestore.FieldValue.serverTimestamp();
-    } else {
-      updateData.status = "returning";
-      updateData.returningAt = admin.firestore.FieldValue.serverTimestamp();
-      updateData.revisionRejectedAt =
-        admin.firestore.FieldValue.serverTimestamp();
-    }
-
-    // Only one concurrent request can respond to the revision
-    if (!(await updateIfStatus(quoteRef, "revised", updateData))) {
-      return NextResponse.json(
-        { error: "Quote is not in revised status" },
-        { status: 400 }
+        { error },
+        { status: transition.code === "not_found" ? 404 : 400 }
       );
     }
 

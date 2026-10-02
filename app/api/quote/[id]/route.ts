@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import admin from "@/lib/firebase-admin";
-import { findOrCreateCustomer } from "@/lib/customer-link";
-import { sendEmail } from "@/lib/email";
-import QuoteAcceptedEmail from "@/emails/quote-accepted";
 import { checkRevisionExpiry } from "@/lib/revision-expiry";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { updateIfStatus } from "@/lib/status-transition";
 import { serializeTimestamp } from "@/lib/serialize";
-import { TRADEIN_TERMS_VERSION } from "@/lib/tradein-terms";
+import { transitionQuote, transitionErrorStatus } from "@/lib/transition-quote";
 
 // ---------------------------------------------------------------------------
 // Public response shape
@@ -26,6 +21,7 @@ const PUBLIC_FIELDS = [
   "displayCurrency",
   "fxRate",
   "status",
+  "tradeInRef",
   "paymentMethod",
   "inspectionGrade",
   "revisedPriceNZD",
@@ -145,223 +141,52 @@ export async function PUT(
       return NextResponse.json({ error: "Quote not found" }, { status: 404 });
     }
 
-    const existingData = quoteDoc.data()!;
-
-    // --- Handle revision response ---
+    // --- Revision response ---
     if (
       body.action === "accept_revision" ||
       body.action === "reject_revision"
     ) {
-      if (existingData.status !== "revised") {
+      const result = await transitionQuote(
+        id,
+        body.action === "accept_revision" ? "inspected" : "returning",
+        { actor: "customer" }
+      );
+      if (!result.ok) {
         return NextResponse.json(
-          { error: "Quote is not in revised status" },
-          { status: 400 }
+          {
+            error:
+              result.code === "invalid_transition"
+                ? "Quote is not in revised status"
+                : result.message,
+          },
+          { status: transitionErrorStatus(result.code) }
         );
       }
-
-      // Check expiry
-      if (existingData.revisionExpiresAt?.toDate) {
-        if (existingData.revisionExpiresAt.toDate() < new Date()) {
-          return NextResponse.json(
-            { error: "Revision response period has expired" },
-            { status: 400 }
-          );
-        }
-      }
-
-      const updateData: Record<string, unknown> = {};
-
-      if (body.action === "accept_revision") {
-        updateData.status = "inspected";
-        updateData.revisionAcceptedAt =
-          admin.firestore.FieldValue.serverTimestamp();
-      } else {
-        updateData.status = "returning";
-        updateData.returningAt =
-          admin.firestore.FieldValue.serverTimestamp();
-        updateData.revisionRejectedAt =
-          admin.firestore.FieldValue.serverTimestamp();
-      }
-
-      // Only one concurrent request can respond to the revision
-      if (!(await updateIfStatus(quoteRef, "revised", updateData))) {
-        return NextResponse.json(
-          { error: "Quote is not in revised status" },
-          { status: 409 }
-        );
-      }
-
-      const updatedDoc = await quoteRef.get();
-      return NextResponse.json(
-        await toPublicQuote(updatedDoc.id, updatedDoc.data()!)
-      );
+      return NextResponse.json(await toPublicQuote(id, result.quote));
     }
 
-    // --- Original acceptance flow ---
-    const {
-      customerName,
-      customerEmail,
-      customerPhone,
-      shippingAddress,
-      paymentMethod,
-      payIdPhone,
-      bankBSB,
-      bankAccountNumber,
-      bankAccountName,
-      imei,
-      termsAccepted,
-    } = body;
-
-    // Validate required fields
-    if (!customerName || !customerEmail || !customerPhone || !shippingAddress || !paymentMethod) {
-      return NextResponse.json(
-        {
-          error:
-            "customerName, customerEmail, customerPhone, shippingAddress, and paymentMethod are required",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (termsAccepted !== true) {
-      return NextResponse.json(
-        { error: "You must accept the Trade-In Terms & Conditions" },
-        { status: 400 }
-      );
-    }
-
-    // Validate payment method
-    if (!["payid", "bank_transfer"].includes(paymentMethod)) {
-      return NextResponse.json(
-        { error: "paymentMethod must be 'payid' or 'bank_transfer'" },
-        { status: 400 }
-      );
-    }
-
-    // Validate payment details based on method
-    if (paymentMethod === "payid" && !payIdPhone) {
-      return NextResponse.json(
-        { error: "payIdPhone is required for PayID payment method" },
-        { status: 400 }
-      );
-    }
-
-    if (
-      paymentMethod === "bank_transfer" &&
-      (!bankBSB || !bankAccountNumber || !bankAccountName)
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "bankBSB, bankAccountNumber, and bankAccountName are required for bank transfer",
-        },
-        { status: 400 }
-      );
-    }
-
-    // Check quote is still in "quoted" status
-    if (existingData.status !== "quoted") {
-      return NextResponse.json(
-        { error: "Quote has already been processed" },
-        { status: 400 }
-      );
-    }
-
-    // Check quote hasn't expired
-    if (existingData.expiresAt?.toDate) {
-      const expiryDate = existingData.expiresAt.toDate();
-      if (expiryDate < new Date()) {
-        return NextResponse.json(
-          { error: "Quote has expired" },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Build update data
-    const updateData: Record<string, unknown> = {
-      status: "accepted",
-      acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
-      termsAcceptedAt: admin.firestore.FieldValue.serverTimestamp(),
-      termsVersion: TRADEIN_TERMS_VERSION,
-      customerName,
-      customerEmail,
-      customerPhone,
-      shippingAddress,
-      paymentMethod,
-    };
-
-    if (paymentMethod === "payid") {
-      updateData.payIdPhone = payIdPhone;
-    } else {
-      updateData.bankBSB = bankBSB;
-      updateData.bankAccountNumber = bankAccountNumber;
-      updateData.bankAccountName = bankAccountName;
-    }
-
-    // Accept IMEI if provided and quote doesn't already have one
-    if (imei && typeof imei === "string" && /^\d{15}$/.test(imei) && !existingData.imei) {
-      updateData.imei = imei;
-    }
-
-    // Only one concurrent request can accept the quote; side effects below
-    // run only for the request that made the change
-    if (!(await updateIfStatus(quoteRef, "quoted", updateData))) {
-      return NextResponse.json(
-        { error: "Quote has already been processed" },
-        { status: 409 }
-      );
-    }
-
-    // Auto-create/link customer record
-    try {
-      const customerId = await findOrCreateCustomer({
-        type: "individual",
-        name: customerName,
-        email: customerEmail,
-        phone: customerPhone,
-        shippingAddress,
-        paymentMethod,
-        payIdPhone: paymentMethod === "payid" ? payIdPhone : null,
-        bankBSB: paymentMethod === "bank_transfer" ? bankBSB : null,
-        bankAccountNumber: paymentMethod === "bank_transfer" ? bankAccountNumber : null,
-        bankAccountName: paymentMethod === "bank_transfer" ? bankAccountName : null,
-        quoteId: id,
-        quoteValueNZD: existingData.quotePriceNZD ?? 0,
-      });
-      await quoteRef.update({ customerId });
-    } catch (err) {
-      console.error("Customer link error (non-blocking):", err);
-    }
-
-    const updatedDoc = await quoteRef.get();
-    const publicQuote = await toPublicQuote(updatedDoc.id, updatedDoc.data()!);
-
-    // Send acceptance confirmation email (non-blocking)
-    const device = publicQuote.device as
-      | { make: string; model: string; storage: string }
-      | null;
-    const deviceLabel = device
-      ? `${device.make} ${device.model} ${device.storage}`.trim()
-      : "your device";
-    sendEmail({
-      to: customerEmail,
-      subject: "Your trade-in quote has been accepted",
-      react: QuoteAcceptedEmail({
-        customerName,
-        deviceName: deviceLabel,
-        quotePrice: existingData.quotePriceDisplay ?? existingData.quotePriceNZD ?? 0,
-        currency: existingData.displayCurrency ?? "AUD",
-        quoteId: id,
-        rhexLabel: true,
-      }),
+    // --- Acceptance ---
+    const result = await transitionQuote(id, "accepted", {
+      actor: "customer",
+      payload: body,
     });
+    if (!result.ok) {
+      return NextResponse.json(
+        {
+          error:
+            result.code === "invalid_transition"
+              ? "Quote has already been processed"
+              : result.message,
+        },
+        { status: transitionErrorStatus(result.code) }
+      );
+    }
 
-    return NextResponse.json(publicQuote);
+    return NextResponse.json(await toPublicQuote(id, result.quote));
   } catch (error) {
-    console.error("Error accepting quote:", error);
+    console.error("Error updating quote:", error);
     return NextResponse.json(
-      { error: "Failed to accept quote" },
+      { error: "Failed to update quote" },
       { status: 500 }
     );
   }
