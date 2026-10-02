@@ -29,6 +29,15 @@ export async function loadDevices(quotes: QuoteData[]): Promise<DeviceMap> {
   return map;
 }
 
+/**
+ * Whether ops screens (queues, Receive Parcel) show a quote. Sandbox quotes
+ * are hidden, except Mode C ones, which partners test end to end (labels,
+ * receiving, inspection) before going live.
+ */
+export function isOpsVisible(q: QuoteData): boolean {
+  return q.sandbox !== true || q.partnerMode === "C";
+}
+
 /** The fields the ops screens show for a quote. */
 export function summarizeQuote(id: string, q: QuoteData, devices: DeviceMap) {
   const device = devices.get(q.deviceId as string);
@@ -36,6 +45,7 @@ export function summarizeQuote(id: string, q: QuoteData, devices: DeviceMap) {
     id,
     tradeInRef: (q.tradeInRef as string) ?? null,
     status: q.status as string,
+    sandbox: q.sandbox === true,
     customerName: (q.customerName as string) ?? null,
     customerEmail: (q.customerEmail as string) ?? null,
     device: device ? `${device.make} ${device.model} ${device.storage}`.trim() : "Unknown device",
@@ -60,5 +70,5 @@ export async function loadOpenTradeIns(): Promise<{ id: string; data: QuoteData 
     .get();
   return snap.docs
     .map((doc) => ({ id: doc.id, data: doc.data() }))
-    .filter(({ data }) => data.sandbox !== true);
+    .filter(({ data }) => isOpsVisible(data));
 }

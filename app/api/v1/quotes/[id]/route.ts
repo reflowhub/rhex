@@ -4,6 +4,7 @@ import { requireApiKey, ApiKeyPartner, canAccess } from "@/lib/api-key-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { applyQuoteExpiry } from "@/lib/quote-expiry";
 import { serializeTimestamp } from "@/lib/serialize";
+import { v1QuoteStatus, v1RevisedPrice } from "@/lib/v1-quote";
 
 // ---------------------------------------------------------------------------
 // GET /api/v1/quotes/[id] — Get quote status with device info
@@ -68,13 +69,15 @@ export async function GET(
       publicPriceNZD: quoteData.publicPriceNZD ?? null,
       quotePrice: quoteData.quotePriceDisplay ?? quoteData.quotePriceNZD,
       displayCurrency: quoteData.displayCurrency ?? "NZD",
-      status: quoteData.status,
+      status: v1QuoteStatus(quoteData),
       source: quoteData.source ?? null,
+      tradeInRef: quoteData.tradeInRef ?? null,
       imei: quoteData.imei ?? null,
       customerName: quoteData.customerName ?? null,
       customerEmail: quoteData.customerEmail ?? null,
       inspectionGrade: quoteData.inspectionGrade ?? null,
       revisedPriceNZD: quoteData.revisedPriceNZD ?? null,
+      revisedPrice: v1RevisedPrice(quoteData),
       revisedDeviceId: quoteData.revisedDeviceId ?? null,
       revisedDeviceMake: quoteData.revisedDeviceMake ?? null,
       revisedDeviceModel: quoteData.revisedDeviceModel ?? null,
@@ -84,6 +87,13 @@ export async function GET(
       acceptedAt: serializeTimestamp(quoteData.acceptedAt),
       revisedAt: serializeTimestamp(quoteData.revisedAt),
       revisionExpiresAt: serializeTimestamp(quoteData.revisionExpiresAt),
+      trackingNumber: quoteData.trackingNumber ?? null,
+      labelSentAt: serializeTimestamp(quoteData.labelSentAt),
+      postByAt: serializeTimestamp(quoteData.postByAt),
+      shippedAt: serializeTimestamp(quoteData.shippedAt),
+      receivedAt: serializeTimestamp(quoteData.receivedAt),
+      inspectedAt: serializeTimestamp(quoteData.inspectedAt),
+      completedAt: serializeTimestamp(quoteData.paidAt),
       returningAt: serializeTimestamp(quoteData.returningAt),
       returnedAt: serializeTimestamp(quoteData.returnedAt),
       device,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
+import { PARTNER_MODES } from "@/lib/partner-config";
 import { serializeTimestamp } from "@/lib/serialize";
 
 // ---------------------------------------------------------------------------
@@ -165,11 +166,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate modes
-    const validModes = ["A", "B"];
+    const validModes: readonly string[] = PARTNER_MODES;
     const normalizedModes = modes.filter((m: string) => validModes.includes(m));
     if (normalizedModes.length === 0) {
       return NextResponse.json(
-        { error: "At least one valid mode (A or B) is required" },
+        { error: "At least one valid mode (A, B or C) is required" },
         { status: 400 }
       );
     }
@@ -206,12 +207,20 @@ export async function POST(request: NextRequest) {
       partnerData.payoutFrequency = null;
     }
 
-    // Mode B fields
+    // Mode B / C fields. Mode C partners get the public price by default.
     if (normalizedModes.includes("B")) {
       partnerData.partnerRateDiscount = partnerRateDiscount ?? 10;
+    } else if (normalizedModes.includes("C")) {
+      partnerData.partnerRateDiscount = partnerRateDiscount ?? 0;
     } else {
       partnerData.partnerRateDiscount = null;
     }
+    // API quotes are Mode C when the partner has it, else Mode B
+    partnerData.apiMode = normalizedModes.includes("C")
+      ? "C"
+      : normalizedModes.includes("B")
+        ? "B"
+        : null;
 
     // Create Firebase Auth user for partner login
     let authUser;

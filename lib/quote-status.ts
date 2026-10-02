@@ -199,3 +199,8 @@ export type QuoteActor = "customer" | "partner" | "apiKey" | "admin" | "system";
 export function formatTradeInRef(n: number): string {
   return `TI-${n}`;
 }
+
+/** Sandbox quotes have their own sequence, so production TI- numbers aren't used up. */
+export function formatSandboxTradeInRef(n: number): string {
+  return `SBX-${n}`;
+}

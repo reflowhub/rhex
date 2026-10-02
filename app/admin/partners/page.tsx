@@ -456,7 +456,7 @@ export default function PartnersPage() {
                               variant="outline"
                               className="text-xs"
                             >
-                              {mode === "A" ? "Referral" : "Dealer"}
+                              {mode === "A" ? "Referral" : mode === "B" ? "Dealer" : "Retailer (C)"}
                             </Badge>
                           ))}
                         </div>

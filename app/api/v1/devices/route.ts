@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiKey, ApiKeyPartner } from "@/lib/api-key-auth";
+import { requireApiKey, ApiKeyPartner, apiPartnerDiscount } from "@/lib/api-key-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getDevices, getPrices } from "@/lib/device-cache";
 import { getActivePriceList, getCategoryGrades, loadCategories } from "@/lib/categories";
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const discount = partner.partnerRateDiscount ?? 10;
+    const discount = apiPartnerDiscount(partner);
     const currency = partner.currency ?? "NZD";
     const fxRates = currency !== "NZD" ? await getTodayFXRate() : null;
     const fxRate = fxRates?.NZD_AUD ?? 1;

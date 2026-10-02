@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import { requireApiKey, ApiKeyPartner } from "@/lib/api-key-auth";
+import { requireApiKey, ApiKeyPartner, apiPartnerDiscount } from "@/lib/api-key-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getActivePriceList, getCategoryGrades } from "@/lib/categories";
 import { readGrades } from "@/lib/grades";
@@ -68,7 +68,7 @@ export async function GET(
     }
 
     const allGrades = readGrades(priceDoc.data()!);
-    const discount = partner.partnerRateDiscount ?? 10;
+    const discount = apiPartnerDiscount(partner);
     const currency = partner.currency ?? "NZD";
     const fxRates = currency !== "NZD" ? await getTodayFXRate() : null;
     const fxRate = fxRates?.NZD_AUD ?? 1;

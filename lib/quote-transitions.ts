@@ -17,9 +17,11 @@ import {
 import {
   formatMoney,
   originalAmount,
+  partnerSettlementSnapshot,
   payoutSnapshot,
   toQuoteCurrency,
 } from "@/lib/quote-money";
+import { partnerResultFor, type PartnerResultBody } from "@/lib/partner-result";
 import { TRADEIN_TERMS_VERSION } from "@/lib/tradein-terms";
 import { formatAuAddress, parseAuAddress, type AuAddress } from "@/lib/au-address";
 
@@ -56,7 +58,9 @@ export type SideEffect =
   /** Take the quote's value off the linked customer's totalValueNZD */
   | "reverse_customer_value"
   /** Add it back (an expired quote received after all) */
-  | "restore_customer_value";
+  | "restore_customer_value"
+  /** Mode C: deliver the queued result notification to the partner */
+  | "partner_result";
 
 export interface StatusHistoryEntry {
   from: QuoteStatus;
@@ -83,6 +87,8 @@ export type TransitionPlan =
       effects: SideEffect[];
       /** Assign the next TI- reference in the same transaction */
       assignReference: boolean;
+      /** Mode C: the final outcome to queue for the partner in the same transaction */
+      partnerResult: PartnerResultBody | null;
     }
   | { ok: false; code: TransitionErrorCode; message: string };
 
@@ -149,9 +155,44 @@ function isPast(value: unknown, now: Date): boolean {
   return d !== null && d.getTime() <= now.getTime();
 }
 
-function isModeB(q: QuoteData): boolean {
+/** Mode B: the partner buys and ships the device; RHEX deals only with the partner. */
+export function isModeB(q: QuoteData): boolean {
   return q.partnerMode === "B";
 }
+
+/**
+ * Mode C: RHEX buys the device from the partner's customer; the partner
+ * refunds the customer and receives the final result (docs/PARTNERSHIP.md).
+ */
+export function isModeC(q: QuoteData): boolean {
+  return q.partnerMode === "C";
+}
+
+/** Side effects that reach the end customer, dropped for Mode B. */
+const CUSTOMER_EFFECTS: readonly SideEffect[] = [
+  "link_customer",
+  "accepted_email",
+  "revised_email",
+  "paid_email",
+  "expired_email",
+  "returned_email",
+  "reverse_customer_value",
+  "restore_customer_value",
+];
+
+const PAYMENT_FIELDS = [
+  "paymentMethod",
+  "payIdPhone",
+  "bankBSB",
+  "bankAccountNumber",
+  "bankAccountName",
+] as const;
+
+function hasPaymentFields(p: Record<string, unknown>): boolean {
+  return PAYMENT_FIELDS.some((f) => str(p[f]) !== null);
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function hasPayoutDetails(q: QuoteData): boolean {
   if (q.paymentMethod === "payid") return !!str(q.payIdPhone);
@@ -221,8 +262,17 @@ function inspectionGrade(payload: Record<string, unknown>): string | null {
 // ---------------------------------------------------------------------------
 
 function applyAccept(q: QuoteData, ctx: TransitionContext): ApplyResult {
+  if (isModeC(q)) return applyAcceptModeC(q, ctx);
   const p = ctx.payload ?? {};
   const modeB = isModeB(q);
+
+  // RHEX pays the Mode B partner, never its customer
+  if (modeB && hasPaymentFields(p)) {
+    return {
+      error:
+        "Payment details aren't accepted for this quote: RHEX pays the partner, not the customer",
+    };
+  }
 
   // Payload values win; admins may accept using details already on the quote
   const resolve = (field: string) => str(p[field]) ?? str(q[field]);
@@ -246,29 +296,28 @@ function applyAccept(q: QuoteData, ctx: TransitionContext): ApplyResult {
     shippingAddress = resolve("shippingAddress");
   }
 
+  // Mode B customer contact is optional reference data
   if (
-    !customerName ||
-    !customerEmail ||
-    !customerPhone ||
-    !shippingAddress ||
-    (!modeB && !paymentMethod)
+    !modeB &&
+    (!customerName ||
+      !customerEmail ||
+      !customerPhone ||
+      !shippingAddress ||
+      !paymentMethod)
   ) {
     return {
-      error: modeB
-        ? "customerName, customerEmail, customerPhone, and shippingAddress are required"
-        : "customerName, customerEmail, customerPhone, shippingAddress, and paymentMethod are required",
+      error:
+        "customerName, customerEmail, customerPhone, shippingAddress, and paymentMethod are required",
     };
   }
 
-  const fields: Record<string, unknown> = {
-    customerName,
-    customerEmail,
-    customerPhone,
-    shippingAddress,
-  };
+  const fields: Record<string, unknown> = {};
+  if (customerName) fields.customerName = customerName;
+  if (customerEmail) fields.customerEmail = customerEmail;
+  if (customerPhone) fields.customerPhone = customerPhone;
+  if (shippingAddress) fields.shippingAddress = shippingAddress;
   if (shippingAddressParts) fields.shippingAddressParts = shippingAddressParts;
 
-  // Payment method is optional for Mode B (RHEX pays the partner)
   if (paymentMethod) {
     if (paymentMethod !== "payid" && paymentMethod !== "bank_transfer") {
       return { error: "paymentMethod must be 'payid' or 'bank_transfer'" };
@@ -310,6 +359,89 @@ function applyAccept(q: QuoteData, ctx: TransitionContext): ApplyResult {
 
   const effects: SideEffect[] = ["link_customer"];
   // Admin accepts send no email (unchanged from before the module)
+  if (ctx.actor !== "admin") effects.push("accepted_email");
+  return { fields, effects };
+}
+
+/**
+ * Mode C acceptance, sent by the partner at checkout: the customer's contact
+ * details, AU address and consent to RHEX's trade-in terms. RHEX is the
+ * buyer but the partner refunds the customer, so payout details are refused.
+ * Admins may accept using details already on the quote, without consent.
+ */
+function applyAcceptModeC(q: QuoteData, ctx: TransitionContext): ApplyResult {
+  const p = ctx.payload ?? {};
+  if (hasPaymentFields(p)) {
+    return {
+      error:
+        "Payment details aren't accepted for this quote: the partner refunds the customer",
+    };
+  }
+
+  const resolve = (field: string) => str(p[field]) ?? str(q[field]);
+  const firstName = resolve("customerFirstName");
+  const lastName = resolve("customerLastName");
+  const email = resolve("customerEmail");
+  const phone = resolve("customerPhone");
+  const rawAddress =
+    p.shippingAddressParts ??
+    (p.shippingAddress && typeof p.shippingAddress === "object"
+      ? p.shippingAddress
+      : undefined) ??
+    q.shippingAddressParts;
+
+  if (!firstName || !lastName || !email || !phone || !rawAddress) {
+    return {
+      error:
+        "customerFirstName, customerLastName, customerEmail, customerPhone and shippingAddress are required",
+    };
+  }
+  if (!EMAIL_PATTERN.test(email)) {
+    return { error: "customerEmail is not a valid email address" };
+  }
+  const address = parseAuAddress(rawAddress);
+  if (!address.ok) return { error: `shippingAddress: ${address.error}` };
+
+  if (
+    p.marketingConsent !== undefined &&
+    typeof p.marketingConsent !== "boolean"
+  ) {
+    return { error: "marketingConsent must be true or false" };
+  }
+  const marketingConsent = p.marketingConsent === true;
+
+  const fields: Record<string, unknown> = {
+    customerFirstName: firstName,
+    customerLastName: lastName,
+    customerName: `${firstName} ${lastName}`,
+    customerEmail: email,
+    customerPhone: phone,
+    shippingAddress: formatAuAddress(address.address),
+    shippingAddressParts: address.address,
+    marketingConsent,
+    marketingConsentAt: marketingConsent ? ctx.now : null,
+  };
+
+  if (ctx.actor !== "admin") {
+    if (p.termsAccepted !== true) {
+      return {
+        error:
+          "termsAccepted must be true: the customer must accept the Trade-In Terms & Conditions",
+      };
+    }
+    if (p.termsVersion !== TRADEIN_TERMS_VERSION) {
+      return {
+        error: `termsVersion must be "${TRADEIN_TERMS_VERSION}", the current Trade-In Terms & Conditions`,
+      };
+    }
+    fields.termsAcceptedAt = ctx.now;
+    fields.termsVersion = TRADEIN_TERMS_VERSION;
+  }
+
+  const imei = str(p.imei);
+  if (imei && /^\d{15}$/.test(imei) && !q.imei) fields.imei = imei;
+
+  const effects: SideEffect[] = ["link_customer"];
   if (ctx.actor !== "admin") effects.push("accepted_email");
   return { fields, effects };
 }
@@ -655,11 +787,21 @@ export const TRANSITIONS: readonly Rule[] = [
     to: "paid",
     actors: ["admin"],
     state: (q) =>
-      isModeB(q) || hasPayoutDetails(q) ? null : "Payout details are missing",
-    apply: (q, ctx) => ({
-      fields: { payout: payoutSnapshot(q, ctx.now, ctx.actorId ?? null) },
-      effects: ["commission", "paid_email"],
-    }),
+      isModeB(q) || isModeC(q) || hasPayoutDetails(q)
+        ? null
+        : "Payout details are missing",
+    apply: (q, ctx) =>
+      // Mode C: approved; the partner refunds the customer (partner_result)
+      isModeC(q)
+        ? {
+            fields: {
+              settlement: partnerSettlementSnapshot(q, ctx.now, ctx.actorId ?? null),
+            },
+          }
+        : {
+            fields: { payout: payoutSnapshot(q, ctx.now, ctx.actorId ?? null) },
+            effects: ["commission", "paid_email"],
+          },
   },
   {
     from: "inspected",
@@ -680,6 +822,22 @@ function findRule(from: QuoteStatus, to: QuoteStatus): Rule | undefined {
   return TRANSITIONS.find((r) => r.from === from && r.to === to);
 }
 
+/**
+ * Actors a partner mode rules out on top of the table. Mode C quotes are
+ * accepted by the partner at checkout, and the customer (not the partner)
+ * answers a revised offer.
+ */
+function modeForbids(q: QuoteData, rule: Rule, actor: QuoteActor): boolean {
+  if (!isModeC(q)) return false;
+  if (rule.from === "quoted" && rule.to === "accepted") return actor === "customer";
+  if (rule.from === "revised") return actor === "partner" || actor === "apiKey";
+  return false;
+}
+
+function actorAllowed(q: QuoteData, rule: Rule, actor: QuoteActor): boolean {
+  return rule.actors.includes(actor) && !modeForbids(q, rule, actor);
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -698,7 +856,7 @@ export function allowedTransitions(
   return TRANSITIONS.filter(
     (r) =>
       r.from === q.status &&
-      r.actors.includes(actor) &&
+      actorAllowed(q, r, actor) &&
       (!r.state || r.state(q, ctx) === null)
   ).map((r) => r.to);
 }
@@ -738,7 +896,7 @@ export function planTransition(
       message: `Cannot move a quote from "${from}" to "${to}"`,
     };
   }
-  if (!rule.actors.includes(ctx.actor)) {
+  if (!actorAllowed(q, rule, ctx.actor)) {
     return {
       ok: false,
       code: "forbidden",
@@ -772,13 +930,23 @@ export function planTransition(
   const history = Array.isArray(q.statusHistory) ? q.statusHistory : [];
   update.statusHistory = [...history, historyEntry];
 
+  let effects = applied.effects ?? [];
+  // Mode B: RHEX deals only with the partner, so nothing reaches its customer
+  if (isModeB(q)) effects = effects.filter((e) => !CUSTOMER_EFFECTS.includes(e));
+
+  const partnerResult = isModeC(q)
+    ? partnerResultFor({ ...q, ...applied.fields }, from, to)
+    : null;
+  if (partnerResult) effects = [...effects, "partner_result"];
+
   return {
     ok: true,
     from,
     to,
     update,
     historyEntry,
-    effects: applied.effects ?? [],
+    effects,
     assignReference: to === "accepted" && !q.tradeInRef,
+    partnerResult,
   };
 }

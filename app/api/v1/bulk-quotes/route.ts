@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
-import { requireApiKey, ApiKeyPartner } from "@/lib/api-key-auth";
+import { requireApiKey, ApiKeyPartner, apiPartnerDiscount } from "@/lib/api-key-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { buildPartnerEstimate, EstimateError } from "@/lib/partner-estimate";
 import { getTodayFXRate, convertPrice } from "@/lib/fx";
@@ -25,9 +25,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Mode C trade-ins are single devices at checkout
+  if (partner.apiMode === "C") {
+    return NextResponse.json(
+      { error: "Bulk quotes aren't available for this account" },
+      { status: 403 }
+    );
+  }
+
   try {
     const body = await request.json();
-    const discount = partner.partnerRateDiscount ?? 10;
+    const discount = apiPartnerDiscount(partner);
 
     const estimate = await buildPartnerEstimate({
       csv: body.csv,

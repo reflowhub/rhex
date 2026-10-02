@@ -18,6 +18,10 @@
     {
       "path": "/api/cron/quote-expiry",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/partner-notifications",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

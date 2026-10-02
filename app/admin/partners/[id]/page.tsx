@@ -66,6 +66,17 @@ interface Partner {
   commissionTiers: { minQty: number; rate: number }[] | null;
   payoutFrequency: string | null;
   partnerRateDiscount: number | null;
+  apiMode: "B" | "C" | null;
+  resultWebhook: {
+    url: string | null;
+    sandboxUrl: string | null;
+    secretEnv: string | null;
+    sandboxSecretEnv: string | null;
+    secretSet: boolean;
+    sandboxSecretSet: boolean;
+  };
+  sandboxEmailAllowlist: string[];
+  sandboxEmailFallback: string | null;
   currency: "AUD" | "NZD";
   contactPerson: string | null;
   contactPhone: string | null;
@@ -172,6 +183,13 @@ export default function PartnerDetailPage() {
     currency: "AUD" as "AUD" | "NZD",
     modeA: false,
     modeB: false,
+    modeC: false,
+    resultUrl: "",
+    resultSandboxUrl: "",
+    resultSecretEnv: "",
+    resultSandboxSecretEnv: "",
+    sandboxEmailAllowlist: "",
+    sandboxEmailFallback: "",
     commissionModel: "percentage",
     commissionPercent: 5,
     commissionFlat: 5,
@@ -363,10 +381,18 @@ export default function PartnerDetailPage() {
       currency: partner.currency ?? "AUD",
       modeA: partner.modes.includes("A"),
       modeB: partner.modes.includes("B"),
+      modeC: partner.modes.includes("C"),
+      resultUrl: partner.resultWebhook?.url ?? "",
+      resultSandboxUrl: partner.resultWebhook?.sandboxUrl ?? "",
+      resultSecretEnv: partner.resultWebhook?.secretEnv ?? "",
+      resultSandboxSecretEnv: partner.resultWebhook?.sandboxSecretEnv ?? "",
+      sandboxEmailAllowlist: (partner.sandboxEmailAllowlist ?? []).join("\n"),
+      sandboxEmailFallback: partner.sandboxEmailFallback ?? "",
       commissionModel: partner.commissionModel || "percentage",
       commissionPercent: partner.commissionPercent ?? 5,
       commissionFlat: partner.commissionFlat ?? 5,
-      partnerRateDiscount: partner.partnerRateDiscount ?? 10,
+      partnerRateDiscount:
+        partner.partnerRateDiscount ?? (partner.modes.includes("C") ? 0 : 10),
       payoutFrequency: partner.payoutFrequency || "monthly",
       contactPerson: partner.contactPerson ?? "",
       contactPhone: partner.contactPhone ?? "",
@@ -391,6 +417,7 @@ export default function PartnerDetailPage() {
     const modes: string[] = [];
     if (editForm.modeA) modes.push("A");
     if (editForm.modeB) modes.push("B");
+    if (editForm.modeC) modes.push("C");
 
     if (modes.length === 0) {
       setEditError("At least one mode is required");
@@ -413,6 +440,18 @@ export default function PartnerDetailPage() {
           commissionPercent: editForm.commissionPercent,
           commissionFlat: editForm.commissionFlat,
           partnerRateDiscount: editForm.partnerRateDiscount,
+          // API quotes take Mode C when the partner has it
+          apiMode: editForm.modeC ? "C" : editForm.modeB ? "B" : null,
+          ...(editForm.modeC && {
+            resultWebhook: {
+              url: editForm.resultUrl.trim() || null,
+              sandboxUrl: editForm.resultSandboxUrl.trim() || null,
+              secretEnv: editForm.resultSecretEnv.trim() || null,
+              sandboxSecretEnv: editForm.resultSandboxSecretEnv.trim() || null,
+            },
+            sandboxEmailAllowlist: editForm.sandboxEmailAllowlist,
+            sandboxEmailFallback: editForm.sandboxEmailFallback.trim() || null,
+          }),
           payoutFrequency: editForm.payoutFrequency,
           contactPerson: editForm.contactPerson.trim() || null,
           contactPhone: editForm.contactPhone.trim() || null,
@@ -555,7 +594,7 @@ export default function PartnerDetailPage() {
               <dd className="flex gap-1">
                 {partner.modes.map((m) => (
                   <Badge key={m} variant="outline" className="text-xs">
-                    {m === "A" ? "Referral" : "Dealer"}
+                    {m === "A" ? "Referral" : m === "B" ? "Dealer" : "Retailer (C)"}
                   </Badge>
                 ))}
               </dd>
@@ -668,6 +707,56 @@ export default function PartnerDetailPage() {
                   <dt className="text-muted-foreground">Partner Receives</dt>
                   <dd className="font-medium">
                     {100 - (partner.partnerRateDiscount ?? 10)}% of public payout
+                  </dd>
+                </div>
+              </>
+            )}
+
+            {/* Mode C config */}
+            {partner.modes.includes("C") && (
+              <>
+                {(partner.modes.includes("A") || partner.modes.includes("B")) && (
+                  <div className="my-1 h-px bg-border" />
+                )}
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">Mode C — Retailer Trade-In</span>
+                </div>
+                <div className="flex justify-between pl-6">
+                  <dt className="text-muted-foreground">API price</dt>
+                  <dd className="font-medium">
+                    {(partner.partnerRateDiscount ?? 0) === 0
+                      ? "Public price"
+                      : `${partner.partnerRateDiscount}% below public price`}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4 pl-6">
+                  <dt className="shrink-0 text-muted-foreground">Result URL</dt>
+                  <dd className="truncate text-xs">
+                    {partner.resultWebhook?.url ?? "Not set"}
+                    {partner.resultWebhook?.url && !partner.resultWebhook.secretSet && (
+                      <span className="ml-1 text-destructive">(secret missing)</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4 pl-6">
+                  <dt className="shrink-0 text-muted-foreground">Sandbox result URL</dt>
+                  <dd className="truncate text-xs">
+                    {partner.resultWebhook?.sandboxUrl ?? "Not set"}
+                    {partner.resultWebhook?.sandboxUrl &&
+                      !partner.resultWebhook.sandboxSecretSet && (
+                        <span className="ml-1 text-destructive">(secret missing)</span>
+                      )}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4 pl-6">
+                  <dt className="shrink-0 text-muted-foreground">Sandbox emails</dt>
+                  <dd className="text-right text-xs">
+                    {(partner.sandboxEmailAllowlist ?? []).join(", ") || "None allowed"}
+                    <br />
+                    <span className="text-muted-foreground">
+                      Others → {partner.sandboxEmailFallback ?? "dropped"}
+                    </span>
                   </dd>
                 </div>
               </>
@@ -863,7 +952,7 @@ export default function PartnerDetailPage() {
           </div>
         )}
         {/* API Access Card */}
-        {partner.modes.includes("B") && (
+        {(partner.modes.includes("B") || partner.modes.includes("C")) && (
           <div className="rounded-lg border border-border bg-card p-6">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1239,6 +1328,17 @@ export default function PartnerDetailPage() {
                   />
                   Mode B (Dealer)
                 </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={editForm.modeC}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, modeC: e.target.checked }))
+                    }
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  Mode C (Retailer)
+                </label>
               </div>
             </div>
 
@@ -1337,11 +1437,11 @@ export default function PartnerDetailPage() {
               </div>
             )}
 
-            {editForm.modeB && (
+            {(editForm.modeB || editForm.modeC) && (
               <div className="rounded-md border border-border p-4 space-y-3">
-                <p className="text-sm font-medium">Mode B — Partner Rate</p>
+                <p className="text-sm font-medium">Partner Rate (API quotes)</p>
                 <div className="grid gap-2">
-                  <Label>Rate Discount (% below public payout)</Label>
+                  <Label>Rate Discount (% below public payout; 0 = public price)</Label>
                   <Input
                     type="number"
                     min="0"
@@ -1352,6 +1452,87 @@ export default function PartnerDetailPage() {
                       setEditForm((f) => ({
                         ...f,
                         partnerRateDiscount: parseFloat(e.target.value) || 0,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
+            {editForm.modeC && (
+              <div className="rounded-md border border-border p-4 space-y-3">
+                <p className="text-sm font-medium">Mode C — Result Notifications</p>
+                <p className="text-xs text-muted-foreground">
+                  URLs must contain {"{quoteId}"}. Secrets stay in env vars; enter
+                  the env var names here.
+                </p>
+                <div className="grid gap-2">
+                  <Label>Result URL (production)</Label>
+                  <Input
+                    placeholder="https://partner.example/api/trade-in/{quoteId}"
+                    value={editForm.resultUrl}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, resultUrl: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Secret env var (production)</Label>
+                  <Input
+                    placeholder="TRADE_IN_WEBHOOK_SECRET"
+                    value={editForm.resultSecretEnv}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, resultSecretEnv: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Result URL (sandbox / staging)</Label>
+                  <Input
+                    placeholder="https://staging.partner.example/api/trade-in/{quoteId}"
+                    value={editForm.resultSandboxUrl}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, resultSandboxUrl: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Secret env var (sandbox)</Label>
+                  <Input
+                    placeholder="TRADE_IN_WEBHOOK_SECRET_SANDBOX"
+                    value={editForm.resultSandboxSecretEnv}
+                    onChange={(e) =>
+                      setEditForm((f) => ({
+                        ...f,
+                        resultSandboxSecretEnv: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <p className="pt-2 text-sm font-medium">Sandbox emails</p>
+                <div className="grid gap-2">
+                  <Label>Allowed addresses (one per line)</Label>
+                  <textarea
+                    rows={3}
+                    className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    value={editForm.sandboxEmailAllowlist}
+                    onChange={(e) =>
+                      setEditForm((f) => ({
+                        ...f,
+                        sandboxEmailAllowlist: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Send all other sandbox emails to</Label>
+                  <Input
+                    placeholder="test inbox (blank = don't send)"
+                    value={editForm.sandboxEmailFallback}
+                    onChange={(e) =>
+                      setEditForm((f) => ({
+                        ...f,
+                        sandboxEmailFallback: e.target.value,
                       }))
                     }
                   />

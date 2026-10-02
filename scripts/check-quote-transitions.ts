@@ -5,7 +5,7 @@
  * reminders, sandbox handling, label send/replace/refund, "I've posted
  * it", money (revised price at the locked FX rate, payout snapshot,
  * customer totalValueNZD), late-arrival decisions and the customer timeline. Creates its own data and
- * deletes it afterwards, restoring counters/tradeIns to its previous value.
+ * deletes it afterwards, restoring the trade-in counters to their previous values.
  *
  * Usage: npx tsx scripts/check-quote-transitions.ts   (refuses to run unless
  * .env.local points at rhex-test; emails are skipped without RESEND_API_KEY)
@@ -27,6 +27,8 @@ async function main() {
   const created: string[] = [];
   const counterRef = adminDb.doc("counters/tradeIns");
   const counterBefore = (await counterRef.get()).data();
+  const sandboxCounterRef = adminDb.doc("counters/tradeInsSandbox");
+  const sandboxCounterBefore = (await sandboxCounterRef.get()).data();
   const check = (label: string, cond: unknown) => console.log(`${cond ? "PASS" : "FAIL"}  ${label}`);
 
   const partnerRef = await adminDb.collection("partners").add({ name: "Phase1 Test Partner", status: "active", modes: ["A"], commissionModel: "flat", commissionFlat: 7 });
@@ -99,7 +101,7 @@ async function main() {
     const s = await mkQuote({ sandbox: true });
     await transitionQuote(s.id, "accepted", { actor: "apiKey", actorId: "key1", payload: details });
     const sd = (await s.get()).data()!;
-    check("sandbox: accepted without reference or customer link", sd.status === "accepted" && !sd.tradeInRef && !sd.customerId);
+    check(`sandbox: accepted with an SBX- reference (${sd.tradeInRef}), no customer link`, sd.status === "accepted" && /^SBX-\d+$/.test(sd.tradeInRef) && !sd.customerId);
 
     // Shipping labels
     const l = await mkQuote();
@@ -210,6 +212,8 @@ async function main() {
     // References used by this run's (deleted) quotes can be reused
     if (counterBefore) await counterRef.set(counterBefore);
     else await counterRef.delete();
+    if (sandboxCounterBefore) await sandboxCounterRef.set(sandboxCounterBefore);
+    else await sandboxCounterRef.delete();
     console.log("cleaned up");
   }
 }

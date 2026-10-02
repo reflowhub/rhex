@@ -172,3 +172,38 @@ export function payoutSnapshot(
     paidBy,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Mode C settlement snapshot
+// ---------------------------------------------------------------------------
+
+export interface PartnerSettlementSnapshot {
+  /** The partner that refunds the customer and is settled in the net statement */
+  partnerId: string | null;
+  /** The approved trade-in value the partner refunds, in the quote's currency */
+  amount: number;
+  currency: QuoteCurrency;
+  amountNZD: number;
+  approvedAt: Date;
+  approvedBy: string | null;
+}
+
+/**
+ * Saved on a Mode C quote at `paid` (approved) instead of a payout: RHEX
+ * pays nobody directly; the partner refunds the customer this amount.
+ */
+export function partnerSettlementSnapshot(
+  q: QuoteMoneyFields & { partnerId?: unknown },
+  approvedAt: Date,
+  approvedBy: string | null
+): PartnerSettlementSnapshot {
+  const payable = payableAmount(q);
+  return {
+    partnerId: typeof q.partnerId === "string" ? q.partnerId : null,
+    amount: payable.amount,
+    currency: payable.currency,
+    amountNZD: payable.amountNZD,
+    approvedAt,
+    approvedBy,
+  };
+}

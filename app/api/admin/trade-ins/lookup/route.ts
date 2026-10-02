@@ -3,7 +3,12 @@ import { adminDb } from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { matchParcel } from "@/lib/parcel-match";
 import type { QuoteData } from "@/lib/quote-transitions";
-import { loadDevices, loadOpenTradeIns, summarizeQuote } from "@/lib/trade-in-ops";
+import {
+  isOpsVisible,
+  loadDevices,
+  loadOpenTradeIns,
+  summarizeQuote,
+} from "@/lib/trade-in-ops";
 
 // ---------------------------------------------------------------------------
 // GET /api/admin/trade-ins/lookup?q= — Find the quote a parcel belongs to
@@ -24,7 +29,7 @@ async function loadExpiredWithLabel(): Promise<{ id: string; data: QuoteData }[]
       .get();
     return snap.docs
       .map((doc) => ({ id: doc.id, data: doc.data() }))
-      .filter(({ data }) => data.sandbox !== true);
+      .filter(({ data }) => isOpsVisible(data));
   } catch (error) {
     console.error("Expired-quote lookup failed (index deployed?):", error);
     return [];

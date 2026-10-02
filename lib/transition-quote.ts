@@ -3,7 +3,11 @@ import type { AdminSession } from "@/lib/admin-auth";
 import { logQuoteTransition } from "@/lib/audit-log";
 import { onQuotePaid } from "@/lib/commission-trigger";
 import { findOrCreateCustomer } from "@/lib/customer-link";
-import { sendEmail } from "@/lib/email";
+import {
+  deliverPartnerNotification,
+  queuePartnerResult,
+} from "@/lib/partner-notifications";
+import { sendQuoteEmail } from "@/lib/quote-email";
 import { originalAmount, payableAmount } from "@/lib/quote-money";
 import { queueLabelRefund } from "@/lib/shipping-labels";
 import { getRevisionResponseDays } from "@/lib/tradein-settings";
@@ -13,11 +17,13 @@ import QuotePaidEmail from "@/emails/quote-paid";
 import QuoteReturnedEmail from "@/emails/quote-returned";
 import QuoteRevisedEmail from "@/emails/quote-revised";
 import {
+  formatSandboxTradeInRef,
   formatTradeInRef,
   type QuoteActor,
   type QuoteStatus,
 } from "@/lib/quote-status";
 import {
+  isModeC,
   planTransition,
   toDate,
   type QuoteData,
@@ -31,7 +37,9 @@ import {
 // Re-reads the quote inside a transaction, checks the transition against
 // lib/quote-transitions.ts and writes status, timestamp and statusHistory
 // together. Side effects run after commit, only for the call that made the
-// change. Sandbox quotes skip side effects and TI- references.
+// change. Sandbox quotes get SBX- references and skip side effects, except
+// Mode C sandbox quotes, which run them against test inboxes and the
+// partner's staging endpoint (no customer records or commission).
 
 const FIRST_TRADE_IN_NUMBER = 1001;
 
@@ -112,14 +120,38 @@ export async function transitionQuote(
 
     const sandbox = before.sandbox === true;
     const update = { ...plan.update };
+    const now = plan.historyEntry.at;
 
-    if (plan.assignReference && !sandbox) {
-      const counterRef = adminDb.doc("counters/tradeIns");
+    if (plan.assignReference) {
+      const counterRef = adminDb.doc(
+        sandbox ? "counters/tradeInsSandbox" : "counters/tradeIns"
+      );
       const counter = await tx.get(counterRef);
       const n =
         (counter.data()?.nextId as number | undefined) ?? FIRST_TRADE_IN_NUMBER;
       tx.set(counterRef, { nextId: n + 1 }, { merge: true });
-      update.tradeInRef = formatTradeInRef(n);
+      update.tradeInRef = sandbox ? formatSandboxTradeInRef(n) : formatTradeInRef(n);
+    }
+
+    // Mode C: queue the final result with the status change, so it can't be lost
+    let notificationId: string | null = null;
+    if (plan.partnerResult) {
+      notificationId = queuePartnerResult(tx, {
+        quoteId,
+        partnerId: (before.partnerId as string | undefined) ?? null,
+        sandbox,
+        body: plan.partnerResult,
+        from: plan.from,
+        to,
+        now,
+      });
+      update.partnerResult = {
+        ...plan.partnerResult,
+        notificationId,
+        status: "pending",
+        queuedAt: now,
+        updatedAt: now,
+      };
     }
 
     tx.update(ref, update);
@@ -128,7 +160,8 @@ export async function transitionQuote(
       from: plan.from,
       before,
       update,
-      effects: sandbox ? [] : plan.effects,
+      notificationId,
+      effects: sandboxEffects(before, plan.effects),
     };
   });
 
@@ -148,9 +181,32 @@ export async function transitionQuote(
     });
   }
 
-  await runSideEffects(quoteId, quote, outcome.effects, opts.actor);
+  await runSideEffects(
+    quoteId,
+    quote,
+    outcome.effects,
+    opts.actor,
+    outcome.notificationId
+  );
 
   return { ok: true, from: outcome.from, to, quote };
+}
+
+/**
+ * Side effects for a sandbox quote: none, except Mode C, whose emails go to
+ * test inboxes (lib/quote-email.ts) and whose result goes to the partner's
+ * staging endpoint. Sandbox quotes never touch customer records.
+ */
+function sandboxEffects(q: QuoteData, effects: SideEffect[]): SideEffect[] {
+  if (q.sandbox !== true) return effects;
+  if (!isModeC(q)) return [];
+  return effects.filter(
+    (e) =>
+      e !== "link_customer" &&
+      e !== "commission" &&
+      e !== "reverse_customer_value" &&
+      e !== "restore_customer_value"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -177,7 +233,8 @@ async function runSideEffects(
   quoteId: string,
   quote: QuoteData,
   effects: SideEffect[],
-  actor: QuoteActor
+  actor: QuoteActor,
+  notificationId: string | null
 ): Promise<void> {
   const ref = adminDb.collection("quotes").doc(quoteId);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://rhex.app";
@@ -211,6 +268,8 @@ async function runSideEffects(
                 : null,
             quoteId,
             quoteValueNZD: Number(quote.quotePriceNZD ?? 0),
+            sourcePartnerId: isModeC(quote) ? (quote.partnerId as string) : null,
+            marketingConsent: quote.marketingConsent === true,
           });
           // customerValueNZD: what this quote added to the customer's total
           const customerValueNZD = Number(quote.quotePriceNZD ?? 0);
@@ -222,10 +281,10 @@ async function runSideEffects(
 
         case "accepted_email": {
           if (!customerEmail) break;
-          // Public quotes are priced for the customer; v1 keeps its NZD email
-          // until the Mode A/B review
-          const isPublic = actor === "customer";
-          sendEmail({
+          // Customer-priced quotes (public and Mode C, whose customer deals
+          // with RHEX); other v1 accepts keep the NZD email
+          const isPublic = actor === "customer" || isModeC(quote);
+          await sendQuoteEmail(quote, {
             to: customerEmail,
             subject: "Your trade-in quote has been accepted",
             react: QuoteAcceptedEmail({
@@ -251,13 +310,12 @@ async function runSideEffects(
           const revisedDeviceName = quote.revisedDeviceId
             ? `${quote.revisedDeviceMake} ${quote.revisedDeviceModel} ${quote.revisedDeviceStorage}`.trim()
             : undefined;
-          const quoteUrl = quote.partnerId
-            ? `${siteUrl}/partner/quotes/${quoteId}`
-            : `${siteUrl}/sell/quote/${quoteId}`;
+          // The customer's own quote page (Mode B quotes send no customer email)
+          const quoteUrl = `${siteUrl}/sell/quote/${quoteId}`;
           const expiresAt = toDate(quote.revisionExpiresAt) ?? new Date();
           const original = originalAmount(quote);
           const revised = payableAmount(quote);
-          sendEmail({
+          await sendQuoteEmail(quote, {
             to: customerEmail,
             subject: "Your trade-in device has been inspected — action required",
             react: QuoteRevisedEmail({
@@ -285,7 +343,7 @@ async function runSideEffects(
           if (!customerEmail) break;
           const tradeInRef =
             (quote.tradeInRef as string | undefined) ?? quoteId.slice(0, 8);
-          sendEmail({
+          await sendQuoteEmail(quote, {
             to: customerEmail,
             subject: `Your trade-in has been closed (${tradeInRef})`,
             react: QuoteExpiredEmail({
@@ -301,7 +359,7 @@ async function runSideEffects(
           if (!customerEmail) break;
           const tradeInRef =
             (quote.tradeInRef as string | undefined) ?? quoteId.slice(0, 8);
-          sendEmail({
+          await sendQuoteEmail(quote, {
             to: customerEmail,
             subject: `Your device is on its way back (${tradeInRef})`,
             react: QuoteReturnedEmail({
@@ -314,6 +372,10 @@ async function runSideEffects(
           });
           break;
         }
+
+        case "partner_result":
+          if (notificationId) await deliverPartnerNotification(notificationId);
+          break;
 
         case "queue_label_refund":
           if (typeof quote.labelId === "string") {
@@ -333,7 +395,7 @@ async function runSideEffects(
           if (!customerEmail) break;
           const googlePlaceId = process.env.GOOGLE_PLACE_ID;
           const payable = payableAmount(quote);
-          sendEmail({
+          await sendQuoteEmail(quote, {
             to: customerEmail,
             subject: "Payment sent for your trade-in",
             react: QuotePaidEmail({

@@ -93,9 +93,16 @@ async function toPublicQuote(
   return quote;
 }
 
-/** Quotes the public endpoints must not change (decided in the Mode A/B review). */
+/**
+ * Quotes the public endpoints must not change: Mode B (RHEX deals only with
+ * the partner) and sandbox quotes, except Mode C sandbox quotes, whose
+ * customer pages partners test before going live. Mode C customers can't
+ * accept here (the partner does, through v1); lib/quote-transitions.ts
+ * enforces that.
+ */
 function isPublicWriteBlocked(data: FirebaseFirestore.DocumentData): boolean {
-  return data.partnerMode === "B" || data.sandbox === true;
+  if (data.partnerMode === "B") return true;
+  return data.sandbox === true && data.partnerMode !== "C";
 }
 
 // GET /api/quote/[id] — Get a quote by ID, including device info

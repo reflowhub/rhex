@@ -3,6 +3,14 @@ import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { serializeTimestamp } from "@/lib/serialize";
+import { partnerApiMode } from "@/lib/api-key-auth";
+import {
+  PARTNER_MODES,
+  parseEmailList,
+  parseOptionalEmail,
+  parseResultWebhook,
+} from "@/lib/partner-config";
+import { sandboxEmailConfig } from "@/lib/sandbox-email";
 
 // ---------------------------------------------------------------------------
 // GET /api/admin/partners/[id] — Get partner detail
@@ -66,8 +74,23 @@ export async function GET(
       commissionFlat: data.commissionFlat ?? null,
       commissionTiers: data.commissionTiers ?? null,
       payoutFrequency: data.payoutFrequency ?? "monthly",
-      // Mode B
+      // Mode B / C
       partnerRateDiscount: data.partnerRateDiscount ?? null,
+      apiMode: partnerApiMode(data),
+      // Mode C
+      resultWebhook: {
+        url: data.resultWebhook?.url ?? null,
+        sandboxUrl: data.resultWebhook?.sandboxUrl ?? null,
+        secretEnv: data.resultWebhook?.secretEnv ?? null,
+        sandboxSecretEnv: data.resultWebhook?.sandboxSecretEnv ?? null,
+        // Whether the named env vars are set here (never their values)
+        secretSet: !!(data.resultWebhook?.secretEnv && process.env[data.resultWebhook.secretEnv]),
+        sandboxSecretSet: !!(
+          data.resultWebhook?.sandboxSecretEnv && process.env[data.resultWebhook.sandboxSecretEnv]
+        ),
+      },
+      sandboxEmailAllowlist: sandboxEmailConfig(data).allowlist,
+      sandboxEmailFallback: sandboxEmailConfig(data).fallback,
       // Payment
       paymentMethod: data.paymentMethod ?? null,
       payIdPhone: data.payIdPhone ?? null,
@@ -139,8 +162,37 @@ export async function PUT(
 
     // Mode updates
     if (body.modes !== undefined && Array.isArray(body.modes) && body.modes.length > 0) {
-      const validModes = ["A", "B"];
+      const validModes: readonly string[] = PARTNER_MODES;
       updateData.modes = body.modes.filter((m: string) => validModes.includes(m));
+    }
+
+    // API mode: the mode API quotes are created in
+    if (body.apiMode !== undefined) {
+      if (body.apiMode !== null && body.apiMode !== "B" && body.apiMode !== "C") {
+        return NextResponse.json({ error: "apiMode must be B, C or null" }, { status: 400 });
+      }
+      updateData.apiMode = body.apiMode;
+    }
+
+    // Mode C: result webhook and sandbox email routing
+    try {
+      if (body.resultWebhook !== undefined) {
+        updateData.resultWebhook = parseResultWebhook(body.resultWebhook);
+      }
+      if (body.sandboxEmailAllowlist !== undefined) {
+        updateData.sandboxEmailAllowlist = parseEmailList(body.sandboxEmailAllowlist);
+      }
+      if (body.sandboxEmailFallback !== undefined) {
+        updateData.sandboxEmailFallback = parseOptionalEmail(
+          body.sandboxEmailFallback,
+          "Sandbox fallback inbox"
+        );
+      }
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Invalid settings" },
+        { status: 400 }
+      );
     }
 
     // Code update (check uniqueness if changed)
@@ -233,6 +285,7 @@ export async function PUT(
       commissionTiers: updatedData.commissionTiers ?? null,
       payoutFrequency: updatedData.payoutFrequency ?? "monthly",
       partnerRateDiscount: updatedData.partnerRateDiscount ?? null,
+      apiMode: partnerApiMode(updatedData),
       currency: updatedData.currency ?? "AUD",
       contactPerson: updatedData.contactPerson ?? null,
       contactPhone: updatedData.contactPhone ?? null,

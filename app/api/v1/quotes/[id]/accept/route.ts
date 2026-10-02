@@ -4,10 +4,15 @@ import { requireApiKey, ApiKeyPartner, canAccess } from "@/lib/api-key-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { serializeTimestamp } from "@/lib/serialize";
 import { transitionQuote } from "@/lib/transition-quote";
+import { v1QuoteStatus } from "@/lib/v1-quote";
 
 // ---------------------------------------------------------------------------
 // PUT /api/v1/quotes/[id]/accept — Accept quote with customer details
 // ---------------------------------------------------------------------------
+// Mode C: the customer's name, email, phone, AU address and consent to the
+// current trade-in terms (termsAccepted + termsVersion) are required, and
+// payment details are refused. Mode B: contact is optional, payment refused.
+// The rules live in lib/quote-transitions.ts.
 
 export async function PUT(
   request: NextRequest,
@@ -79,10 +84,11 @@ export async function PUT(
       publicPriceNZD: updatedData.publicPriceNZD ?? null,
       quotePrice: updatedData.quotePriceDisplay ?? updatedData.quotePriceNZD,
       displayCurrency: updatedData.displayCurrency ?? "NZD",
-      status: updatedData.status,
+      status: v1QuoteStatus(updatedData),
       source: updatedData.source ?? null,
-      customerName: updatedData.customerName,
-      customerEmail: updatedData.customerEmail,
+      tradeInRef: updatedData.tradeInRef ?? null,
+      customerName: updatedData.customerName ?? null,
+      customerEmail: updatedData.customerEmail ?? null,
       createdAt: serializeTimestamp(updatedData.createdAt),
       expiresAt: serializeTimestamp(updatedData.expiresAt),
       acceptedAt: serializeTimestamp(updatedData.acceptedAt),

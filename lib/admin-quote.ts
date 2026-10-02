@@ -40,6 +40,8 @@ const PLAIN_FIELDS = [
   "tradeInRef",
   "termsVersion",
   "customerName",
+  "customerFirstName",
+  "customerLastName",
   "customerEmail",
   "customerPhone",
   "shippingAddress",
@@ -81,6 +83,7 @@ const PLAIN_FIELDS = [
   "carrier",
   "trackingNumber",
   "labelCostAUD",
+  "marketingConsent",
 ] as const;
 
 export async function toAdminQuote(id: string, data: QuoteData) {
@@ -124,6 +127,18 @@ export async function toAdminQuote(id: string, data: QuoteData) {
   const payout = data.payout as Record<string, unknown> | undefined;
   quote.payout = payout
     ? { ...payout, paidAt: serializeTimestamp(payout.paidAt) }
+    : null;
+  const settlement = data.settlement as Record<string, unknown> | undefined;
+  quote.settlement = settlement
+    ? { ...settlement, approvedAt: serializeTimestamp(settlement.approvedAt) }
+    : null;
+  const partnerResult = data.partnerResult as Record<string, unknown> | undefined;
+  quote.partnerResult = partnerResult
+    ? {
+        ...partnerResult,
+        queuedAt: serializeTimestamp(partnerResult.queuedAt),
+        updatedAt: serializeTimestamp(partnerResult.updatedAt),
+      }
     : null;
   quote.allowedTransitions = allowedTransitions(data, "admin");
 

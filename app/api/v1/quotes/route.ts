@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "@/lib/firebase-admin";
-import { requireApiKey, ApiKeyPartner } from "@/lib/api-key-auth";
+import { requireApiKey, ApiKeyPartner, apiPartnerDiscount } from "@/lib/api-key-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { calculatePartnerRate } from "@/lib/partner-pricing";
 import { readGrades } from "@/lib/grades";
 import { getActivePriceList, getCategoryGrades } from "@/lib/categories";
 import { parsePlatform } from "@/lib/parse-platform";
 import { getTodayFXRate, convertPrice } from "@/lib/fx";
-import { PARTNER_QUOTE_VALIDITY_MS } from "@/lib/quote-validity";
+import {
+  PARTNER_QUOTE_VALIDITY_MS,
+  PUBLIC_QUOTE_VALIDITY_MS,
+} from "@/lib/quote-validity";
 
 // ---------------------------------------------------------------------------
 // POST /api/v1/quotes — Create a single-device quote at partner rate
+// (Mode B, or Mode C: the partner's customer accepts RHEX's terms, so the
+// 24-hour validity of terms §5 applies)
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
@@ -103,7 +108,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate partner rate
-    const discount = partner.partnerRateDiscount ?? 10;
+    const discount = apiPartnerDiscount(partner);
     const partnerPriceNZD = calculatePartnerRate(
       Number(publicPriceNZD),
       discount
@@ -116,11 +121,13 @@ export async function POST(request: NextRequest) {
     const quotePriceDisplay = convertPrice(partnerPriceNZD, currency, fxRate);
     const publicPriceDisplay = convertPrice(Number(publicPriceNZD), currency, fxRate);
 
-    // Calculate expiry (1 hour for sandbox, 14 days for production)
+    // Expiry: 1 hour for sandbox; 24 hours for Mode C, 14 days for Mode B
     const now = new Date();
     const expiryMs = partner.sandbox
       ? 1 * 60 * 60 * 1000
-      : PARTNER_QUOTE_VALIDITY_MS;
+      : partner.apiMode === "C"
+        ? PUBLIC_QUOTE_VALIDITY_MS
+        : PARTNER_QUOTE_VALIDITY_MS;
     const expiresAt = new Date(now.getTime() + expiryMs);
 
     // Capture client metadata
@@ -140,7 +147,7 @@ export async function POST(request: NextRequest) {
       quotePriceDisplay,
       status: "quoted",
       partnerId: partner.id,
-      partnerMode: "B",
+      partnerMode: partner.apiMode,
       partnerRateDiscount: discount,
       source: "api",
       ...(partner.sandbox && { sandbox: true }),

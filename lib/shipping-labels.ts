@@ -1,7 +1,7 @@
 import { adminDb } from "@/lib/firebase-admin";
 import type { AdminSession } from "@/lib/admin-auth";
 import { logQuoteAction } from "@/lib/audit-log";
-import { sendEmail } from "@/lib/email";
+import { sendQuoteEmail } from "@/lib/quote-email";
 import QuoteLabelEmail from "@/emails/quote-label";
 import QuoteLabelReminderEmail from "@/emails/quote-label-reminder";
 import {
@@ -11,7 +11,7 @@ import {
   labelDeadlines,
   type LabelReminder,
 } from "@/lib/label-deadlines";
-import { toDate } from "@/lib/quote-transitions";
+import { isModeB, toDate } from "@/lib/quote-transitions";
 
 // ---------------------------------------------------------------------------
 // Shipping labels for trade-in quotes
@@ -89,6 +89,8 @@ export async function sendQuoteLabel(
       sentBy: opts.admin.email,
       status: "active",
       refundState: "none" satisfies LabelRefundState,
+      // Sandbox labels are test uploads: never queued for an AusPost refund
+      sandbox: q.sandbox === true,
     });
     tx.set(blobRef, {
       quoteId,
@@ -102,7 +104,7 @@ export async function sendQuoteLabel(
       tx.update(adminDb.collection("shippingLabels").doc(replaceLabelId), {
         status: "replaced",
         replacedAt: now,
-        refundState: "pending" satisfies LabelRefundState,
+        refundState: (q.sandbox === true ? "none" : "pending") satisfies LabelRefundState,
       });
     }
     tx.update(quoteRef, {
@@ -134,11 +136,12 @@ export async function sendQuoteLabel(
     },
   });
 
+  // Mode B: RHEX deals only with the partner. Sandbox: test inboxes only.
   const q = outcome.quote;
-  if (q.sandbox !== true && typeof q.customerEmail === "string") {
+  if (!isModeB(q) && typeof q.customerEmail === "string") {
     const deviceName = await deviceLabel(q.deviceId);
     const tradeInRef = (q.tradeInRef as string) ?? quoteId.slice(0, 8);
-    await sendEmail({
+    await sendQuoteEmail(q, {
       to: q.customerEmail,
       subject: `Your prepaid shipping label (${tradeInRef})`,
       react: QuoteLabelEmail({
@@ -191,7 +194,7 @@ export async function sendLabelReminder(
   const tradeInRef = (q.tradeInRef as string) ?? quoteId.slice(0, 8);
   const postBy = toDate(q.postByAt)!;
   const final = reminder === `day${LABEL_REMINDER_DAYS[LABEL_REMINDER_DAYS.length - 1]}`;
-  await sendEmail({
+  await sendQuoteEmail(q, {
     to: q.customerEmail as string,
     subject: final
       ? `Last reminder: post your trade-in by ${formatCustomerDate(postBy)} (${tradeInRef})`
@@ -213,7 +216,8 @@ export async function queueLabelRefund(labelId: string): Promise<void> {
   const ref = adminDb.collection("shippingLabels").doc(labelId);
   await adminDb.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
-    if (!snap.exists || snap.data()?.refundState !== "none") return;
+    const label = snap.data();
+    if (!label || label.refundState !== "none" || label.sandbox === true) return;
     tx.update(ref, {
       refundState: "pending" satisfies LabelRefundState,
       refundQueuedAt: new Date(),

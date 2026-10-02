@@ -56,7 +56,9 @@ export function dueLabelReminder(
   q: QuoteData,
   now: Date = new Date()
 ): LabelReminder | null {
-  if (q.status !== "accepted" || q.sandbox === true) return null;
+  if (q.status !== "accepted" || q.partnerMode === "B") return null;
+  // Sandbox reminders only for Mode C, whose emails go to test inboxes
+  if (q.sandbox === true && q.partnerMode !== "C") return null;
   const sentAt = toDate(q.labelSentAt);
   const postBy = toDate(q.postByAt);
   if (!sentAt || !postBy || postBy.getTime() <= now.getTime()) return null;

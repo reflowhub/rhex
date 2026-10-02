@@ -252,6 +252,8 @@ Cancellations send no customer email. Analytics and funnel metrics leave out `no
 
 ## 6. For the Mode A/B review
 
+> **2026-10-02:** OPPO AU moved to a new **Mode C** (Reflow buys the device, OPPO refunds the customer, signed result to OPPO): see `docs/partners/OPPO.md` and the Mode C section of `docs/PARTNERSHIP.md`. For Mode C, quotes last 24h, customers consent to the terms through the partner's accept (`termsVersion`), RHEX labels go to the customer, revised offers go to the customer on the public quote page, and the v1 API returns `revisedPrice` at the locked rate. Mode B was cut down to: no customer emails or customer records, payment details refused, contact optional. The remaining Mode A/B questions below wait until a real Mode B partner signs.
+
 - Partner and v1 quote validity (currently 14 days) and whether the 24h rule applies. Terms §5 (published 3 October 2026) says every Indicative Quote is valid for 24 hours, with no "unless otherwise stated", so partner, v1 and admin-created quotes are currently more generous than the terms.
 - Terms consent for v1 accepts (partners accepting for customers).
 - Who ships for partner quotes; whether partners get RHEX labels; v1 endpoints for label, tracking and "posted".

@@ -47,6 +47,7 @@ import {
   toQuoteCurrency,
 } from "@/lib/quote-money";
 import HelpLink from "@/components/admin/help-link";
+import PartnerResultsPanel from "@/components/admin/partner-results-panel";
 import AuAddressFields from "@/components/au-address-fields";
 import {
   isAuAddressComplete,
@@ -166,6 +167,21 @@ interface Quote {
     amountNZD: number;
     paidAt: string | null;
     paidBy: string | null;
+  } | null;
+  /** Mode C: saved at `paid` (approved) instead of a payout */
+  settlement?: {
+    partnerId: string | null;
+    amount: number;
+    currency: string;
+    amountNZD: number;
+    approvedAt: string | null;
+    approvedBy: string | null;
+  } | null;
+  /** Mode C: the latest result queued for the partner */
+  partnerResult?: {
+    accepted: boolean;
+    status: string;
+    updatedAt: string | null;
   } | null;
   statusHistory: StatusHistoryEntry[];
   allowedTransitions: QuoteStatus[];
@@ -976,11 +992,21 @@ export default function QuoteDetailPage() {
                   ? "Mode A (Referral)"
                   : quote.partnerMode === "B"
                   ? "Mode B (Direct)"
+                  : quote.partnerMode === "C"
+                  ? "Mode C (Retailer: partner refunds the customer)"
                   : quote.partnerMode || "\u2014"}
               </dd>
             </div>
           </dl>
         </div>
+      )}
+
+      {quote.partnerMode === "C" && (
+        <PartnerResultsPanel
+          quoteId={quote.id}
+          partnerName={quote.partnerName || "the partner"}
+          refreshKey={`${quote.status}:${quote.partnerResult?.updatedAt ?? ""}`}
+        />
       )}
 
       {/* ---------------------------------------------------------------- */}
@@ -1227,7 +1253,24 @@ export default function QuoteDetailPage() {
               Returning: {quote.returnReason}
             </div>
           )}
-          {quote.status === "paid" && (
+          {quote.status === "paid" && quote.partnerMode === "C" && (
+            <div className="flex items-start gap-2 text-emerald-600">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Trade-in approved — {quote.partnerName || "the partner"} refunds
+                the customer.
+                {quote.settlement && (
+                  <span className="block text-muted-foreground">
+                    {formatWithNZD(quote.settlement, quote.settlement.amountNZD)}
+                    {quote.settlement.approvedBy && ` · by ${quote.settlement.approvedBy}`}
+                    {quote.settlement.approvedAt &&
+                      ` · ${formatDate(quote.settlement.approvedAt)}`}
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
+          {quote.status === "paid" && quote.partnerMode !== "C" && (
             <div className="flex items-start gap-2 text-emerald-600">
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
               <span>
@@ -1323,7 +1366,7 @@ export default function QuoteDetailPage() {
                 setPayOpen(true);
               }}
             >
-              Mark Paid
+              {quote.partnerMode === "C" ? "Approve & Notify Partner" : "Mark Paid"}
             </Button>
           )}
           {can("returned") && (
@@ -1643,12 +1686,27 @@ export default function QuoteDetailPage() {
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Payment</DialogTitle>
-            <DialogDescription>
-              Send the payment first, then mark the quote paid. The customer
-              gets a payment email.{" "}
-              <HelpLink page="trade-ins/pay-customer" />
-            </DialogDescription>
+            {quote.partnerMode === "C" ? (
+              <>
+                <DialogTitle>Approve Trade-In</DialogTitle>
+                <DialogDescription>
+                  Approving sends {quote.partnerName || "the partner"} the final
+                  result (accepted, amount and grade), and{" "}
+                  {quote.partnerName || "the partner"} refunds the customer. RHEX
+                  doesn&apos;t pay anyone directly. Check any holds and the data
+                  wipe first: this can&apos;t be undone.
+                </DialogDescription>
+              </>
+            ) : (
+              <>
+                <DialogTitle>Confirm Payment</DialogTitle>
+                <DialogDescription>
+                  Send the payment first, then mark the quote paid. The customer
+                  gets a payment email.{" "}
+                  <HelpLink page="trade-ins/pay-customer" />
+                </DialogDescription>
+              </>
+            )}
           </DialogHeader>
           {(() => {
             const payable = payableAmount(quote);
@@ -1669,10 +1727,24 @@ export default function QuoteDetailPage() {
                   <dt className="text-muted-foreground">Basis</dt>
                   <dd>{payable.revised ? "Revised offer" : "Original quote"}</dd>
                 </div>
+                {quote.partnerMode === "C" && (
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Grade sent</dt>
+                    <dd>
+                      {payable.revised
+                        ? quote.inspectionGrade ?? "—"
+                        : quote.grade}
+                    </dd>
+                  </div>
+                )}
                 <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Pay to</dt>
+                  <dt className="text-muted-foreground">
+                    {quote.partnerMode === "C" ? "Refunded by" : "Pay to"}
+                  </dt>
                   <dd className="text-right">
-                    {quote.paymentMethod === "payid"
+                    {quote.partnerMode === "C"
+                      ? quote.partnerName || "Partner"
+                      : quote.paymentMethod === "payid"
                       ? `PayID ${quote.payIdPhone ?? ""}`
                       : quote.paymentMethod === "bank_transfer"
                         ? `BSB ${quote.bankBSB ?? ""} · ${quote.bankAccountNumber ?? ""} · ${quote.bankAccountName ?? ""}`
@@ -1702,7 +1774,7 @@ export default function QuoteDetailPage() {
               disabled={actionLoading}
             >
               {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Mark Paid
+              {quote.partnerMode === "C" ? "Approve & Notify Partner" : "Mark Paid"}
             </Button>
           </DialogFooter>
         </DialogContent>

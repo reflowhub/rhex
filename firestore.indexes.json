@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "partnerNotifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "nextAttemptAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "quotes",
       "queryScope": "COLLECTION",
       "fields": [

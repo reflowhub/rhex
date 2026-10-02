@@ -21,10 +21,33 @@ export interface ApiKeyPartner {
   commissionFlat: number | null;
   commissionTiers: unknown | null;
   payoutFrequency: string | null;
-  // Mode B
+  // Mode B / C
   partnerRateDiscount: number | null;
+  /** Mode given to quotes this key creates (docs/PARTNERSHIP.md) */
+  apiMode: ApiMode;
   // Sandbox
   sandbox: boolean;
+}
+
+export type ApiMode = "B" | "C";
+
+/**
+ * The partner's API mode: `apiMode` from its config, or "B" for partners
+ * set up before Mode C (API access used to be Mode B only). Null when the
+ * partner has no API mode, e.g. Mode A only.
+ */
+export function partnerApiMode(data: FirebaseFirestore.DocumentData): ApiMode | null {
+  if (data.apiMode === "B" || data.apiMode === "C") return data.apiMode;
+  return data.modes?.includes("B") ? "B" : null;
+}
+
+/**
+ * Percent below the public price that API quotes are priced at. Mode C
+ * partners get the public price unless a discount is set; Mode B keeps its
+ * historical 10% default.
+ */
+export function apiPartnerDiscount(partner: ApiKeyPartner): number {
+  return partner.partnerRateDiscount ?? (partner.apiMode === "C" ? 0 : 10);
 }
 
 // ---------------------------------------------------------------------------
@@ -70,9 +93,10 @@ export async function verifyApiKey(
 
     const data = partnerDoc.data()!;
 
-    // Only allow active partners with Mode B
+    // Only active partners with an API mode (B or C)
     if (data.status !== "active") return null;
-    if (!data.modes?.includes("B")) return null;
+    const apiMode = partnerApiMode(data);
+    if (!apiMode) return null;
 
     // Fire-and-forget: update lastUsedAt
     adminDb
@@ -96,6 +120,7 @@ export async function verifyApiKey(
       commissionTiers: data.commissionTiers ?? null,
       payoutFrequency: data.payoutFrequency ?? "monthly",
       partnerRateDiscount: data.partnerRateDiscount ?? null,
+      apiMode,
       sandbox: keyData.sandbox === true,
     };
   } catch (error) {

@@ -33,6 +33,27 @@ Partner physically receives the device from the customer and ships it to Reflow 
 
 **Mode B is essentially the existing `/business/estimate` flow but scoped to a partner account.** The partner sees only their own submissions and partner rates. All quotes carry a `partnerId` field.
 
+### Mode C — Retailer Trade-In (Reflow Buys, Partner Refunds)
+
+Added 2026-10-02 for OPPO AU (see `docs/partners/OPPO.md`). A retailer offers trade-in with a new-device purchase and integrates through the v1 API. Unlike Mode B, the partner never handles the device and doesn't buy it:
+
+1. At checkout, the partner creates a quote through the API at the partner price, then accepts it with the customer's contact details, AU address and consent to Reflow's trade-in terms.
+2. **Reflow is the buyer.** Reflow emails the customer an AusPost label and handles reminders, receiving, data wipe, inspection, re-quotes (7 days to respond) and returns, as for a direct consumer trade-in.
+3. **The partner is Reflow's agent for payment only.** When the outcome is final, RHEX sends the partner a signed result (`accepted` true/false, approved price and grade). On `true`, the partner refunds the trade-in value to the customer's original payment method.
+4. Settlement is between Reflow and the partner only, as a periodic net statement: approved trade-in values owed to the partner, less processing fees the partner owes Reflow (per completed and per returned/declined trade-in, set per partner).
+
+Customer data: Reflow holds the customer's name, email, phone and address, tagged with the source partner. It never holds bank or PayID details. No marketing without recorded opt-in consent.
+
+Any partner bonus or promotion is the partner's own; RHEX never sees or shows it.
+
+| | Mode A | Mode B | Mode C |
+|---|---|---|---|
+| Who the customer deals with | Reflow | The partner | Reflow (partner refunds) |
+| Who ships the device | Customer, Reflow label | Partner | Customer, Reflow label |
+| Who Reflow pays | Customer (+ partner commission) | Partner, at the partner rate | Nobody directly; the partner refunds the customer and is settled in the net statement |
+| Customer data Reflow holds | Full, incl. payout details | None | Contact + address, no payout details |
+| Integration | Referral link / embed | Portal or v1 API | v1 API + signed result notification |
+
 ### Mode A — Commission Structure (Admin-Configurable)
 
 Applies to **Mode A only**. Each Mode A partner gets a commission profile set by admin. Default is 5% but supports three models — choose per partner:

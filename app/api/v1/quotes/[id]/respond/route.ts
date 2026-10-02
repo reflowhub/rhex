@@ -51,7 +51,14 @@ export async function PUT(
       { actor: "apiKey", actorId: partner.apiKeyId }
     );
     if (!transition.ok) {
-      // v1 contract: every rejected response is a 400
+      // Mode C: the customer answers revised offers on RHEX's quote page
+      if (transition.code === "forbidden") {
+        return NextResponse.json(
+          { error: "The customer responds to revised offers for this quote" },
+          { status: 403 }
+        );
+      }
+      // v1 contract: every other rejected response is a 400
       const error =
         transition.code === "invalid_transition"
           ? "Quote is not in revised status"

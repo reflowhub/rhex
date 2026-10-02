@@ -20,6 +20,10 @@ interface CustomerLinkInput {
   quoteId?: string;
   bulkQuoteId?: string;
   quoteValueNZD: number;
+  /** Partner the customer came through (Mode C), tagged on the record */
+  sourcePartnerId?: string | null;
+  /** Recorded opt-in to marketing; only ever turns consent on */
+  marketingConsent?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,6 +80,15 @@ export async function findOrCreateCustomer(
     if (input.quoteId) {
       updateData.quoteIds = admin.firestore.FieldValue.arrayUnion(input.quoteId);
     }
+    if (input.sourcePartnerId) {
+      updateData.sourcePartnerIds = admin.firestore.FieldValue.arrayUnion(
+        input.sourcePartnerId
+      );
+    }
+    if (input.marketingConsent === true) {
+      updateData.marketingConsent = true;
+      updateData.marketingConsentAt = new Date();
+    }
     if (input.bulkQuoteId) {
       updateData.bulkQuoteIds = admin.firestore.FieldValue.arrayUnion(
         input.bulkQuoteId
@@ -100,6 +113,9 @@ export async function findOrCreateCustomer(
       bankAccountName: input.bankAccountName || null,
       quoteIds: input.quoteId ? [input.quoteId] : [],
       bulkQuoteIds: input.bulkQuoteId ? [input.bulkQuoteId] : [],
+      sourcePartnerIds: input.sourcePartnerId ? [input.sourcePartnerId] : [],
+      marketingConsent: input.marketingConsent === true,
+      marketingConsentAt: input.marketingConsent === true ? new Date() : null,
       totalQuotes: 1,
       totalValueNZD: input.quoteValueNZD,
       lastActivityAt: new Date().toISOString(),

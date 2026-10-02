@@ -939,3 +939,302 @@ describe("acceptance address", () => {
     expect(api.update.shippingAddressParts).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Partner modes (docs/PARTNERSHIP.md, docs/partners/OPPO.md)
+// ---------------------------------------------------------------------------
+
+function planOk(q: QuoteData, to: QuoteStatus, c: TransitionContext) {
+  const plan = planTransition(q, to, c);
+  if (!plan.ok) throw new Error(`expected ok, got ${plan.code}: ${plan.message}`);
+  return plan;
+}
+
+describe("Mode B (RHEX deals only with the partner)", () => {
+  const modeB = (status: QuoteStatus, extra: QuoteData = {}) =>
+    quote(status, { partnerMode: "B", partnerId: "p1", ...extra });
+
+  it("accepts with no customer contact, and sends nothing to the customer", () => {
+    const plan = planOk(modeB("quoted"), "accepted", ctx("apiKey", { payload: {} }));
+    expect(plan.update.customerName).toBeUndefined();
+    expect(plan.effects).toEqual([]);
+  });
+
+  it("keeps customer contact given as reference", () => {
+    const plan = planOk(
+      modeB("quoted"),
+      "accepted",
+      ctx("apiKey", { payload: { customerName: "Sam", customerEmail: "sam@example.com" } })
+    );
+    expect(plan.update.customerName).toBe("Sam");
+    expect(plan.effects).toEqual([]);
+  });
+
+  it("refuses payment details", () => {
+    for (const field of ["paymentMethod", "payIdPhone", "bankBSB", "bankAccountNumber", "bankAccountName"]) {
+      const plan = planTransition(
+        modeB("quoted"),
+        "accepted",
+        ctx("apiKey", { payload: { [field]: "x" } })
+      );
+      expect(plan.ok, field).toBe(false);
+    }
+  });
+
+  it("drops every customer email and customer-record effect", () => {
+    const revised = planOk(
+      modeB("received", CUSTOMER_DETAILS),
+      "revised",
+      ctx("admin", { payload: { inspectionGrade: "C", revisedPriceNZD: 100 } })
+    );
+    expect(revised.effects).toEqual([]);
+
+    const paid = planOk(modeB("inspected", CUSTOMER_DETAILS), "paid", ctx("admin"));
+    expect(paid.effects).toEqual(["commission"]);
+
+    const returned = planOk(
+      modeB("returning", { ...CUSTOMER_DETAILS, customerId: "c1" }),
+      "returned",
+      ctx("admin")
+    );
+    expect(returned.effects).toEqual([]);
+
+    const expired = planOk(
+      modeB("accepted", { ...CUSTOMER_DETAILS, labelSentAt: past(50), postByAt: past(40) }),
+      "expired",
+      ctx("system")
+    );
+    expect(expired.effects).toEqual([]);
+  });
+
+  it("never queues a partner result", () => {
+    const plan = planOk(modeB("inspected"), "paid", ctx("admin"));
+    expect(plan.partnerResult).toBeNull();
+  });
+});
+
+describe("Mode C (RHEX buys; the partner refunds the customer)", () => {
+  // AUD quote locked at 0.9: 200 NZD → 180 AUD
+  const modeC = (status: QuoteStatus, extra: QuoteData = {}) =>
+    quote(status, {
+      partnerMode: "C",
+      partnerId: "oppo",
+      displayCurrency: "AUD",
+      fxRate: 0.9,
+      quotePriceDisplay: 180,
+      grade: "B",
+      ...extra,
+    });
+
+  const ACCEPT = {
+    customerFirstName: "Sam",
+    customerLastName: "Seller",
+    customerEmail: "sam@example.com",
+    customerPhone: "0400000000",
+    shippingAddress: { line1: "1 Test St", line2: "Unit 2", suburb: "Sydney", state: "nsw", postcode: "2000" },
+    termsAccepted: true,
+    termsVersion: TRADEIN_TERMS_VERSION,
+  };
+
+  const accept = (payload: Record<string, unknown>, actor: QuoteActor = "apiKey") =>
+    planTransition(modeC("quoted"), "accepted", ctx(actor, { payload }));
+
+  describe("acceptance", () => {
+    it("stores contact, address and consent, and emails the customer", () => {
+      const plan = accept(ACCEPT);
+      if (!plan.ok) throw new Error(plan.message);
+      expect(plan.update).toMatchObject({
+        customerFirstName: "Sam",
+        customerLastName: "Seller",
+        customerName: "Sam Seller",
+        customerEmail: "sam@example.com",
+        customerPhone: "0400000000",
+        shippingAddressParts: { line1: "1 Test St", line2: "Unit 2", suburb: "Sydney", state: "NSW", postcode: "2000" },
+        termsVersion: TRADEIN_TERMS_VERSION,
+        termsAcceptedAt: NOW,
+        marketingConsent: false,
+        marketingConsentAt: null,
+      });
+      expect(plan.update.paymentMethod).toBeUndefined();
+      expect(plan.effects).toEqual(["link_customer", "accepted_email"]);
+      expect(plan.assignReference).toBe(true);
+      expect(plan.partnerResult).toBeNull();
+    });
+
+    it("records marketing consent only when given", () => {
+      const plan = accept({ ...ACCEPT, marketingConsent: true });
+      if (!plan.ok) throw new Error(plan.message);
+      expect(plan.update.marketingConsent).toBe(true);
+      expect(plan.update.marketingConsentAt).toEqual(NOW);
+      expect(accept({ ...ACCEPT, marketingConsent: "yes" }).ok).toBe(false);
+    });
+
+    it.each([
+      "customerFirstName",
+      "customerLastName",
+      "customerEmail",
+      "customerPhone",
+      "shippingAddress",
+    ])("requires %s", (field) => {
+      const payload: Record<string, unknown> = { ...ACCEPT };
+      delete payload[field];
+      expect(accept(payload).ok).toBe(false);
+    });
+
+    it("validates the email and the AU address", () => {
+      expect(accept({ ...ACCEPT, customerEmail: "not-an-email" }).ok).toBe(false);
+      expect(
+        accept({ ...ACCEPT, shippingAddress: { line1: "1 Test St", suburb: "Sydney", state: "XX", postcode: "2000" } }).ok
+      ).toBe(false);
+      // A one-line address isn't enough
+      expect(accept({ ...ACCEPT, shippingAddress: "1 Test St, Sydney NSW 2000" }).ok).toBe(false);
+    });
+
+    it("requires consent to the current terms", () => {
+      expect(accept({ ...ACCEPT, termsAccepted: false }).ok).toBe(false);
+      expect(accept({ ...ACCEPT, termsAccepted: undefined }).ok).toBe(false);
+      const old = accept({ ...ACCEPT, termsVersion: "2026-10-02" });
+      expect(old.ok).toBe(false);
+      if (!old.ok) expect(old.message).toContain(TRADEIN_TERMS_VERSION);
+    });
+
+    it("refuses payment details", () => {
+      expect(accept({ ...ACCEPT, paymentMethod: "payid", payIdPhone: "0400000123" }).ok).toBe(false);
+      expect(accept({ ...ACCEPT, bankAccountNumber: "123456" }).ok).toBe(false);
+    });
+
+    it("can't be accepted by the customer on the public page", () => {
+      const plan = accept(ACCEPT, "customer");
+      expect(plan.ok).toBe(false);
+      if (!plan.ok) expect(plan.code).toBe("forbidden");
+      expect(allowedTransitions(modeC("quoted"), "customer", NOW)).not.toContain("accepted");
+    });
+
+    it("lets an admin accept with details already on the quote, without consent", () => {
+      const q = modeC("quoted", {
+        customerFirstName: "Sam",
+        customerLastName: "Seller",
+        customerEmail: "sam@example.com",
+        customerPhone: "0400000000",
+        shippingAddressParts: ACCEPT.shippingAddress,
+      });
+      const plan = planOk(q, "accepted", ctx("admin", { payload: {} }));
+      expect(plan.update.termsVersion).toBeUndefined();
+      expect(plan.effects).toEqual(["link_customer"]);
+    });
+  });
+
+  describe("revised offers", () => {
+    const revised = (extra: QuoteData = {}) =>
+      modeC("revised", {
+        inspectionGrade: "D",
+        revisedPriceNZD: 100,
+        revisedPriceDisplay: 90,
+        revisionExpiresAt: future(3),
+        ...extra,
+      });
+
+    it("are answered by the customer, not the partner", () => {
+      for (const actor of ["apiKey", "partner"] as const) {
+        for (const to of ["inspected", "returning"] as const) {
+          const plan = planTransition(revised(), to, ctx(actor));
+          expect(plan.ok).toBe(false);
+          if (!plan.ok) expect(plan.code).toBe("forbidden");
+        }
+      }
+      expect(planTransition(revised(), "inspected", ctx("customer")).ok).toBe(true);
+      expect(allowedTransitions(revised(), "apiKey", NOW)).toEqual([]);
+    });
+
+    it("declined → result not accepted, revised price and grade", () => {
+      const plan = planOk(revised(), "returning", ctx("customer"));
+      expect(plan.partnerResult).toEqual({ approvedQuotePrice: 90, acceptGrading: "D", accepted: false });
+      expect(plan.effects).toContain("partner_result");
+    });
+
+    it("expired → result not accepted", () => {
+      const plan = planOk(revised({ revisionExpiresAt: past() }), "returning", ctx("system"));
+      expect(plan.partnerResult).toEqual({ approvedQuotePrice: 90, acceptGrading: "D", accepted: false });
+    });
+
+    it("accepted → no result until approved", () => {
+      const plan = planOk(revised(), "inspected", ctx("customer"));
+      expect(plan.partnerResult).toBeNull();
+    });
+  });
+
+  describe("approval (inspected → paid)", () => {
+    it("needs no payout details and saves a settlement, not a payout", () => {
+      const plan = planOk(modeC("inspected", { inspectionGrade: "A" }), "paid", ctx("admin", { actorId: "ops@reflowhub.com" }));
+      expect(plan.update.payout).toBeUndefined();
+      expect(plan.update.settlement).toEqual({
+        partnerId: "oppo",
+        amount: 180,
+        currency: "AUD",
+        amountNZD: 200,
+        approvedAt: NOW,
+        approvedBy: "ops@reflowhub.com",
+      });
+      // No commission, no "Payment sent" email
+      expect(plan.effects).toEqual(["partner_result"]);
+    });
+
+    it("matched device → original AUD price and original grade", () => {
+      // Inspected as better than declared: still the original quote (D12)
+      const plan = planOk(modeC("inspected", { inspectionGrade: "A" }), "paid", ctx("admin"));
+      expect(plan.partnerResult).toEqual({ approvedQuotePrice: 180, acceptGrading: "B", accepted: true });
+    });
+
+    it("accepted re-quote → revised AUD price and inspection grade", () => {
+      const q = modeC("inspected", { inspectionGrade: "D", revisedPriceNZD: 100, revisedPriceDisplay: 90 });
+      const plan = planOk(q, "paid", ctx("admin"));
+      expect(plan.partnerResult).toEqual({ approvedQuotePrice: 90, acceptGrading: "D", accepted: true });
+    });
+  });
+
+  describe("endings without a customer decision", () => {
+    it("RHEX returns the device → not accepted, last offered price", () => {
+      const plan = planOk(modeC("received"), "returning", ctx("admin", { reason: "iCloud locked" }));
+      expect(plan.partnerResult).toEqual({ approvedQuotePrice: 180, acceptGrading: "B", accepted: false });
+    });
+
+    it("returned after inspection → inspection grade", () => {
+      const plan = planOk(modeC("inspected", { inspectionGrade: "E" }), "returning", ctx("admin", { reason: "Not a device we buy" }));
+      expect(plan.partnerResult).toEqual({ approvedQuotePrice: 180, acceptGrading: "E", accepted: false });
+    });
+
+    it("surrendered to authorities → not accepted", () => {
+      const plan = planOk(
+        modeC("on_hold", { heldFrom: "received" }),
+        "cancelled",
+        ctx("admin", { payload: { cancelReason: "surrendered" } })
+      );
+      expect(plan.partnerResult?.accepted).toBe(false);
+    });
+
+    it("sends nothing when the device never arrived", () => {
+      const cancelled = planOk(modeC("accepted"), "cancelled", ctx("admin", { payload: { cancelReason: "customer_request" } }));
+      expect(cancelled.partnerResult).toBeNull();
+      const expired = planOk(
+        modeC("accepted", { labelSentAt: past(50), postByAt: past(40) }),
+        "expired",
+        ctx("system")
+      );
+      expect(expired.partnerResult).toBeNull();
+    });
+
+    it("sends nothing once the device is back with the customer", () => {
+      const plan = planOk(modeC("returning"), "returned", ctx("admin"));
+      expect(plan.partnerResult).toBeNull();
+    });
+  });
+
+  it("customer emails still go out (RHEX deals with the customer)", () => {
+    const plan = planOk(
+      modeC("received", CUSTOMER_DETAILS),
+      "revised",
+      ctx("admin", { payload: { inspectionGrade: "C", revisedPriceNZD: 100 } })
+    );
+    expect(plan.effects).toEqual(["revised_email"]);
+  });
+});
