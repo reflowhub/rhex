@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft } from "lucide-react";
+import { TRADEIN_TERMS_EFFECTIVE_DATE } from "@/lib/tradein-terms";
 
 export const metadata: Metadata = {
   title: "Trade-In Terms & Conditions | RHEX",
@@ -26,7 +27,7 @@ export default function TradeInTermsPage() {
         RHEX Trade-In Terms &amp; Conditions
       </h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Effective date: [Insert date]
+        Effective date: {TRADEIN_TERMS_EFFECTIVE_DATE}
       </p>
 
       <div className="mt-10 space-y-10 text-sm leading-relaxed text-foreground/90">

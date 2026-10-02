@@ -15,6 +15,12 @@ interface QuoteAcceptedEmailProps {
   quotePrice: number;
   currency: string;
   quoteId: string;
+  /**
+   * Public quotes: RHEX emails a prepaid label and the customer ticked the
+   * terms checkbox. Partner (v1) quotes keep the generic copy until the
+   * Mode A/B review decides who ships.
+   */
+  rhexLabel?: boolean;
 }
 
 export default function QuoteAcceptedEmail({
@@ -23,6 +29,7 @@ export default function QuoteAcceptedEmail({
   quotePrice,
   currency,
   quoteId,
+  rhexLabel = false,
 }: QuoteAcceptedEmailProps) {
   const quoteUrl = `https://rhex.app/sell/quote/${quoteId}`;
 
@@ -38,18 +45,36 @@ export default function QuoteAcceptedEmail({
             accepted. The quoted value is{" "}
             <strong>${quotePrice.toFixed(2)} {currency}</strong>.
           </Text>
-          <Text style={paragraph}>
-            Please ship your device to us at your earliest convenience. You can
-            view your quote details and shipping instructions below:
-          </Text>
+          {rhexLabel ? (
+            <>
+              <Text style={paragraph}>
+                We&apos;ll email your prepaid Australia Post label shortly.
+                Once we send it, you&apos;ll have <strong>14 days</strong> to
+                post your device.
+              </Text>
+              <Text style={paragraph}>
+                While you wait, get your device ready: pack it in a rigid box
+                with bubble wrap or similar padding, back up your data, remove
+                your SIM and memory cards, sign out of your accounts and turn
+                off Find My / Activation Lock. You supply the packaging.
+              </Text>
+            </>
+          ) : (
+            <Text style={paragraph}>
+              Please ship your device to us at your earliest convenience. You
+              can view your quote details and shipping instructions below:
+            </Text>
+          )}
           <Section style={buttonSection}>
             <Button style={button} href={quoteUrl}>
-              View Quote
+              {rhexLabel ? "View Your Trade-In" : "View Quote"}
             </Button>
           </Section>
           <Hr style={hr} />
           <Text style={footer}>
-            By accepting this quote, you agree to our{" "}
+            {rhexLabel
+              ? "When you accepted this quote, you agreed to our "
+              : "By accepting this quote, you agree to our "}
             <a href="https://rhex.app/terms/trade-in" style={link}>
               Trade-In Terms &amp; Conditions
             </a>

@@ -5,6 +5,92 @@ import { findOrCreateCustomer } from "@/lib/customer-link";
 import { sendEmail } from "@/lib/email";
 import QuoteAcceptedEmail from "@/emails/quote-accepted";
 import { checkRevisionExpiry } from "@/lib/revision-expiry";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { updateIfStatus } from "@/lib/status-transition";
+import { serializeTimestamp } from "@/lib/serialize";
+import { TRADEIN_TERMS_VERSION } from "@/lib/tradein-terms";
+
+// ---------------------------------------------------------------------------
+// Public response shape
+// ---------------------------------------------------------------------------
+// Anyone with the quote ID can call these endpoints, so responses only carry
+// the fields the customer pages need. Never spread the raw document: it holds
+// contact details, payout details, geo data and partner pricing.
+
+const PUBLIC_FIELDS = [
+  "deviceId",
+  "grade",
+  "imei",
+  "quotePriceNZD",
+  "quotePriceDisplay",
+  "displayCurrency",
+  "fxRate",
+  "status",
+  "paymentMethod",
+  "inspectionGrade",
+  "revisedPriceNZD",
+  "revisedDeviceId",
+  "revisedDeviceMake",
+  "revisedDeviceModel",
+  "revisedDeviceStorage",
+  "revisionAutoExpired",
+] as const;
+
+const PUBLIC_TIMESTAMP_FIELDS = [
+  "createdAt",
+  "expiresAt",
+  "acceptedAt",
+  "revisedAt",
+  "revisionExpiresAt",
+  "revisionAcceptedAt",
+  "revisionRejectedAt",
+  "returningAt",
+  "returnedAt",
+] as const;
+
+/** Mask all but the last 3 characters, e.g. "•••• 123". */
+function maskTail(value: unknown): string | null {
+  if (typeof value !== "string" || !value) return null;
+  const compact = value.replace(/\s/g, "");
+  return compact.length > 3 ? `•••• ${compact.slice(-3)}` : "••••";
+}
+
+async function getDeviceSummary(deviceId: unknown) {
+  if (typeof deviceId !== "string" || !deviceId) return null;
+  const deviceDoc = await adminDb.collection("devices").doc(deviceId).get();
+  if (!deviceDoc.exists) return null;
+  const deviceData = deviceDoc.data();
+  return {
+    id: deviceDoc.id,
+    make: deviceData?.make,
+    model: deviceData?.model,
+    storage: deviceData?.storage,
+  };
+}
+
+async function toPublicQuote(
+  id: string,
+  data: FirebaseFirestore.DocumentData
+): Promise<Record<string, unknown>> {
+  const quote: Record<string, unknown> = { id };
+  for (const field of PUBLIC_FIELDS) {
+    if (data[field] !== undefined) quote[field] = data[field];
+  }
+  for (const field of PUBLIC_TIMESTAMP_FIELDS) {
+    if (data[field]) quote[field] = serializeTimestamp(data[field]);
+  }
+  if (data.payIdPhone) quote.payIdPhone = maskTail(data.payIdPhone);
+  if (data.bankAccountNumber) {
+    quote.bankAccountNumber = maskTail(data.bankAccountNumber);
+  }
+  quote.device = await getDeviceSummary(data.deviceId);
+  return quote;
+}
+
+/** Quotes the public endpoints must not change (decided in the Mode A/B review). */
+function isPublicWriteBlocked(data: FirebaseFirestore.DocumentData): boolean {
+  return data.partnerMode === "B" || data.sandbox === true;
+}
 
 // GET /api/quote/[id] — Get a quote by ID, including device info
 export async function GET(
@@ -23,61 +109,7 @@ export async function GET(
       return NextResponse.json({ error: "Quote not found" }, { status: 404 });
     }
 
-    const quoteData = quoteDoc.data();
-
-    // Fetch device info
-    let device = null;
-    if (quoteData?.deviceId) {
-      const deviceDoc = await adminDb
-        .collection("devices")
-        .doc(quoteData.deviceId)
-        .get();
-
-      if (deviceDoc.exists) {
-        const deviceData = deviceDoc.data();
-        device = {
-          id: deviceDoc.id,
-          make: deviceData?.make,
-          model: deviceData?.model,
-          storage: deviceData?.storage,
-        };
-      }
-    }
-
-    // Serialize Firestore Timestamps to ISO strings
-    const serializedQuote: Record<string, unknown> = {
-      id: quoteDoc.id,
-      ...quoteData,
-    };
-
-    if (quoteData?.createdAt?.toDate) {
-      serializedQuote.createdAt = quoteData.createdAt.toDate().toISOString();
-    }
-    if (quoteData?.expiresAt?.toDate) {
-      serializedQuote.expiresAt = quoteData.expiresAt.toDate().toISOString();
-    }
-    if (quoteData?.acceptedAt?.toDate) {
-      serializedQuote.acceptedAt = quoteData.acceptedAt.toDate().toISOString();
-    }
-    if (quoteData?.revisedAt?.toDate) {
-      serializedQuote.revisedAt = quoteData.revisedAt.toDate().toISOString();
-    }
-    if (quoteData?.revisionExpiresAt?.toDate) {
-      serializedQuote.revisionExpiresAt = quoteData.revisionExpiresAt
-        .toDate()
-        .toISOString();
-    }
-    if (quoteData?.returningAt?.toDate) {
-      serializedQuote.returningAt = quoteData.returningAt.toDate().toISOString();
-    }
-    if (quoteData?.returnedAt?.toDate) {
-      serializedQuote.returnedAt = quoteData.returnedAt.toDate().toISOString();
-    }
-
-    return NextResponse.json({
-      ...serializedQuote,
-      device,
-    });
+    return NextResponse.json(await toPublicQuote(quoteDoc.id, quoteDoc.data()!));
   } catch (error) {
     console.error("Error fetching quote:", error);
     return NextResponse.json(
@@ -87,33 +119,40 @@ export async function GET(
   }
 }
 
-// PUT /api/quote/[id] — Accept a quote with customer details
+// PUT /api/quote/[id] — Accept a quote with customer details, or respond to
+// a revised quote
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ip = getClientIp(request);
+  const rl = await checkRateLimit(`ip:${ip}:/api/quote/[id]:PUT`, 10);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
+    );
+  }
+
   try {
     const { id } = await params;
     const body = await request.json();
+
+    const quoteRef = adminDb.collection("quotes").doc(id);
+    const quoteDoc = await quoteRef.get();
+
+    if (!quoteDoc.exists || isPublicWriteBlocked(quoteDoc.data()!)) {
+      return NextResponse.json({ error: "Quote not found" }, { status: 404 });
+    }
+
+    const existingData = quoteDoc.data()!;
 
     // --- Handle revision response ---
     if (
       body.action === "accept_revision" ||
       body.action === "reject_revision"
     ) {
-      const quoteRef = adminDb.collection("quotes").doc(id);
-      const quoteDoc = await quoteRef.get();
-
-      if (!quoteDoc.exists) {
-        return NextResponse.json(
-          { error: "Quote not found" },
-          { status: 404 }
-        );
-      }
-
-      const data = quoteDoc.data()!;
-
-      if (data.status !== "revised") {
+      if (existingData.status !== "revised") {
         return NextResponse.json(
           { error: "Quote is not in revised status" },
           { status: 400 }
@@ -121,8 +160,8 @@ export async function PUT(
       }
 
       // Check expiry
-      if (data.revisionExpiresAt?.toDate) {
-        if (data.revisionExpiresAt.toDate() < new Date()) {
+      if (existingData.revisionExpiresAt?.toDate) {
+        if (existingData.revisionExpiresAt.toDate() < new Date()) {
           return NextResponse.json(
             { error: "Revision response period has expired" },
             { status: 400 }
@@ -144,34 +183,18 @@ export async function PUT(
           admin.firestore.FieldValue.serverTimestamp();
       }
 
-      await quoteRef.update(updateData);
-
-      // Re-fetch and serialize
-      const updatedDoc = await quoteRef.get();
-      const updatedData = updatedDoc.data();
-      const serialized: Record<string, unknown> = {
-        id: updatedDoc.id,
-        ...updatedData,
-      };
-
-      // Serialize timestamps
-      for (const field of [
-        "createdAt",
-        "expiresAt",
-        "acceptedAt",
-        "revisedAt",
-        "revisionExpiresAt",
-        "returningAt",
-        "returnedAt",
-        "revisionAcceptedAt",
-        "revisionRejectedAt",
-      ]) {
-        if (updatedData?.[field]?.toDate) {
-          serialized[field] = updatedData[field].toDate().toISOString();
-        }
+      // Only one concurrent request can respond to the revision
+      if (!(await updateIfStatus(quoteRef, "revised", updateData))) {
+        return NextResponse.json(
+          { error: "Quote is not in revised status" },
+          { status: 409 }
+        );
       }
 
-      return NextResponse.json(serialized);
+      const updatedDoc = await quoteRef.get();
+      return NextResponse.json(
+        await toPublicQuote(updatedDoc.id, updatedDoc.data()!)
+      );
     }
 
     // --- Original acceptance flow ---
@@ -186,6 +209,7 @@ export async function PUT(
       bankAccountNumber,
       bankAccountName,
       imei,
+      termsAccepted,
     } = body;
 
     // Validate required fields
@@ -195,6 +219,13 @@ export async function PUT(
           error:
             "customerName, customerEmail, customerPhone, shippingAddress, and paymentMethod are required",
         },
+        { status: 400 }
+      );
+    }
+
+    if (termsAccepted !== true) {
+      return NextResponse.json(
+        { error: "You must accept the Trade-In Terms & Conditions" },
         { status: 400 }
       );
     }
@@ -228,18 +259,8 @@ export async function PUT(
       );
     }
 
-    // Get existing quote
-    const quoteRef = adminDb.collection("quotes").doc(id);
-    const quoteDoc = await quoteRef.get();
-
-    if (!quoteDoc.exists) {
-      return NextResponse.json({ error: "Quote not found" }, { status: 404 });
-    }
-
-    const existingData = quoteDoc.data();
-
     // Check quote is still in "quoted" status
-    if (existingData?.status !== "quoted") {
+    if (existingData.status !== "quoted") {
       return NextResponse.json(
         { error: "Quote has already been processed" },
         { status: 400 }
@@ -247,7 +268,7 @@ export async function PUT(
     }
 
     // Check quote hasn't expired
-    if (existingData?.expiresAt?.toDate) {
+    if (existingData.expiresAt?.toDate) {
       const expiryDate = existingData.expiresAt.toDate();
       if (expiryDate < new Date()) {
         return NextResponse.json(
@@ -261,6 +282,8 @@ export async function PUT(
     const updateData: Record<string, unknown> = {
       status: "accepted",
       acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+      termsAcceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+      termsVersion: TRADEIN_TERMS_VERSION,
       customerName,
       customerEmail,
       customerPhone,
@@ -277,11 +300,18 @@ export async function PUT(
     }
 
     // Accept IMEI if provided and quote doesn't already have one
-    if (imei && typeof imei === "string" && /^\d{15}$/.test(imei) && !existingData?.imei) {
+    if (imei && typeof imei === "string" && /^\d{15}$/.test(imei) && !existingData.imei) {
       updateData.imei = imei;
     }
 
-    await quoteRef.update(updateData);
+    // Only one concurrent request can accept the quote; side effects below
+    // run only for the request that made the change
+    if (!(await updateIfStatus(quoteRef, "quoted", updateData))) {
+      return NextResponse.json(
+        { error: "Quote has already been processed" },
+        { status: 409 }
+      );
+    }
 
     // Auto-create/link customer record
     try {
@@ -297,54 +327,20 @@ export async function PUT(
         bankAccountNumber: paymentMethod === "bank_transfer" ? bankAccountNumber : null,
         bankAccountName: paymentMethod === "bank_transfer" ? bankAccountName : null,
         quoteId: id,
-        quoteValueNZD: existingData?.quotePriceNZD ?? 0,
+        quoteValueNZD: existingData.quotePriceNZD ?? 0,
       });
       await quoteRef.update({ customerId });
     } catch (err) {
       console.error("Customer link error (non-blocking):", err);
     }
 
-    // Fetch updated quote
     const updatedDoc = await quoteRef.get();
-    const updatedData = updatedDoc.data();
-
-    // Serialize timestamps
-    const serializedQuote: Record<string, unknown> = {
-      id: updatedDoc.id,
-      ...updatedData,
-    };
-
-    if (updatedData?.createdAt?.toDate) {
-      serializedQuote.createdAt = updatedData.createdAt.toDate().toISOString();
-    }
-    if (updatedData?.expiresAt?.toDate) {
-      serializedQuote.expiresAt = updatedData.expiresAt.toDate().toISOString();
-    }
-    if (updatedData?.acceptedAt?.toDate) {
-      serializedQuote.acceptedAt = updatedData.acceptedAt
-        .toDate()
-        .toISOString();
-    }
-
-    // Fetch device info
-    let device = null;
-    if (updatedData?.deviceId) {
-      const deviceDoc = await adminDb
-        .collection("devices")
-        .doc(updatedData.deviceId)
-        .get();
-      if (deviceDoc.exists) {
-        const deviceData = deviceDoc.data();
-        device = {
-          id: deviceDoc.id,
-          make: deviceData?.make,
-          model: deviceData?.model,
-          storage: deviceData?.storage,
-        };
-      }
-    }
+    const publicQuote = await toPublicQuote(updatedDoc.id, updatedDoc.data()!);
 
     // Send acceptance confirmation email (non-blocking)
+    const device = publicQuote.device as
+      | { make: string; model: string; storage: string }
+      | null;
     const deviceLabel = device
       ? `${device.make} ${device.model} ${device.storage}`.trim()
       : "your device";
@@ -354,16 +350,14 @@ export async function PUT(
       react: QuoteAcceptedEmail({
         customerName,
         deviceName: deviceLabel,
-        quotePrice: existingData?.quotePriceDisplay ?? existingData?.quotePriceNZD ?? 0,
-        currency: existingData?.displayCurrency ?? "AUD",
+        quotePrice: existingData.quotePriceDisplay ?? existingData.quotePriceNZD ?? 0,
+        currency: existingData.displayCurrency ?? "AUD",
         quoteId: id,
+        rhexLabel: true,
       }),
     });
 
-    return NextResponse.json({
-      ...serializedQuote,
-      device,
-    });
+    return NextResponse.json(publicQuote);
   } catch (error) {
     console.error("Error accepting quote:", error);
     return NextResponse.json(

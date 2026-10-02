@@ -36,6 +36,7 @@ const inter = Inter({
 import { gtagEvent, gtagConversion } from "@/lib/gtag";
 import { fbPixelEvent } from "@/lib/fbpixel";
 import { SELL_GRADE_LABELS as GRADE_LABELS, GRADE_COLORS } from "@/lib/grades";
+import { TradeInShippingInstructions } from "@/components/trade-in-shipping";
 
 import { AlertTriangle } from "lucide-react";
 
@@ -108,6 +109,7 @@ export default function QuoteResultPage({
   const [bankAccountName, setBankAccountName] = useState("");
   const [shippingAddress, setShippingAddress] = useState("");
   const [imeiInput, setImeiInput] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   // Fetch quote
   useEffect(() => {
@@ -166,12 +168,13 @@ export default function QuoteResultPage({
       payment_method: paymentMethod,
     });
 
-    const body: Record<string, string> = {
+    const body: Record<string, string | boolean> = {
       customerName,
       customerEmail,
       customerPhone,
       shippingAddress,
       paymentMethod,
+      termsAccepted,
     };
 
     if (paymentMethod === "payid") {
@@ -394,8 +397,8 @@ export default function QuoteResultPage({
               <div>
                 <p className="font-semibold text-green-800">Quote Accepted</p>
                 <p className="text-sm text-green-700">
-                  Your quote has been confirmed. Follow the shipping
-                  instructions below.
+                  Your quote has been confirmed. We&apos;ll email your prepaid
+                  shipping label shortly.
                 </p>
               </div>
             </div>
@@ -737,7 +740,7 @@ export default function QuoteResultPage({
                   className="mt-1"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  We'll send a prepaid satchel to this address.
+                  Used for your shipping label and any return of your device.
                 </p>
               </div>
 
@@ -828,6 +831,26 @@ export default function QuoteResultPage({
                 </>
               )}
 
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  required
+                  className="mt-0.5 rounded border-input"
+                />
+                <span>
+                  I agree to the{" "}
+                  <Link
+                    href="/terms/trade-in"
+                    target="_blank"
+                    className="underline underline-offset-4 hover:text-primary"
+                  >
+                    Trade-In Terms &amp; Conditions
+                  </Link>
+                </span>
+              </label>
+
               <div className="flex gap-3 pt-2">
                 <Button
                   type="button"
@@ -843,7 +866,7 @@ export default function QuoteResultPage({
                 <Button
                   type="submit"
                   className="flex-1"
-                  disabled={submitting || !paymentMethod}
+                  disabled={submitting || !paymentMethod || !termsAccepted}
                 >
                   {submitting ? (
                     <>
@@ -890,42 +913,7 @@ export default function QuoteResultPage({
               </div>
             </div>
 
-            {/* Shipping Instructions */}
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <Package className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold">Shipping Instructions</h3>
-              </div>
-              <div className="space-y-3 text-sm text-muted-foreground">
-                <p>Ship your device to:</p>
-                <div className="rounded-lg bg-muted p-3">
-                  <p className="font-medium text-foreground">
-                    Reflow Hub Pty Ltd
-                  </p>
-                  <p>[Address]</p>
-                  <p>[City, State, Postcode]</p>
-                </div>
-                <p>
-                  Please include your quote reference number{" "}
-                  <span className="font-medium text-foreground font-mono">
-                    {quote.id.slice(0, 8)}...
-                  </span>{" "}
-                  written on a piece of paper inside the package.
-                </p>
-              </div>
-            </div>
-
-            {/* Expiry Reminder */}
-            <div className="rounded-lg border p-4">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  This quote is valid for{" "}
-                  <span className="font-medium text-foreground">14 days</span>{" "}
-                  from acceptance. Please ship your device within this period.
-                </p>
-              </div>
-            </div>
+            <TradeInShippingInstructions quoteId={quote.id} />
 
             {/* Google Review Prompt */}
             {process.env.NEXT_PUBLIC_GOOGLE_PLACE_ID && (
