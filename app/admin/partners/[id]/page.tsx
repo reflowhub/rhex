@@ -86,6 +86,7 @@ interface Partner {
   sandboxEmailFallback: string | null;
   emailBrand: EmailBrandSettings;
   customerEmails: Record<CustomerEmailSwitch, boolean>;
+  neverArrivedResult?: boolean;
   currency: "AUD" | "NZD";
   contactPerson: string | null;
   contactPhone: string | null;
@@ -204,6 +205,7 @@ export default function PartnerDetailPage() {
     emailSupportEmail: "",
     emailSupportPhone: "",
     customerEmails: customerEmailSwitches(undefined),
+    neverArrivedResult: true,
     commissionModel: "percentage",
     commissionPercent: 5,
     commissionFlat: 5,
@@ -407,6 +409,7 @@ export default function PartnerDetailPage() {
       emailSupportEmail: partner.emailBrand?.supportEmail ?? "",
       emailSupportPhone: partner.emailBrand?.supportPhone ?? "",
       customerEmails: partner.customerEmails ?? customerEmailSwitches(undefined),
+      neverArrivedResult: partner.neverArrivedResult ?? true,
       commissionModel: partner.commissionModel || "percentage",
       commissionPercent: partner.commissionPercent ?? 5,
       commissionFlat: partner.commissionFlat ?? 5,
@@ -477,6 +480,7 @@ export default function PartnerDetailPage() {
               supportPhone: editForm.emailSupportPhone,
             },
             customerEmails: editForm.customerEmails,
+            neverArrivedResult: editForm.neverArrivedResult,
           }),
           payoutFrequency: editForm.payoutFrequency,
           contactPerson: editForm.contactPerson.trim() || null,
@@ -773,6 +777,14 @@ export default function PartnerDetailPage() {
                       !partner.resultWebhook.sandboxSecretSet && (
                         <span className="ml-1 text-destructive">(secret missing)</span>
                       )}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4 pl-6">
+                  <dt className="shrink-0 text-muted-foreground">Never arrived</dt>
+                  <dd className="text-right text-xs">
+                    {partner.neverArrivedResult === false
+                      ? "Sends nothing"
+                      : "Sends accepted: false (original price and grade)"}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4 pl-6">
@@ -1586,6 +1598,28 @@ export default function PartnerDetailPage() {
                     }
                   />
                 </div>
+                <p className="pt-2 text-sm font-medium">Never arrived</p>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={editForm.neverArrivedResult}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, neverArrivedResult: e.target.checked }))
+                    }
+                    className="mt-0.5 h-4 w-4 rounded border-border"
+                  />
+                  <span>
+                    Send a result when the device never arrives
+                    <span className="block text-xs text-muted-foreground">
+                      When an accepted trade-in expires unposted, is cancelled
+                      before the device arrives, or is lost in transit, send
+                      accepted: false with the original price and grade. A
+                      device that turns up afterwards can&apos;t be received
+                      against it. Trade-ins that were never accepted send
+                      nothing.
+                    </span>
+                  </span>
+                </label>
                 <p className="pt-2 text-sm font-medium">Customer emails</p>
                 <p className="text-xs text-muted-foreground">
                   Co-branded with the partner&apos;s logo, from rhex. Replies go to

@@ -123,6 +123,7 @@ export const CUSTOMER_EMAIL_SWITCHES = [
   { key: "returning", label: "Returning the device (declined, expired or rejected)" },
   { key: "returned", label: "Device posted back (tracking)" },
   { key: "closed", label: "Closed, never posted" },
+  { key: "cancelled", label: "Cancelled before arrival (customer request, lost in transit)" },
 ] as const;
 
 export type CustomerEmailSwitch = (typeof CUSTOMER_EMAIL_SWITCHES)[number]["key"];
@@ -195,6 +196,24 @@ export function customerEmailSwitches(
   return Object.fromEntries(
     CUSTOMER_EMAIL_SWITCHES.map(({ key }) => [key, raw[key] !== false])
   ) as Record<CustomerEmailSwitch, boolean>;
+}
+
+// ---------------------------------------------------------------------------
+// Mode C never arrived (docs/partners/OPPO.md, 2d)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the partner is sent `accepted: false` (original price and grade)
+ * when an accepted trade-in ends before the device arrives: it expires
+ * unposted, or is cancelled while accepted or shipped. Unset means on.
+ */
+export function neverArrivedResultOn(partner: Record<string, unknown> | undefined): boolean {
+  return partner?.neverArrivedResult !== false;
+}
+
+export function parseNeverArrivedResult(value: unknown): boolean {
+  if (typeof value !== "boolean") throw new Error("Never-arrived result must be on or off");
+  return value;
 }
 
 /** Parse the switches sent by admin: booleans for known keys only. */

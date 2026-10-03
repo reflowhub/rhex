@@ -7,8 +7,10 @@
  * concurrency, missing config, and which customer emails go out (co-branded
  * Mode C emails and the partner's switches; checked from the mailer's log,
  * so it needs RESEND_API_KEY unset), the public quote data behind the
- * co-branded quote page, and the feedback raffle refusing partner quotes
- * (Mode B and C). Creates its own data and deletes it
+ * co-branded quote page, the feedback raffle refusing partner quotes
+ * (Mode B and C), and never-arrived handling (results for unposted expiry
+ * and cancellations before arrival, the setting off, no receiving after a
+ * result, the cancellation email). Creates its own data and deletes it
  * afterwards, restoring the trade-in counters.
  *
  * Usage: npx tsx scripts/check-mode-c.ts   (refuses to run unless .env.local
@@ -79,6 +81,9 @@ async function main() {
   const { v1QuoteStatus } = await import("../lib/v1-quote");
   const { sendRevisionReminder } = await import("../lib/revision-reminder");
   const { returningReason } = await import("../lib/returning-reason");
+  const { summarizeQuote } = await import("../lib/trade-in-ops");
+  const { render } = await import("@react-email/components");
+  const { default: QuoteExpiredEmail } = await import("../emails/quote-expired");
   const { NextRequest } = await import("next/server");
   const quoteRoute = await import("../app/api/quote/[id]/route");
   const feedbackRoute = await import("../app/api/feedback/[quoteId]/route");
@@ -323,6 +328,77 @@ async function main() {
     emailsSince();
     await transitionQuote(y.id, "expired", { actor: "system" });
     check("switched back on: closed email", sentTo(emailsSince(), "Your trade-in has been closed"));
+
+    // --- Never arrived (2d) ----------------------------------------------
+    const NOT_ACCEPTED = JSON.stringify({ approvedQuotePrice: 180, acceptGrading: "B", accepted: false });
+    const lastResult = (id: string) => stub.received.filter((rr) => rr.quoteId === id).at(-1);
+    const unposted = {
+      labelSentAt: new Date(Date.now() - 50 * 86400000),
+      postByAt: new Date(Date.now() - 40 * 86400000),
+    };
+    const na1 = await mkQuote();
+    await transitionQuote(na1.id, "accepted", { ...apiKey, payload: accept });
+    await na1.update(unposted);
+    emailsSince();
+    check("never arrived: unposted → expired", (await transitionQuote(na1.id, "expired", { actor: "system" })).ok);
+    check(
+      `never arrived: unposted → not accepted, original price + grade (${JSON.stringify(lastResult(na1.id)?.body)})`,
+      JSON.stringify(lastResult(na1.id)?.body) === NOT_ACCEPTED && lastResult(na1.id)?.signatureOk
+    );
+    check("never arrived: closed email", sentTo(emailsSince(), "Your trade-in has been closed"));
+    const late = await transitionQuote(na1.id, "received", { ...admin, payload: { imei: "356789012345675" } });
+    check("never arrived: late device can't be received", !late.ok && /final result/.test(late.message));
+    d = (await na1.get()).data()!;
+    check("never arrived: receive screen sees the result", !!summarizeQuote(na1.id, d, new Map()).partnerResultSentAt);
+
+    const na2 = await mkQuote();
+    await transitionQuote(na2.id, "accepted", { ...apiKey, payload: accept });
+    emailsSince();
+    check("never arrived: customer asked to cancel", (await transitionQuote(na2.id, "cancelled", { ...admin, payload: { cancelReason: "customer_request" } })).ok);
+    check("never arrived: cancelled → not accepted", JSON.stringify(lastResult(na2.id)?.body) === NOT_ACCEPTED);
+    check("email: cancelled (customer request)", sentTo(emailsSince(), "Your trade-in has been cancelled"));
+
+    const na3 = await mkQuote();
+    await transitionQuote(na3.id, "accepted", { ...apiKey, payload: accept });
+    await transitionQuote(na3.id, "shipped", admin);
+    emailsSince();
+    check("never arrived: lost in transit", (await transitionQuote(na3.id, "cancelled", { ...admin, payload: { cancelReason: "lost_in_transit" } })).ok);
+    check("never arrived: lost → not accepted", JSON.stringify(lastResult(na3.id)?.body) === NOT_ACCEPTED);
+    check("email: cancelled (lost in transit)", sentTo(emailsSince(), "Your trade-in has been cancelled"));
+
+    const na4 = await mkQuote();
+    await transitionQuote(na4.id, "accepted", { ...apiKey, payload: accept });
+    emailsSince();
+    await transitionQuote(na4.id, "cancelled", { ...admin, payload: { cancelReason: "not_genuine" } });
+    check("never arrived: not genuine → not accepted", JSON.stringify(lastResult(na4.id)?.body) === NOT_ACCEPTED);
+    check("not genuine: no cancelled email", !emailsSince().some((l) => l.includes("has been cancelled")));
+
+    const na5 = await mkQuote();
+    await transitionQuote(na5.id, "cancelled", { ...admin, payload: { cancelReason: "not_genuine" } });
+    check("never accepted: no result", (await notificationsFor(na5.id)).length === 0);
+
+    await partnerRef.update({ neverArrivedResult: false });
+    const na6 = await mkQuote();
+    await transitionQuote(na6.id, "accepted", { ...apiKey, payload: accept });
+    await na6.update(unposted);
+    await transitionQuote(na6.id, "expired", { actor: "system" });
+    check("setting off: no result", (await notificationsFor(na6.id)).length === 0);
+    const lateOk = await transitionQuote(na6.id, "received", { ...admin, payload: { imei: "356789012345676" } });
+    check("setting off: late device can still be received", lateOk.ok && (await na6.get()).data()!.lateArrival === true);
+    await partnerRef.update({ neverArrivedResult: true });
+
+    const closedHtml = (partnerResultSent: boolean) =>
+      render(
+        QuoteExpiredEmail({
+          customerName: "Mode",
+          deviceName: "Test Phone",
+          tradeInRef: "TI-1",
+          brand: { name: "E2E Brand", logoUrl: null, supportEmail: "support@reflowhub.com", supportPhone: null },
+          partnerResultSent,
+        })
+      );
+    check("closed email: result sent → new trade-in or post back", (await closedHtml(true)).includes("arrange a new trade-in"));
+    check("closed email: no result → unchanged wording", (await closedHtml(false)).includes("sort it out"));
 
     // --- Missing config -------------------------------------------------
     await partnerRef.update({ "resultWebhook.secretEnv": "MODE_C_E2E_UNSET_SECRET" });

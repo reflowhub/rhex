@@ -34,10 +34,15 @@ interface QuoteRow {
   acceptedAt: string | null;
   labelSentAt: string | null;
   expectedByAt: string | null;
+  partnerMode: string | null;
+  partnerName: string | null;
 }
 
 interface AwaitingRow extends QuoteRow {
   waitingDays: number | null;
+  /** Mode C: when the label becomes overdue (end of the next business day) */
+  labelDueAt: string | null;
+  labelOverdue: boolean;
 }
 
 interface OverdueRow extends QuoteRow {
@@ -78,6 +83,17 @@ function formatDate(iso: string | null): string {
     day: "numeric",
     month: "short",
     year: "numeric",
+  });
+}
+
+/** The business day a Mode C label is due, e.g. "Tue 6 Oct" (Sydney time). */
+function formatDueDay(dueAt: string): string {
+  // dueAt is the midnight that ends the due day
+  return new Date(new Date(dueAt).getTime() - 1).toLocaleDateString("en-AU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "Australia/Sydney",
   });
 }
 
@@ -197,6 +213,7 @@ export default function TradeInOpsPage() {
   ];
 
   const openQuote = (id: string) => router.push(`/admin/quotes/${id}`);
+  const awaitingOverdue = queues?.awaitingLabel.filter((q) => q.labelOverdue).length ?? 0;
 
   return (
     <div>
@@ -235,6 +252,11 @@ export default function TradeInOpsPage() {
             )}
           >
             {t.label} ({t.count})
+            {t.key === "awaiting" && awaitingOverdue > 0 && (
+              <span className={cn("ml-1", tab !== t.key && "text-destructive")}>
+                · {awaitingOverdue} overdue
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -255,8 +277,13 @@ export default function TradeInOpsPage() {
             <>
               <div className="flex items-center justify-between border-b px-4 py-3">
                 <p className="text-sm text-muted-foreground">
-                  Oldest first. Create the label in the AusPost portal, then
-                  upload it on the quote.{" "}
+                  Overdue partner labels first, then oldest first. Create the
+                  label in the AusPost portal, then upload it on the quote.
+                  {awaitingOverdue > 0 && (
+                    <span className="font-medium text-destructive">
+                      {" "}{awaitingOverdue} partner label{awaitingOverdue === 1 ? " is" : "s are"} overdue.
+                    </span>
+                  )}{" "}
                   <HelpLink page="trade-ins/clear-not-genuine" label="Spotting fake acceptances" />
                 </p>
                 <Button
@@ -277,6 +304,7 @@ export default function TradeInOpsPage() {
                     <TableHead>Device</TableHead>
                     <TableHead>Accepted</TableHead>
                     <TableHead>Waiting</TableHead>
+                    <TableHead>Label due</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -293,6 +321,11 @@ export default function TradeInOpsPage() {
                       </TableCell>
                       <TableCell className="font-mono text-xs">
                         {q.tradeInRef ?? q.id.slice(0, 8)}
+                        {q.partnerMode === "C" && (
+                          <Badge variant="outline" className="ml-2 font-sans">
+                            {q.partnerName ?? "Partner"}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div>{q.customerName ?? "—"}</div>
@@ -304,6 +337,13 @@ export default function TradeInOpsPage() {
                         className={cn((q.waitingDays ?? 0) >= 2 && "font-medium text-amber-700")}
                       >
                         {days(q.waitingDays)}
+                      </TableCell>
+                      <TableCell
+                        className={cn(q.labelOverdue && "font-medium text-destructive")}
+                      >
+                        {q.labelDueAt
+                          ? `${q.labelOverdue ? "Overdue · " : ""}${formatDueDay(q.labelDueAt)}`
+                          : "—"}
                       </TableCell>
                     </TableRow>
                   ))}

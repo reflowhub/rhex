@@ -1,6 +1,6 @@
 # Cancel a trade-in
 
-Cancel a trade-in when it should stop and we don't have the device. **Cancelling can't be undone, and the customer isn't emailed.**
+Cancel a trade-in when it should stop and we don't have the device. **Cancelling can't be undone.** The customer isn't emailed, except for partner trade-ins (see below).
 
 ## When you can cancel
 
@@ -33,4 +33,12 @@ The reason shows in the Workflow box, on the Quotes list and in the History box.
 
 - If an **Accepted** trade-in had a label, the unused label goes to [Labels to refund](refund-labels.md) automatically.
 - A **Shipped** label has already been scanned, so it can't be refunded.
-- Tell the customer yourself if they need to know. No email is sent.
+- Tell the customer yourself if they need to know. No email is sent, except for partner trade-ins.
+
+## Partner trade-ins (such as OPPO)
+
+When a partner trade-in is cancelled while it's **Accepted** or **Shipped**:
+
+- The partner is told the trade-in isn't going ahead, so it won't refund the customer. This happens if the partner's **Never arrived** setting is on (it is for OPPO). The Cancel dialog warns you when it applies.
+- The customer is emailed that the trade-in is cancelled when the reason is **Customer asked to cancel**, **Lost in transit** or **Other**, unless the partner has switched that email off. The Cancel dialog says whether an email will go. Fake and duplicate acceptances aren't emailed.
+- If the device turns up later, it can't be received against this trade-in. See "Parcels for closed partner trade-ins" in [Receive a parcel](receive-parcel.md).

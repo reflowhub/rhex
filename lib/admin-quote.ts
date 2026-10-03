@@ -1,5 +1,6 @@
 import { adminDb } from "@/lib/firebase-admin";
 import { serializeTimestamp } from "@/lib/serialize";
+import { customerEmailSwitches, neverArrivedResultOn } from "@/lib/partner-config";
 import { allowedTransitions, type QuoteData } from "@/lib/quote-transitions";
 
 // ---------------------------------------------------------------------------
@@ -95,10 +96,18 @@ export async function toAdminQuote(id: string, data: QuoteData) {
 
   const partnerId = (data.partnerId as string) ?? null;
   let partnerName: string | null = null;
+  // Mode C: what cancelling tells the partner and the customer (Cancel dialog)
+  let partnerNeverArrivedResult = false;
+  let partnerCancelledEmail = false;
   if (partnerId) {
     const partnerDoc = await adminDb.collection("partners").doc(partnerId).get();
     if (partnerDoc.exists) {
-      partnerName = (partnerDoc.data()?.name as string) ?? null;
+      const partner = partnerDoc.data();
+      partnerName = (partner?.name as string) ?? null;
+      if (data.partnerMode === "C") {
+        partnerNeverArrivedResult = neverArrivedResultOn(partner);
+        partnerCancelledEmail = customerEmailSwitches(partner).cancelled;
+      }
     }
   }
 
@@ -112,6 +121,8 @@ export async function toAdminQuote(id: string, data: QuoteData) {
     },
     partnerId,
     partnerName,
+    partnerNeverArrivedResult,
+    partnerCancelledEmail,
     sandbox: data.sandbox === true,
   };
   for (const field of PLAIN_FIELDS) quote[field] = data[field] ?? null;

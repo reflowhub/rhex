@@ -35,7 +35,21 @@ interface Match {
   imei: string | null;
   trackingNumber: string | null;
   expectedByAt: string | null;
+  partnerMode: string | null;
+  partnerName: string | null;
+  shippingAddress: string | null;
+  customerPhone: string | null;
+  /** Mode C: the partner already has the final result, so it can't be received */
+  partnerResultSentAt: string | null;
   matchedOn: string;
+}
+
+/**
+ * A partner trade-in that's over (the partner was sent the final result, or
+ * it was cancelled): the device can't be received against it.
+ */
+function isClosedForPartner(m: Match): boolean {
+  return m.partnerMode === "C" && (!!m.partnerResultSentAt || m.status === "cancelled");
 }
 
 interface UnmatchedParcel {
@@ -231,6 +245,16 @@ export default function ReceiveParcelPage() {
     if (res.ok) loadParcels();
   };
 
+  // A parcel for a closed partner trade-in: log it while ops contact the customer
+  const logClosedParcel = (m: Match) => {
+    const ref = m.tradeInRef ?? m.id.slice(0, 8);
+    setUmNote(
+      `Parcel for ${ref} (${m.partnerName ?? "partner"} trade-in closed, ${m.customerName ?? "customer"}). Waiting on the customer: new trade-in or post it back.`
+    );
+    setSelected(null);
+    setShowUnmatched(true);
+  };
+
   const imeiMismatch =
     !!selected?.imei && imei.length === 15 && imei !== selected.imei;
   const late =
@@ -320,8 +344,41 @@ export default function ReceiveParcelPage() {
         </div>
       )}
 
+      {/* A closed partner trade-in: don't receive */}
+      {selected && isClosedForPartner(selected) && (
+        <div className="mt-6 rounded-lg border border-destructive/40 bg-card p-6">
+          <MatchSummary match={selected} />
+          <p className="mt-4 flex items-center gap-2 font-medium text-destructive">
+            <AlertTriangle className="h-4 w-4" />
+            Don&apos;t receive this parcel against {selected.tradeInRef ?? "this trade-in"}.
+          </p>
+          <p className="mt-2 text-sm">
+            {selected.partnerResultSentAt
+              ? `${selected.partnerName ?? "The partner"} was told on ${formatDate(selected.partnerResultSentAt)} that this trade-in isn't going ahead, so it can't be completed.`
+              : "This trade-in was cancelled, so it can't be completed."}{" "}
+            Contact the customer and either start a new Reflow trade-in for
+            them (create and accept a quote, then receive the device against
+            it), or post the device back.
+          </p>
+          <div className="mt-3 rounded-md bg-muted p-3 text-sm">
+            <p className="font-medium">{selected.customerName ?? "No name"}</p>
+            {selected.shippingAddress && <p>{selected.shippingAddress}</p>}
+            <p className="text-muted-foreground">
+              {[selected.customerEmail, selected.customerPhone].filter(Boolean).join(" · ")}
+            </p>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Button onClick={() => logClosedParcel(selected)}>Log parcel to follow up</Button>
+            <Button variant="outline" onClick={() => setSelected(null)}>
+              Back
+            </Button>
+            <HelpLink page="trade-ins/receive-parcel" label="Parcels for closed trade-ins" />
+          </div>
+        </div>
+      )}
+
       {/* Receive form */}
-      {selected && (
+      {selected && !isClosedForPartner(selected) && (
         <form
           onSubmit={handleReceive}
           className="mt-6 rounded-lg border border-border bg-card p-6"
