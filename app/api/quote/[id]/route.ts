@@ -109,6 +109,10 @@ async function toPublicQuote(
   quote.hasLabel =
     typeof data.labelId === "string" &&
     (data.status === "accepted" || data.status === "shipped");
+  // Mode C: a label the partner made reached the customer from the partner
+  if (quote.hasLabel && modeC && data.labelProvidedBy === "partner") {
+    quote.labelFrom = (quote.partner as { name: string }).name;
+  }
   // {step, at} only: statusHistory reasons can hold internal notes
   quote.timeline = customerTimeline(data);
   quote.device = await getDeviceSummary(data.deviceId);

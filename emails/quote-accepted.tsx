@@ -61,11 +61,20 @@ export default function QuoteAcceptedEmail({
       )}
       {rhexLabel ? (
         <>
-          <Text style={styles.paragraph}>
-            We&apos;ll email your prepaid Australia Post label shortly.
-            Once we send it, you&apos;ll have <strong>14 days</strong> to
-            post your device.
-          </Text>
+          {brand ? (
+            // Mode C: the label may come from RHEX or the partner (OPPO.md, 2e)
+            <Text style={styles.paragraph}>
+              You&apos;ll receive your prepaid Australia Post label by email
+              shortly. Once it arrives, you&apos;ll have{" "}
+              <strong>14 days</strong> to post your device.
+            </Text>
+          ) : (
+            <Text style={styles.paragraph}>
+              We&apos;ll email your prepaid Australia Post label shortly.
+              Once we send it, you&apos;ll have <strong>14 days</strong> to
+              post your device.
+            </Text>
+          )}
           <Text style={styles.paragraph}>
             While you wait, get your device ready: pack it in a rigid box
             with bubble wrap or similar padding, back up your data, remove

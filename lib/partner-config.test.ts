@@ -10,6 +10,11 @@ import {
   parseResultWebhook,
   neverArrivedResultOn,
   parseNeverArrivedResult,
+  REFLOW_LABELS,
+  labelArrangementFor,
+  labelPaidBy,
+  parseLabelArrangement,
+  quoteLabelArrangement,
 } from "@/lib/partner-config";
 
 describe("parseResultWebhook", () => {
@@ -136,5 +141,47 @@ describe("never-arrived result setting", () => {
   it("must be on or off", () => {
     expect(parseNeverArrivedResult(false)).toBe(false);
     expect(() => parseNeverArrivedResult("no")).toThrow("on or off");
+  });
+});
+
+describe("shipping label terms", () => {
+  const partnerInbound = {
+    inbound: { providedBy: "partner", paidBy: "reflow" },
+    return: { providedBy: "reflow", paidBy: "reflow" },
+  } as const;
+
+  it("defaults to Reflow making and paying for every label", () => {
+    expect(labelArrangementFor(undefined)).toEqual(REFLOW_LABELS);
+    expect(labelArrangementFor({ labels: { inbound: { providedBy: "partner" } } })).toEqual({
+      inbound: { providedBy: "partner", paidBy: "reflow" },
+      return: { providedBy: "reflow", paidBy: "reflow" },
+    });
+    expect(quoteLabelArrangement({})).toEqual(REFLOW_LABELS);
+    expect(quoteLabelArrangement({ labelArrangement: partnerInbound })).toEqual(partnerInbound);
+  });
+
+  it("ignores stored values that aren't a party", () => {
+    expect(
+      labelArrangementFor({ labels: { inbound: { providedBy: "oppo", paidBy: 1 } } })
+    ).toEqual(REFLOW_LABELS);
+  });
+
+  it("charges the agreed payer, or whoever made a fallback label", () => {
+    const terms = { providedBy: "partner", paidBy: "reflow" } as const;
+    expect(labelPaidBy(terms, "partner")).toBe("reflow");
+    expect(labelPaidBy(terms, "reflow")).toBe("reflow");
+    const partnerPays = { providedBy: "partner", paidBy: "partner" } as const;
+    expect(labelPaidBy(partnerPays, "reflow")).toBe("reflow");
+    const reflowMakesPartnerPays = { providedBy: "reflow", paidBy: "partner" } as const;
+    expect(labelPaidBy(reflowMakesPartnerPays, "reflow")).toBe("partner");
+  });
+
+  it("parses admin settings for both directions", () => {
+    expect(parseLabelArrangement(partnerInbound)).toEqual(partnerInbound);
+    expect(() => parseLabelArrangement(undefined)).toThrow();
+    expect(() => parseLabelArrangement({ inbound: partnerInbound.inbound })).toThrow(/return/);
+    expect(() =>
+      parseLabelArrangement({ ...partnerInbound, return: { providedBy: "oppo", paidBy: "reflow" } })
+    ).toThrow(/Return labels/);
   });
 });

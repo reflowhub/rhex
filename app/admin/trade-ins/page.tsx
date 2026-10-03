@@ -43,6 +43,15 @@ interface AwaitingRow extends QuoteRow {
   /** Mode C: when the label becomes overdue (end of the next business day) */
   labelDueAt: string | null;
   labelOverdue: boolean;
+  /** Mode C: who makes the label (the partner, or Reflow) */
+  labelBy: "reflow" | "partner";
+}
+
+interface ReturnRow extends QuoteRow {
+  returningDays: number | null;
+  returnLabelBy: "reflow" | "partner";
+  /** The partner's return label has been uploaded */
+  returnLabelReady: boolean;
 }
 
 interface OverdueRow extends QuoteRow {
@@ -65,15 +74,17 @@ interface RefundRow {
 interface Queues {
   awaitingLabel: AwaitingRow[];
   overdue: OverdueRow[];
+  toReturn: ReturnRow[];
   labelsToRefund: RefundRow[];
 }
 
-type Tab = "awaiting" | "overdue" | "refunds";
+type Tab = "awaiting" | "overdue" | "returns" | "refunds";
 
 /** Help page for each queue (docs/admin-guide/trade-ins) */
 const TAB_HELP: Record<Tab, string> = {
   awaiting: "trade-ins/send-label",
   overdue: "trade-ins/overdue-parcel",
+  returns: "trade-ins/return-device",
   refunds: "trade-ins/refund-labels",
 };
 
@@ -116,7 +127,12 @@ export default function TradeInOpsPage() {
   // Open a queue directly from a link (/admin/trade-ins?tab=overdue)
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("tab");
-    if (requested === "awaiting" || requested === "overdue" || requested === "refunds") {
+    if (
+      requested === "awaiting" ||
+      requested === "overdue" ||
+      requested === "returns" ||
+      requested === "refunds"
+    ) {
       setTab(requested);
     }
   }, []);
@@ -209,6 +225,7 @@ export default function TradeInOpsPage() {
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: "awaiting", label: "Awaiting label", count: queues?.awaitingLabel.length ?? 0 },
     { key: "overdue", label: "Overdue", count: queues?.overdue.length ?? 0 },
+    { key: "returns", label: "To return", count: queues?.toReturn.length ?? 0 },
     { key: "refunds", label: "Labels to refund", count: queues?.labelsToRefund.length ?? 0 },
   ];
 
@@ -221,7 +238,8 @@ export default function TradeInOpsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Trade-in Ops</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Labels to send, parcels running late and labels to refund.
+            Labels to send, parcels running late, devices to return and
+            labels to refund.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -278,7 +296,9 @@ export default function TradeInOpsPage() {
               <div className="flex items-center justify-between border-b px-4 py-3">
                 <p className="text-sm text-muted-foreground">
                   Overdue partner labels first, then oldest first. Create the
-                  label in the AusPost portal, then upload it on the quote.
+                  label in the AusPost portal, then upload it on the quote. For
+                  rows marked as the partner&apos;s label, chase the partner
+                  if it&apos;s overdue.
                   {awaitingOverdue > 0 && (
                     <span className="font-medium text-destructive">
                       {" "}{awaitingOverdue} partner label{awaitingOverdue === 1 ? " is" : "s are"} overdue.
@@ -344,6 +364,11 @@ export default function TradeInOpsPage() {
                         {q.labelDueAt
                           ? `${q.labelOverdue ? "Overdue · " : ""}${formatDueDay(q.labelDueAt)}`
                           : "—"}
+                        {q.labelBy === "partner" && (
+                          <span className="block text-xs font-normal text-muted-foreground">
+                            {q.partnerName ?? "Partner"}&apos;s label
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -389,6 +414,59 @@ export default function TradeInOpsPage() {
                 ))}
               </TableBody>
             </Table>
+          )
+        ) : tab === "returns" ? (
+          queues.toReturn.length === 0 ? (
+            <Empty text="No devices are waiting to be returned." />
+          ) : (
+            <>
+              <p className="border-b px-4 py-3 text-sm text-muted-foreground">
+                Post each device back to the customer, then mark it returned on
+                the quote. Where the partner makes the return label, wait for
+                it and upload it on the quote first.
+              </p>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Reference</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Device</TableHead>
+                    <TableHead>Returning for</TableHead>
+                    <TableHead>Return label</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {queues.toReturn.map((q) => (
+                    <TableRow key={q.id} className="cursor-pointer" onClick={() => openQuote(q.id)}>
+                      <TableCell className="font-mono text-xs">
+                        {q.tradeInRef ?? q.id.slice(0, 8)}
+                        {q.partnerMode === "C" && (
+                          <Badge variant="outline" className="ml-2 font-sans">
+                            {q.partnerName ?? "Partner"}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>{q.customerName ?? "—"}</TableCell>
+                      <TableCell>{q.device}</TableCell>
+                      <TableCell>{days(q.returningDays)}</TableCell>
+                      <TableCell
+                        className={cn(
+                          q.returnLabelBy === "partner" &&
+                            !q.returnLabelReady &&
+                            "font-medium text-amber-700"
+                        )}
+                      >
+                        {q.returnLabelBy === "reflow"
+                          ? "Reflow makes it"
+                          : q.returnLabelReady
+                            ? `${q.partnerName ?? "Partner"}'s label ready`
+                            : `Waiting for ${q.partnerName ?? "partner"}`}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </>
           )
         ) : queues.labelsToRefund.length === 0 ? (
           <Empty text="No labels are waiting for a refund." />

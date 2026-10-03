@@ -72,6 +72,8 @@ interface QuoteData {
   tradeInRef?: string;
   trackingNumber?: string;
   hasLabel?: boolean;
+  /** Mode C: the partner made the label and emailed it (no download here) */
+  labelFrom?: string;
   labelSentAt?: string;
   postByAt?: string;
   shippedAt?: string;
@@ -481,8 +483,12 @@ export default function QuoteResultPage({
                 <p className="text-sm text-green-700">
                   {quote.status === "shipped"
                     ? "Thanks for posting your device. We'll let you know when it arrives."
+                    : quote.labelFrom
+                    ? `${quote.labelFrom} has emailed you a prepaid shipping label.`
                     : quote.hasLabel
                     ? "Your prepaid shipping label is ready below."
+                    : quote.partner
+                    ? "Your trade-in has been confirmed. You'll receive your prepaid shipping label by email shortly."
                     : "Your quote has been confirmed. We'll email your prepaid shipping label shortly."}
                 </p>
               </div>
@@ -1194,6 +1200,7 @@ export default function QuoteResultPage({
                 tradeInRef={quote.tradeInRef}
                 trackingNumber={quote.trackingNumber}
                 postByAt={quote.postByAt}
+                labelFrom={quote.labelFrom}
                 shippedAt={quote.status === "shipped" ? quote.shippedAt : undefined}
                 posting={posting}
                 onMarkPosted={handleMarkPosted}
@@ -1203,6 +1210,7 @@ export default function QuoteResultPage({
               <TradeInShippingInstructions
                 quoteId={quote.id}
                 tradeInRef={quote.tradeInRef}
+                retailer={!!quote.partner}
               />
             )}
 

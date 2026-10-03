@@ -43,8 +43,9 @@ export default function QuoteExpiredEmail({
       <Text style={styles.paragraph}>Hi {customerName},</Text>
       <Text style={styles.paragraph}>
         We haven&apos;t received your <strong>{deviceName}</strong>, so
-        we&apos;ve closed trade-in <strong>{tradeInRef}</strong> and
-        cancelled its shipping label.
+        we&apos;ve closed trade-in <strong>{tradeInRef}</strong>
+        {/* Mode C: the partner may have made the label (OPPO.md, 2e) */}
+        {brand ? "." : " and cancelled its shipping label."}
       </Text>
 
       <Section style={styles.callout}>
@@ -52,7 +53,9 @@ export default function QuoteExpiredEmail({
           <strong>Please don&apos;t use that label.</strong>
         </Text>
         <Text style={styles.calloutDetail}>
-          It has been cancelled and can&apos;t be used to send your device.
+          {brand
+            ? "This trade-in is closed, so it can't be used to send your device."
+            : "It has been cancelled and can't be used to send your device."}
         </Text>
       </Section>
 

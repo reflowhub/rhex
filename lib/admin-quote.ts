@@ -1,6 +1,10 @@
 import { adminDb } from "@/lib/firebase-admin";
 import { serializeTimestamp } from "@/lib/serialize";
-import { customerEmailSwitches, neverArrivedResultOn } from "@/lib/partner-config";
+import {
+  customerEmailSwitches,
+  neverArrivedResultOn,
+  quoteLabelArrangement,
+} from "@/lib/partner-config";
 import { allowedTransitions, type QuoteData } from "@/lib/quote-transitions";
 
 // ---------------------------------------------------------------------------
@@ -84,6 +88,8 @@ const PLAIN_FIELDS = [
   "carrier",
   "trackingNumber",
   "labelCostAUD",
+  "returnLabelId",
+  "returnLabelCostAUD",
   "marketingConsent",
 ] as const;
 
@@ -152,6 +158,14 @@ export async function toAdminQuote(id: string, data: QuoteData) {
       }
     : null;
   quote.allowedTransitions = allowedTransitions(data, "admin");
+
+  // Who makes and pays for this trade-in's labels (OPPO.md, 2e); labels
+  // from before these fields are Reflow's
+  quote.labelArrangement = quoteLabelArrangement(data);
+  quote.labelProvidedBy = data.labelId ? data.labelProvidedBy ?? "reflow" : null;
+  quote.labelPaidBy = data.labelId ? data.labelPaidBy ?? "reflow" : null;
+  quote.returnLabelProvidedBy = data.returnLabelId ? data.returnLabelProvidedBy ?? "reflow" : null;
+  quote.returnLabelPaidBy = data.returnLabelId ? data.returnLabelPaidBy ?? "reflow" : null;
 
   return quote;
 }

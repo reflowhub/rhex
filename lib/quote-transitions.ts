@@ -24,6 +24,13 @@ import {
 import { partnerResultFor, type PartnerResultBody } from "@/lib/partner-result";
 import { TRADEIN_TERMS_VERSION } from "@/lib/tradein-terms";
 import { formatAuAddress, parseAuAddress, type AuAddress } from "@/lib/au-address";
+import {
+  REFLOW_LABELS,
+  labelPaidBy,
+  quoteLabelArrangement,
+  type LabelArrangement,
+  type LabelTerms,
+} from "@/lib/partner-config";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,6 +52,14 @@ export interface TransitionContext {
   revisionExpiryDays?: number;
   /** Mode C: the partner's never-arrived setting (lib/partner-config.ts) */
   neverArrivedResult?: boolean;
+  /** Mode C: the partner's label settings, copied onto the quote at acceptance */
+  labelArrangement?: LabelArrangement;
+}
+
+/** A return label Reflow made, recorded when the device is marked returned. */
+export interface ReturnLabelPlan extends LabelTerms {
+  trackingNumber: string | null;
+  costAUD: number | null;
 }
 
 /** Work done after commit, only by the call that made the change. */
@@ -96,12 +111,18 @@ export type TransitionPlan =
       assignReference: boolean;
       /** Mode C: the final outcome to queue for the partner in the same transaction */
       partnerResult: PartnerResultBody | null;
+      /** A `shippingLabels` entry to create in the same transaction */
+      returnLabel: ReturnLabelPlan | null;
     }
   | { ok: false; code: TransitionErrorCode; message: string };
 
 type ApplyResult =
   | { error: string }
-  | { fields: Record<string, unknown>; effects?: SideEffect[] };
+  | {
+      fields: Record<string, unknown>;
+      effects?: SideEffect[];
+      returnLabel?: { trackingNumber: string | null; costAUD: number | null };
+    };
 
 interface Rule {
   from: QuoteStatus;
@@ -433,6 +454,8 @@ function applyAcceptModeC(q: QuoteData, ctx: TransitionContext): ApplyResult {
     shippingAddressParts: address.address,
     marketingConsent,
     marketingConsentAt: marketingConsent ? ctx.now : null,
+    // The trade-in keeps the label terms it was accepted under
+    labelArrangement: ctx.labelArrangement ?? REFLOW_LABELS,
   };
 
   if (ctx.actor !== "admin") {
@@ -578,15 +601,35 @@ function applyAdminReturn(q: QuoteData, ctx: TransitionContext): ApplyResult {
   return withModeCEmail({ fields: { returnReason: reason } }, q, "returning_email");
 }
 
-/** returning → returned: the customer is emailed, with the return tracking number if given. */
+/**
+ * returning → returned: the customer is emailed, with the return tracking
+ * number if given. A tracking number or cost records Reflow's return label;
+ * a label the partner made was recorded when staff uploaded it.
+ */
 function applyReturned(q: QuoteData, ctx: TransitionContext): ApplyResult {
-  const tracking = str(ctx.payload?.returnTrackingNumber);
+  if (typeof q.returnLabelId === "string") {
+    return withCustomerValue(
+      { fields: {}, effects: ["returned_email"] },
+      q,
+      "reverse_customer_value"
+    );
+  }
+  const p = ctx.payload ?? {};
+  const tracking = str(p.returnTrackingNumber);
+  const trackingNumber = tracking ? tracking.replace(/\s/g, "").toUpperCase() : null;
+  let costAUD: number | null = null;
+  if (p.returnLabelCostAUD !== undefined && p.returnLabelCostAUD !== null && p.returnLabelCostAUD !== "") {
+    costAUD = Number(p.returnLabelCostAUD);
+    if (!Number.isFinite(costAUD) || costAUD < 0) {
+      return { error: "Return label cost must be a positive number" };
+    }
+  }
   return withCustomerValue(
     {
-      fields: {
-        returnTrackingNumber: tracking ? tracking.replace(/\s/g, "").toUpperCase() : null,
-      },
+      fields: { returnTrackingNumber: trackingNumber },
       effects: ["returned_email"],
+      returnLabel:
+        trackingNumber || costAUD !== null ? { trackingNumber, costAUD } : undefined,
     },
     q,
     "reverse_customer_value"
@@ -1032,6 +1075,11 @@ export function planTransition(
     : null;
   if (partnerResult) effects = [...effects, "partner_result"];
 
+  const returnTerms = quoteLabelArrangement(q).return;
+  const returnLabel: ReturnLabelPlan | null = applied.returnLabel
+    ? { ...applied.returnLabel, providedBy: "reflow", paidBy: labelPaidBy(returnTerms, "reflow") }
+    : null;
+
   return {
     ok: true,
     from,
@@ -1041,5 +1089,6 @@ export function planTransition(
     effects,
     assignReference: to === "accepted" && !q.tradeInRef,
     partnerResult,
+    returnLabel,
   };
 }

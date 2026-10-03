@@ -886,6 +886,85 @@ describe("returning → returned", () => {
     const plan = planTransition(quote("returning"), "returned", ctx("admin"));
     if (!plan.ok) throw new Error(plan.message);
     expect(plan.update.returnTrackingNumber).toBeNull();
+    expect(plan.returnLabel).toBeNull();
+  });
+
+  it("records Reflow's return label with its tracking number and cost", () => {
+    const plan = planTransition(
+      quote("returning"),
+      "returned",
+      ctx("admin", { payload: { returnTrackingNumber: "33ab1234", returnLabelCostAUD: "12.50" } })
+    );
+    if (!plan.ok) throw new Error(plan.message);
+    expect(plan.returnLabel).toEqual({
+      trackingNumber: "33AB1234",
+      costAUD: 12.5,
+      providedBy: "reflow",
+      paidBy: "reflow",
+    });
+  });
+
+  it("records a cost without a tracking number", () => {
+    const plan = planTransition(
+      quote("returning"),
+      "returned",
+      ctx("admin", { payload: { returnLabelCostAUD: 9 } })
+    );
+    if (!plan.ok) throw new Error(plan.message);
+    expect(plan.returnLabel).toMatchObject({ trackingNumber: null, costAUD: 9 });
+  });
+
+  it("charges the partner for Reflow's return label when the partner pays", () => {
+    const plan = planTransition(
+      quote("returning", {
+        labelArrangement: {
+          inbound: { providedBy: "reflow", paidBy: "reflow" },
+          return: { providedBy: "reflow", paidBy: "partner" },
+        },
+      }),
+      "returned",
+      ctx("admin", { payload: { returnTrackingNumber: "33AB1234" } })
+    );
+    if (!plan.ok) throw new Error(plan.message);
+    expect(plan.returnLabel).toMatchObject({ providedBy: "reflow", paidBy: "partner" });
+  });
+
+  it("makes Reflow pay for its own label when the partner was meant to make it", () => {
+    const plan = planTransition(
+      quote("returning", {
+        labelArrangement: {
+          inbound: { providedBy: "reflow", paidBy: "reflow" },
+          return: { providedBy: "partner", paidBy: "partner" },
+        },
+      }),
+      "returned",
+      ctx("admin", { payload: { returnTrackingNumber: "33AB1234" } })
+    );
+    if (!plan.ok) throw new Error(plan.message);
+    expect(plan.returnLabel).toMatchObject({ providedBy: "reflow", paidBy: "reflow" });
+  });
+
+  it("uses the partner's uploaded return label as it is", () => {
+    const plan = planTransition(
+      quote("returning", { returnLabelId: "lbl1", returnTrackingNumber: "PARTNER123" }),
+      "returned",
+      ctx("admin", { payload: { returnTrackingNumber: "OTHER999", returnLabelCostAUD: 5 } })
+    );
+    if (!plan.ok) throw new Error(plan.message);
+    expect(plan.returnLabel).toBeNull();
+    expect(plan.update.returnTrackingNumber).toBeUndefined();
+    expect(plan.effects).toContain("returned_email");
+  });
+
+  it("rejects a negative or non-numeric cost", () => {
+    for (const cost of [-1, "abc"]) {
+      const plan = planTransition(
+        quote("returning"),
+        "returned",
+        ctx("admin", { payload: { returnLabelCostAUD: cost } })
+      );
+      expect(plan.ok).toBe(false);
+    }
   });
 });
 
@@ -1060,6 +1139,29 @@ describe("Mode C (RHEX buys; the partner refunds the customer)", () => {
       expect(plan.effects).toEqual(["link_customer", "accepted_email"]);
       expect(plan.assignReference).toBe(true);
       expect(plan.partnerResult).toBeNull();
+    });
+
+    it("keeps the partner's label terms it was accepted under", () => {
+      const labelArrangement = {
+        inbound: { providedBy: "partner", paidBy: "reflow" },
+        return: { providedBy: "reflow", paidBy: "reflow" },
+      } as const;
+      const plan = planTransition(
+        modeC("quoted"),
+        "accepted",
+        ctx("apiKey", { payload: ACCEPT, labelArrangement })
+      );
+      if (!plan.ok) throw new Error(plan.message);
+      expect(plan.update.labelArrangement).toEqual(labelArrangement);
+    });
+
+    it("records Reflow's labels when the partner has no label settings", () => {
+      const plan = accept(ACCEPT);
+      if (!plan.ok) throw new Error(plan.message);
+      expect(plan.update.labelArrangement).toEqual({
+        inbound: { providedBy: "reflow", paidBy: "reflow" },
+        return: { providedBy: "reflow", paidBy: "reflow" },
+      });
     });
 
     it("records marketing consent only when given", () => {

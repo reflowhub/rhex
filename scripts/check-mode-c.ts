@@ -10,8 +10,10 @@
  * co-branded quote page, the feedback raffle refusing partner quotes
  * (Mode B and C), and never-arrived handling (results for unposted expiry
  * and cancellations before arrival, the setting off, no receiving after a
- * result, the cancellation email). Creates its own data and deletes it
- * afterwards, restoring the trade-in counters.
+ * result, the cancellation email), and shipping labels (who makes and pays
+ * for inbound and return labels, the partner-label v1 endpoint, refunds,
+ * wording). Creates its own data and deletes it afterwards, restoring the
+ * trade-in counters.
  *
  * Usage: npx tsx scripts/check-mode-c.ts   (refuses to run unless .env.local
  * points at rhex-test; emails are skipped without RESEND_API_KEY)
@@ -84,6 +86,11 @@ async function main() {
   const { summarizeQuote } = await import("../lib/trade-in-ops");
   const { render } = await import("@react-email/components");
   const { default: QuoteExpiredEmail } = await import("../emails/quote-expired");
+  const { default: QuoteLabelReminderEmail } = await import("../emails/quote-label-reminder");
+  const { sendQuoteLabel, recordPartnerLabel, recordPartnerReturnLabel, sendLabelReminder } = await import("../lib/shipping-labels");
+  const { hashApiKey } = await import("../lib/api-key-auth");
+  const labelRoute = await import("../app/api/v1/quotes/[id]/label/route");
+  const customerLabelRoute = await import("../app/api/quote/[id]/label/route");
   const { NextRequest } = await import("next/server");
   const quoteRoute = await import("../app/api/quote/[id]/route");
   const feedbackRoute = await import("../app/api/feedback/[quoteId]/route");
@@ -400,6 +407,141 @@ async function main() {
     check("closed email: result sent → new trade-in or post back", (await closedHtml(true)).includes("arrange a new trade-in"));
     check("closed email: no result → unchanged wording", (await closedHtml(false)).includes("sort it out"));
 
+    // --- Shipping labels (2e) --------------------------------------------
+    const PDF = Buffer.from("%PDF-1.4\n% e2e label\n");
+    const labelDoc = async (id: string) => (await adminDb.collection("shippingLabels").doc(id).get()).data();
+    const rawKey = `rhx_e2e_${Date.now()}`;
+    const keyRef = await adminDb.collection("apiKeys").add({
+      keyHash: hashApiKey(rawKey), status: "active", partnerId: partnerRef.id, sandbox: false, createdAt: new Date(),
+    });
+    /** PUT /api/v1/quotes/{id}/label with the partner's key */
+    const putLabel = async (id: string, body: unknown) => {
+      const res = await labelRoute.PUT(
+        new NextRequest(`http://localhost/api/v1/quotes/${id}/label`, {
+          method: "PUT",
+          headers: { "x-api-key": rawKey, "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+        { params: Promise.resolve({ id }) }
+      );
+      return { status: res.status, body: await res.json() };
+    };
+    const customerDownload = async (id: string) =>
+      (await customerLabelRoute.GET(new NextRequest(`http://localhost/api/quote/${id}/label`), { params: Promise.resolve({ id }) })).status;
+
+    try {
+      // Reflow's labels (the default)
+      const l1 = await mkQuote();
+      await transitionQuote(l1.id, "accepted", { ...apiKey, payload: accept });
+      d = (await l1.get()).data()!;
+      check("labels: default terms are Reflow's", d.labelArrangement?.inbound?.providedBy === "reflow" && d.labelArrangement?.return?.paidBy === "reflow");
+      check("labels: partner can't record a label under Reflow's terms", (await putLabel(l1.id, { trackingNumber: "PARTNER00001" })).status === 403);
+      emailsSince();
+      const sent1 = await sendQuoteLabel(l1.id, { pdf: PDF, fileName: "l1.pdf", trackingNumber: "REFLOW00001", labelCostAUD: 11, admin: adminUser });
+      check("labels: Reflow label sent", sent1.ok);
+      check("labels: Reflow label emailed", sentTo(emailsSince(), "Your prepaid shipping label"));
+      let ld = sent1.ok ? await labelDoc(sent1.labelId) : undefined;
+      check(
+        `labels: Reflow label made and paid by Reflow (${ld?.direction}/${ld?.providedBy}/${ld?.paidBy})`,
+        ld?.direction === "inbound" && ld?.providedBy === "reflow" && ld?.paidBy === "reflow" && ld?.partnerId === partnerRef.id
+      );
+      await transitionQuote(l1.id, "cancelled", { ...admin, payload: { cancelReason: "customer_request" } });
+      ld = sent1.ok ? await labelDoc(sent1.labelId) : undefined;
+      check("labels: Reflow label queued for refund on cancel", ld?.refundState === "pending");
+
+      // The partner makes inbound labels and charges Reflow; it makes and pays for returns
+      await partnerRef.update({
+        labels: { inbound: { providedBy: "partner", paidBy: "reflow" }, return: { providedBy: "partner", paidBy: "partner" } },
+      });
+      const l2 = await mkQuote();
+      await transitionQuote(l2.id, "accepted", { ...apiKey, payload: accept });
+      d = (await l2.get()).data()!;
+      check("labels: partner terms kept on the quote", d.labelArrangement?.inbound?.providedBy === "partner" && d.labelArrangement?.return?.paidBy === "partner");
+      check("labels: bad tracking number refused", (await putLabel(l2.id, { trackingNumber: "x" })).status === 400);
+      emailsSince();
+      const put1 = await putLabel(l2.id, { trackingNumber: "ep 0000 1111 2222" });
+      check(`labels: partner records its label via v1 (${put1.status})`, put1.status === 200 && put1.body.trackingNumber === "EP000011112222" && !!put1.body.postByAt);
+      check("labels: no label email for a partner label", !emailsSince().some((l) => l.includes("prepaid shipping label")));
+      d = (await l2.get()).data()!;
+      ld = await labelDoc(d.labelId);
+      check(
+        `labels: partner label made by partner, paid by Reflow (${ld?.providedBy}/${ld?.paidBy})`,
+        ld?.providedBy === "partner" && ld?.paidBy === "reflow" && d.labelProvidedBy === "partner" && d.labelPaidBy === "reflow"
+      );
+      const put2 = await putLabel(l2.id, { trackingNumber: "EP000011112222" });
+      check("labels: same tracking number again changes nothing", put2.status === 200 && (await l2.get()).data()!.labelId === d.labelId);
+      check("labels: a different tracking number is refused", (await putLabel(l2.id, { trackingNumber: "EP999999999999" })).status === 409);
+      const pubL2 = await publicQuote(l2.id);
+      check(`public quote: label from the partner (${pubL2.labelFrom})`, pubL2.hasLabel === true && pubL2.labelFrom === "E2E Brand");
+      check("customer can't download a partner label", (await customerDownload(l2.id)) === 404);
+      await l2.update({ labelSentAt: new Date(Date.now() - 8 * 86400000), "remindersSent": {} });
+      check("labels: reminder still sent for a partner label", (await sendLabelReminder(l2.id)) === "day7");
+      check("email: label reminder", sentTo(emailsSince(), "Reminder: post your trade-in by"));
+      const reminderHtml = await render(QuoteLabelReminderEmail({
+        customerName: "Mode", deviceName: "Test Phone", tradeInRef: "TI-1", postBy: "1 November 2026", quoteId: "q", final: false,
+        brand: { name: "E2E Brand", logoUrl: null, supportEmail: "support@reflowhub.com", supportPhone: null }, labelFrom: "E2E Brand",
+      }));
+      check("reminder: names the partner's label, no download", reminderHtml.includes("E2E Brand emailed you") && !reminderHtml.includes("download your"));
+      // Terms changed later don't touch trade-ins already accepted
+      await partnerRef.update({ labels: {} });
+      check("labels: later settings change leaves the quote's terms", (await l2.get()).data()!.labelArrangement?.inbound?.providedBy === "partner");
+      await partnerRef.update({
+        labels: { inbound: { providedBy: "partner", paidBy: "reflow" }, return: { providedBy: "partner", paidBy: "partner" } },
+      });
+      await transitionQuote(l2.id, "cancelled", { ...admin, payload: { cancelReason: "customer_request" } });
+      check("labels: partner label never queued for refund", (await labelDoc(d.labelId))?.refundState === "none");
+
+      // Reflow's fallback label when the partner's doesn't come
+      const l3 = await mkQuote();
+      await transitionQuote(l3.id, "accepted", { ...apiKey, payload: accept });
+      const fb = await sendQuoteLabel(l3.id, { pdf: PDF, fileName: "l3.pdf", trackingNumber: "REFLOW00003", labelCostAUD: null, admin: adminUser });
+      ld = fb.ok ? await labelDoc(fb.labelId) : undefined;
+      check("labels: Reflow's fallback label is paid by Reflow", ld?.providedBy === "reflow" && ld?.paidBy === "reflow");
+      check("labels: partner can't overwrite it", (await putLabel(l3.id, { trackingNumber: "EP000033334444" })).status === 409);
+      const adminReplace = await recordPartnerLabel(l3.id, { trackingNumber: "EP000033334444", admin: adminUser, replaceLabelId: fb.ok ? fb.labelId : null });
+      check("labels: admin replaces it with the partner's", adminReplace.ok);
+      ld = fb.ok ? await labelDoc(fb.labelId) : undefined;
+      check("labels: replaced Reflow label queued for refund", ld?.status === "replaced" && ld?.refundState === "pending");
+
+      // Partner return label
+      await transitionQuote(l3.id, "received", { ...admin, payload: { imei: "356789012345677" } });
+      await transitionQuote(l3.id, "returning", { ...admin, reason: "Locked" });
+      const notReturning = await recordPartnerReturnLabel(l1.id, { pdf: PDF, fileName: "r.pdf", trackingNumber: "RET00001", labelCostAUD: null, admin: adminUser });
+      check("return label: only while returning", !notReturning.ok);
+      const ret = await recordPartnerReturnLabel(l3.id, { pdf: PDF, fileName: "r.pdf", trackingNumber: "RET00003", labelCostAUD: 14, admin: adminUser });
+      check("return label: partner's uploaded", ret.ok);
+      ld = ret.ok ? await labelDoc(ret.labelId) : undefined;
+      check(
+        `return label: made and paid by the partner (${ld?.direction}/${ld?.providedBy}/${ld?.paidBy})`,
+        ld?.direction === "return" && ld?.providedBy === "partner" && ld?.paidBy === "partner" && ld?.costAUD === 14
+      );
+      emailsSince();
+      check("return label: marked returned", (await transitionQuote(l3.id, "returned", { ...admin, payload: { returnTrackingNumber: "IGNORED" } })).ok);
+      d = (await l3.get()).data()!;
+      check("return label: partner's tracking kept", d.returnTrackingNumber === "RET00003" && d.returnLabelId === (ret.ok && ret.labelId));
+      check("email: returned with tracking", sentTo(emailsSince(), "Your device is on its way back"));
+      const retLabels = await adminDb.collection("shippingLabels").where("quoteId", "==", l3.id).get();
+      check("return label: no second label recorded", retLabels.docs.filter((x) => x.data().direction === "return").length === 1);
+
+      // Reflow return label with its cost (default terms)
+      await partnerRef.update({ labels: {} });
+      const l4 = await mkQuote();
+      await transitionQuote(l4.id, "accepted", { ...apiKey, payload: accept });
+      await transitionQuote(l4.id, "received", { ...admin, payload: { imei: "356789012345674" } });
+      await transitionQuote(l4.id, "returning", { ...admin, reason: "Locked" });
+      const reflowRet = await recordPartnerReturnLabel(l4.id, { pdf: PDF, fileName: "r.pdf", trackingNumber: "RET00004", labelCostAUD: null, admin: adminUser });
+      check("return label: partner upload refused under Reflow's terms", !reflowRet.ok);
+      check("return: marked returned with tracking and cost", (await transitionQuote(l4.id, "returned", { ...admin, payload: { returnTrackingNumber: "ret 0004", returnLabelCostAUD: "12.30" } })).ok);
+      d = (await l4.get()).data()!;
+      ld = d.returnLabelId ? await labelDoc(d.returnLabelId) : undefined;
+      check(
+        `return: Reflow return label recorded (${ld?.trackingNumber}, $${ld?.costAUD})`,
+        ld?.direction === "return" && ld?.providedBy === "reflow" && ld?.paidBy === "reflow" && ld?.trackingNumber === "RET0004" && ld?.costAUD === 12.3 && ld?.refundState === "none"
+      );
+    } finally {
+      await keyRef.delete();
+    }
+
     // --- Missing config -------------------------------------------------
     await partnerRef.update({ "resultWebhook.secretEnv": "MODE_C_E2E_UNSET_SECRET" });
     const m = await mkQuote();
@@ -425,7 +567,18 @@ async function main() {
     stub.close();
     const notes = await adminDb.collection(PARTNER_NOTIFICATIONS).where("partnerId", "==", partnerRef.id).get();
     const customers = await adminDb.collection("customers").where("email", "==", testEmail).get();
+    const labels = (
+      await Promise.all(
+        Array.from({ length: Math.ceil(createdQuotes.length / 30) }, (_, i) =>
+          adminDb.collection("shippingLabels").where("quoteId", "in", createdQuotes.slice(i * 30, i * 30 + 30)).get()
+        )
+      )
+    ).flatMap((snap) => snap.docs);
     const batch = adminDb.batch();
+    labels.forEach((doc) => {
+      batch.delete(doc.ref);
+      batch.delete(adminDb.collection("labelBlobs").doc(doc.id));
+    });
     createdQuotes.forEach((id) => batch.delete(adminDb.collection("quotes").doc(id)));
     notes.docs.forEach((doc) => batch.delete(doc.ref));
     customers.docs.forEach((doc) => batch.delete(doc.ref));
@@ -434,10 +587,12 @@ async function main() {
     counters.forEach((c, i) => (countersBefore[i] ? batch.set(c, countersBefore[i]!) : batch.delete(c)));
     await batch.commit();
     const audit = await adminDb.collection("quoteAuditLog").where("adminUid", "==", adminUser.uid).get();
+    const apiAudit = await adminDb.collection("quoteAuditLog").where("adminUid", "==", "apiKey").get();
     const auditBatch = adminDb.batch();
     audit.docs.forEach((doc) => auditBatch.delete(doc.ref));
+    apiAudit.docs.filter((doc) => createdQuotes.includes(doc.data().quoteId)).forEach((doc) => auditBatch.delete(doc.ref));
     await auditBatch.commit();
-    console.log(`cleaned up ${createdQuotes.length} quotes, ${notes.size} notifications, ${customers.size} customers`);
+    console.log(`cleaned up ${createdQuotes.length} quotes, ${notes.size} notifications, ${customers.size} customers, ${labels.length} labels`);
   }
 }
 

@@ -216,6 +216,87 @@ export function parseNeverArrivedResult(value: unknown): boolean {
   return value;
 }
 
+// ---------------------------------------------------------------------------
+// Mode C shipping labels (docs/partners/OPPO.md, 2e)
+// ---------------------------------------------------------------------------
+
+export const LABEL_PARTIES = ["reflow", "partner"] as const;
+export type LabelParty = (typeof LABEL_PARTIES)[number];
+export type LabelDirection = "inbound" | "return";
+
+/** Who makes a label and who pays for it. */
+export interface LabelTerms {
+  providedBy: LabelParty;
+  paidBy: LabelParty;
+}
+
+/** The partner's label terms for each direction. */
+export type LabelArrangement = Record<LabelDirection, LabelTerms>;
+
+/** Reflow makes and pays for every label: the default, and every non-partner quote. */
+export const REFLOW_LABELS: LabelArrangement = {
+  inbound: { providedBy: "reflow", paidBy: "reflow" },
+  return: { providedBy: "reflow", paidBy: "reflow" },
+};
+
+function isLabelParty(value: unknown): value is LabelParty {
+  return (LABEL_PARTIES as readonly unknown[]).includes(value);
+}
+
+/** Stored terms, with Reflow for anything unset. */
+function readTerms(value: unknown): LabelTerms {
+  const v = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+  return {
+    providedBy: isLabelParty(v.providedBy) ? v.providedBy : "reflow",
+    paidBy: isLabelParty(v.paidBy) ? v.paidBy : "reflow",
+  };
+}
+
+function readArrangement(value: unknown): LabelArrangement {
+  const v = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+  return { inbound: readTerms(v.inbound), return: readTerms(v.return) };
+}
+
+/** A partner doc's label settings (`labels`); unset means Reflow. */
+export function labelArrangementFor(
+  partner: Record<string, unknown> | undefined
+): LabelArrangement {
+  return readArrangement(partner?.labels);
+}
+
+/**
+ * The terms a quote was accepted under (`labelArrangement`, copied from the
+ * partner at acceptance). Quotes without one are Reflow's.
+ */
+export function quoteLabelArrangement(q: Record<string, unknown>): LabelArrangement {
+  return readArrangement(q.labelArrangement);
+}
+
+/**
+ * Who pays for a label: the agreed payer when the agreed party made it,
+ * otherwise whoever made it (e.g. Reflow's fallback label when the partner
+ * was meant to make it).
+ */
+export function labelPaidBy(terms: LabelTerms, providedBy: LabelParty): LabelParty {
+  return providedBy === terms.providedBy ? terms.paidBy : providedBy;
+}
+
+/** Parse the label settings sent by admin; throws with a message for the admin. */
+export function parseLabelArrangement(value: unknown): LabelArrangement {
+  if (!value || typeof value !== "object") throw new Error("Shipping labels must be set for inbound and return");
+  const v = value as Record<string, unknown>;
+  const parse = (direction: LabelDirection): LabelTerms => {
+    const t = v[direction];
+    if (!t || typeof t !== "object") throw new Error(`Set who makes and pays for ${direction} labels`);
+    const { providedBy, paidBy } = t as Record<string, unknown>;
+    if (!isLabelParty(providedBy) || !isLabelParty(paidBy)) {
+      throw new Error(`${direction === "inbound" ? "Inbound" : "Return"} labels must be made and paid by Reflow or the partner`);
+    }
+    return { providedBy, paidBy };
+  };
+  return { inbound: parse("inbound"), return: parse("return") };
+}
+
 /** Parse the switches sent by admin: booleans for known keys only. */
 export function parseCustomerEmails(value: unknown): Record<CustomerEmailSwitch, boolean> {
   if (!value || typeof value !== "object") throw new Error("Customer emails must be a set of switches");
