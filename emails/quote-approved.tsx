@@ -13,9 +13,10 @@ interface QuoteApprovedEmailProps {
 }
 
 /**
- * Mode C: replaces the "Payment sent" email. The partner refunds the
- * customer. Wording agreed in docs/partners/OPPO.md (2b); never shows the
- * partner's bonus amount.
+ * Mode C: replaces the "Payment sent" email. The partner makes the
+ * trade-in payment (a partial refund of the customer's order). Wording
+ * agreed in docs/partners/OPPO.md (2b, 2e); never shows the partner's
+ * bonus amount.
  */
 export default function QuoteApprovedEmail({
   customerName,
@@ -36,7 +37,8 @@ export default function QuoteApprovedEmail({
       <Section style={styles.callout}>
         <Text style={styles.calloutText}>
           Your trade-in value of <strong>{value}</strong> is approved.{" "}
-          {brand.name} will refund {value} to your original payment method.
+          {brand.name} will make a trade-in payment of {value} to the payment
+          method you used for your {brand.name} order.
           Any {brand.name} bonus credit is applied by {brand.name} under its
           promotion terms.
         </Text>

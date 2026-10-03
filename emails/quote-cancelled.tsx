@@ -58,8 +58,8 @@ export default function QuoteCancelledEmail({
         </Section>
       )}
       <Text style={styles.paragraph}>
-        This trade-in won&apos;t go ahead, and {brand.name} won&apos;t refund a
-        trade-in value for it.
+        This trade-in won&apos;t go ahead, and {brand.name} won&apos;t make a
+        trade-in payment for it.
       </Text>
       <Text style={styles.paragraph}>
         {lostInTransit

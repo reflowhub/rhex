@@ -106,7 +106,7 @@ interface QuoteData {
   revisionExpiresAt?: string;
   revisionRejectedAt?: string;
   revisionAutoExpired?: boolean;
-  /** Mode C only: the partner's brand. The partner refunds the customer. */
+  /** Mode C only: the partner's brand. The partner makes the trade-in payment. */
   partner?: PartnerBrand;
 }
 
@@ -357,8 +357,8 @@ export default function QuoteResultPage({
     }
   };
 
-  // Mode C: co-branded; the partner accepts at checkout and refunds the
-  // customer, so no accept form, payout details or links to /sell
+  // Mode C: co-branded; the partner accepts at checkout and makes the
+  // trade-in payment, so no accept form, payout details or links to /sell
   const partner = quote?.partner ?? null;
 
   // Only an open quote can be accepted
@@ -580,15 +580,16 @@ export default function QuoteResultPage({
 
             {partner ? (
               <p className="text-xs text-amber-600 mb-4">
-                If you accept, {partner.name} will refund $
+                If you accept, {partner.name} will make a trade-in payment of $
                 {payableAmount(quote).amount.toFixed(2)}{" "}
-                {payableAmount(quote).currency} to your original payment
-                method once your trade-in is approved. If you decline
+                {payableAmount(quote).currency} to the payment method you used
+                for your {partner.name} order once your trade-in is approved.
+                If you decline
                 {quote.revisionExpiresAt
                   ? `, or we don't hear from you by ${formatCustomerDate(quote.revisionExpiresAt)}`
                   : ""}
                 , we&apos;ll post your device back to you at no cost and{" "}
-                {partner.name} won&apos;t refund a trade-in value.
+                {partner.name} won&apos;t make a trade-in payment.
               </p>
             ) : (
               quote.revisionExpiresAt && (
@@ -649,7 +650,7 @@ export default function QuoteResultPage({
                         }[returningReason(quote)]
                       }{" "}
                       This trade-in won&apos;t go ahead, and {partner.name}{" "}
-                      won&apos;t refund a trade-in value for it. We&apos;ll
+                      won&apos;t make a trade-in payment for it. We&apos;ll
                       email you the tracking number once it&apos;s on its way.
                     </>
                   ) : (
@@ -715,7 +716,7 @@ export default function QuoteResultPage({
           </div>
         )}
 
-        {/* Mode C paid — terminal: approved, the partner refunds. Wording
+        {/* Mode C paid — terminal: approved, the partner pays. Wording
             agreed in docs/partners/OPPO.md (2b); never shows bonus amounts. */}
         {quote.status === "paid" && partner && (
           <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4">
@@ -726,10 +727,10 @@ export default function QuoteResultPage({
                 <p className="text-sm text-green-700">
                   Your trade-in value of ${payableAmount(quote).amount.toFixed(2)}{" "}
                   {payableAmount(quote).currency} is approved.{" "}
-                  {partner.name} will refund $
+                  {partner.name} will make a trade-in payment of $
                   {payableAmount(quote).amount.toFixed(2)}{" "}
-                  {payableAmount(quote).currency} to your original payment
-                  method. Any {partner.name} bonus credit is applied by{" "}
+                  {payableAmount(quote).currency} to the payment method you
+                  used for your {partner.name} order. Any {partner.name} bonus credit is applied by{" "}
                   {partner.name} under its promotion terms.
                 </p>
               </div>

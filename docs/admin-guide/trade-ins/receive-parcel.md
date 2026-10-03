@@ -28,7 +28,7 @@ Sometimes a parcel arrives for a partner trade-in (such as OPPO) that has alread
 
 1. Click **Log parcel to follow up**. The note is filled in for you; add a photo if it helps, then click **Log Parcel**. Keep the device somewhere separate and labelled.
 2. Contact the customer. Either:
-   - **Start a new Reflow trade-in** for them: [create and accept a quote](create-and-accept.md) at today's price, with their payout details. Then receive the device against the new quote (**Mark Received** on the quote page). Reflow pays them directly; there's no partner refund or bonus.
+   - **Start a new Reflow trade-in** for them: [create and accept a quote](create-and-accept.md) at today's price, with their payout details. Then receive the device against the new quote (**Mark Received** on the quote page). Reflow pays them directly; there's no partner trade-in payment or bonus.
    - **Post it back** to the address shown.
 3. [Resolve the logged parcel](unmatched-parcel.md) with what happened, for example "New trade-in TI-1200" or "Posted back, tracking 33ABC…".
 

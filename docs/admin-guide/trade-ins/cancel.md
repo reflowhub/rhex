@@ -39,6 +39,6 @@ The reason shows in the Workflow box, on the Quotes list and in the History box.
 
 When a partner trade-in is cancelled while it's **Accepted** or **Shipped**:
 
-- The partner is told the trade-in isn't going ahead, so it won't refund the customer. This happens if the partner's **Never arrived** setting is on (it is for OPPO). The Cancel dialog warns you when it applies.
+- The partner is told the trade-in isn't going ahead, so it won't make the customer a trade-in payment. This happens if the partner's **Never arrived** setting is on (it is for OPPO). The Cancel dialog warns you when it applies.
 - The customer is emailed that the trade-in is cancelled when the reason is **Customer asked to cancel**, **Lost in transit** or **Other**, unless the partner has switched that email off. The Cancel dialog says whether an email will go. Fake and duplicate acceptances aren't emailed.
 - If the device turns up later, it can't be received against this trade-in. See "Parcels for closed partner trade-ins" in [Receive a parcel](receive-parcel.md).

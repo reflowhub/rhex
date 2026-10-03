@@ -37,7 +37,8 @@ export default function QuoteReceivedEmail({
         <Text style={styles.calloutText}>
           If it matches your trade-in, your trade-in value of{" "}
           <strong>${quotePrice.toFixed(2)} {currency}</strong> is approved and{" "}
-          {brand.name} refunds it to your original payment method.
+          {brand.name} makes the trade-in payment to the payment method you
+          used for your {brand.name} order.
         </Text>
         <Text style={styles.calloutDetail}>
           If it doesn&apos;t, we&apos;ll email you a revised offer to accept or

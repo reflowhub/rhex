@@ -636,7 +636,7 @@ export default function QuoteDetailPage() {
   };
 
   const handleAccept = async () => {
-    // Mode C: split name and no payout details (the partner refunds the customer)
+    // Mode C: split name and no payout details (the partner makes the trade-in payment)
     const {
       customerName,
       customerFirstName,
@@ -1095,7 +1095,7 @@ export default function QuoteDetailPage() {
                   : quote.partnerMode === "B"
                   ? "Mode B (Direct)"
                   : quote.partnerMode === "C"
-                  ? "Mode C (Retailer: partner refunds the customer)"
+                  ? "Mode C (Retailer: partner makes the trade-in payment)"
                   : quote.partnerMode || "\u2014"}
               </dd>
             </div>
@@ -1521,8 +1521,8 @@ export default function QuoteDetailPage() {
             <div className="flex items-start gap-2 text-emerald-600">
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
               <span>
-                Trade-in approved — {quote.partnerName || "the partner"} refunds
-                the customer.
+                Trade-in approved — {quote.partnerName || "the partner"} makes
+                the trade-in payment to the customer.
                 {quote.settlement && (
                   <span className="block text-muted-foreground">
                     {formatWithNZD(quote.settlement, quote.settlement.amountNZD)}
@@ -1957,7 +1957,8 @@ export default function QuoteDetailPage() {
                 <DialogDescription>
                   Approving sends {quote.partnerName || "the partner"} the final
                   result (accepted, amount and grade), and{" "}
-                  {quote.partnerName || "the partner"} refunds the customer. RHEX
+                  {quote.partnerName || "the partner"} makes the trade-in payment
+                  to the customer. RHEX
                   doesn&apos;t pay anyone directly. Check any holds and the data
                   wipe first: this can&apos;t be undone.
                 </DialogDescription>
@@ -2004,7 +2005,7 @@ export default function QuoteDetailPage() {
                 )}
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">
-                    {quote.partnerMode === "C" ? "Refunded by" : "Pay to"}
+                    {quote.partnerMode === "C" ? "Trade-in payment by" : "Pay to"}
                   </dt>
                   <dd className="text-right">
                     {quote.partnerMode === "C"
@@ -2143,7 +2144,7 @@ export default function QuoteDetailPage() {
             <DialogTitle>Accept Quote</DialogTitle>
             <DialogDescription>
               {quote.partnerMode === "C"
-                ? "Confirm the customer's contact details. The partner refunds the customer, so no payout details are needed."
+                ? "Confirm the customer's contact details. The partner makes the trade-in payment, so no payout details are needed."
                 : "Confirm the customer's contact and payout details."}{" "}
               No email is sent for admin acceptances.{" "}
               <HelpLink page="trade-ins/create-and-accept" />
