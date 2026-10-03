@@ -90,6 +90,7 @@ interface PartnerFormData {
   currency: "AUD" | "NZD";
   modeA: boolean;
   modeB: boolean;
+  modeC: boolean;
   status: string;
   commissionModel: string;
   commissionPercent: number;
@@ -120,6 +121,7 @@ const EMPTY_FORM: PartnerFormData = {
   currency: "AUD",
   modeA: true,
   modeB: false,
+  modeC: false,
   status: "active",
   commissionModel: "percentage",
   commissionPercent: 5,
@@ -255,7 +257,7 @@ export default function PartnersPage() {
     formData.code.trim().length >= 3 &&
     formData.contactEmail.trim() !== "" &&
     formData.password.length >= 6 &&
-    (formData.modeA || formData.modeB);
+    (formData.modeA || formData.modeB || formData.modeC);
 
   const handleAdd = async () => {
     if (!isFormValid) return;
@@ -265,6 +267,7 @@ export default function PartnersPage() {
     const modes: string[] = [];
     if (formData.modeA) modes.push("A");
     if (formData.modeB) modes.push("B");
+    if (formData.modeC) modes.push("C");
 
     try {
       const res = await fetch("/api/admin/partners", {
@@ -281,7 +284,8 @@ export default function PartnersPage() {
           commissionModel: formData.commissionModel,
           commissionPercent: formData.commissionPercent,
           commissionFlat: formData.commissionFlat,
-          partnerRateDiscount: formData.partnerRateDiscount,
+          // Only Mode B sets a discount; Mode C defaults to the public price
+          partnerRateDiscount: formData.modeB ? formData.partnerRateDiscount : undefined,
           payoutFrequency: formData.payoutFrequency,
           contactPerson: formData.contactPerson.trim() || null,
           contactPhone: formData.contactPhone.trim() || null,
@@ -807,8 +811,28 @@ export default function PartnersPage() {
                     <span className="text-muted-foreground">(Dealer)</span>
                   </span>
                 </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={formData.modeC}
+                    onChange={(e) =>
+                      handleFormChange("modeC", e.target.checked)
+                    }
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  <span>
+                    Mode C{" "}
+                    <span className="text-muted-foreground">(Retailer)</span>
+                  </span>
+                </label>
               </div>
-              {!formData.modeA && !formData.modeB && (
+              {formData.modeC && (
+                <p className="text-xs text-muted-foreground">
+                  Retailer settings (result URL, customer emails, shipping
+                  labels) are on the partner&apos;s page once it&apos;s created.
+                </p>
+              )}
+              {!formData.modeA && !formData.modeB && !formData.modeC && (
                 <p className="text-xs text-destructive">
                   At least one mode is required
                 </p>
