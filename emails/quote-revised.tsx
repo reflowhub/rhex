@@ -86,12 +86,12 @@ export default function QuoteRevisedEmail({
             <strong>{expiresAt}</strong>.
           </Text>
           <Text style={styles.paragraph}>
-            If you accept, {brand.name} will refund{" "}
-            <strong>${revisedPrice.toFixed(2)} {currency}</strong> to your
-            original payment method once your trade-in is approved. If you
-            decline, or we don&apos;t hear from you by then, we&apos;ll post
-            your device back to you at no cost and {brand.name} won&apos;t
-            refund a trade-in value.
+            If you accept, {brand.name} will make a trade-in payment of{" "}
+            <strong>${revisedPrice.toFixed(2)} {currency}</strong> to the
+            payment method you used for your {brand.name} order once your
+            trade-in is approved. If you decline, or we don&apos;t hear from
+            you by then, we&apos;ll post your device back to you at no cost
+            and {brand.name} won&apos;t make a trade-in payment.
           </Text>
         </>
       ) : (

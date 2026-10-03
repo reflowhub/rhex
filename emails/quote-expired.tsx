@@ -50,7 +50,9 @@ export default function QuoteExpiredEmail({
 
       <Section style={styles.callout}>
         <Text style={styles.calloutText}>
-          <strong>Please don&apos;t use that label.</strong>
+          <strong>
+            {brand ? "Please don't use the shipping label." : "Please don't use that label."}
+          </strong>
         </Text>
         <Text style={styles.calloutDetail}>
           {brand
@@ -63,7 +65,7 @@ export default function QuoteExpiredEmail({
         <>
           <Text style={styles.paragraph}>
             As we didn&apos;t receive your device, this trade-in won&apos;t go
-            ahead and {brand.name} won&apos;t refund a trade-in value for it.
+            ahead and {brand.name} won&apos;t make a trade-in payment for it.
           </Text>
           <Text style={styles.paragraph}>
             {partnerResultSent

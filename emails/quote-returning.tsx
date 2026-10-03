@@ -46,7 +46,7 @@ export default function QuoteReturningEmail({
       </Text>
       <Text style={styles.paragraph}>
         Trade-in <strong>{tradeInRef}</strong> won&apos;t go ahead, and{" "}
-        {brand.name} won&apos;t refund a trade-in value for it.
+        {brand.name} won&apos;t make a trade-in payment for it.
       </Text>
       <Text style={styles.paragraph}>
         We&apos;ll email you the tracking number once your device is on its

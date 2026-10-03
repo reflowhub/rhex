@@ -97,7 +97,7 @@ async function toPublicQuote(
     if (data[field]) quote[field] = serializeTimestamp(data[field]);
   }
   if (modeC) {
-    // The partner refunds the customer: no payout details, even stray ones
+    // The partner makes the trade-in payment: no payout details, even stray ones
     delete quote.paymentMethod;
     quote.partner = await getPublicPartner(data.partnerId);
   } else {

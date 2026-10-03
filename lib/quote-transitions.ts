@@ -192,7 +192,8 @@ export function isModeB(q: QuoteData): boolean {
 
 /**
  * Mode C: RHEX buys the device from the partner's customer; the partner
- * refunds the customer and receives the final result (docs/PARTNERSHIP.md).
+ * makes the trade-in payment (a partial refund of the customer's order)
+ * and receives the final result (docs/PARTNERSHIP.md).
  */
 export function isModeC(q: QuoteData): boolean {
   return q.partnerMode === "C";
@@ -400,7 +401,7 @@ function applyAccept(q: QuoteData, ctx: TransitionContext): ApplyResult {
 /**
  * Mode C acceptance, sent by the partner at checkout: the customer's contact
  * details, AU address and consent to RHEX's trade-in terms. RHEX is the
- * buyer but the partner refunds the customer, so payout details are refused.
+ * buyer but the partner makes the trade-in payment, so payout details are refused.
  * Admins may accept using details already on the quote, without consent.
  */
 function applyAcceptModeC(q: QuoteData, ctx: TransitionContext): ApplyResult {
@@ -408,7 +409,7 @@ function applyAcceptModeC(q: QuoteData, ctx: TransitionContext): ApplyResult {
   if (hasPaymentFields(p)) {
     return {
       error:
-        "Payment details aren't accepted for this quote: the partner refunds the customer",
+        "Payment details aren't accepted for this quote: the partner makes the trade-in payment to the customer",
     };
   }
 
@@ -907,7 +908,7 @@ export const TRANSITIONS: readonly Rule[] = [
         ? null
         : "Payout details are missing",
     apply: (q, ctx) =>
-      // Mode C: approved; the partner refunds the customer (partner_result)
+      // Mode C: approved; the partner makes the trade-in payment (partner_result)
       isModeC(q)
         ? {
             fields: {

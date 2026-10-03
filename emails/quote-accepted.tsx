@@ -55,8 +55,9 @@ export default function QuoteAcceptedEmail({
         <Text style={styles.paragraph}>
           Reflow Hub handles {brand.name}&apos;s trade-ins. We buy your device
           under the Trade-In Terms &amp; Conditions you agreed to at checkout,
-          and once we&apos;ve received and checked it, {brand.name} refunds
-          the trade-in value to your original payment method.
+          and once we&apos;ve received and checked it, {brand.name} makes your
+          trade-in payment to the payment method you used for your{" "}
+          {brand.name} order.
         </Text>
       )}
       {rhexLabel ? (
