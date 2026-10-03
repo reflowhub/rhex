@@ -30,7 +30,7 @@ Finishing up:
 ## The screens
 
 - **Quotes** lists every quote. Filter by status, or search by customer name, email or TI- reference. Click a row to open the quote. Most actions happen on the quote page.
-- **Trade-in Ops** has three work queues: **Awaiting label**, **Overdue** and **Labels to refund**. The **Receive Parcel** button opens the screen you use when a parcel arrives.
+- **Trade-in Ops** has four work queues: **Awaiting label**, **Overdue**, **To return** and **Labels to refund**. The **Receive Parcel** button opens the screen you use when a parcel arrives.
 
 On the quote page, the **Workflow** box shows where the trade-in is and only shows the buttons that make sense right now. If you're looking for a button that isn't there, the trade-in is probably at a different step. The **History** box shows every status change, who made it and any reason they gave.
 

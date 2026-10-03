@@ -14,9 +14,12 @@ const PACKING_STEPS = [
 export function TradeInShippingInstructions({
   quoteId,
   tradeInRef,
+  retailer = false,
 }: {
   quoteId: string;
   tradeInRef?: string;
+  /** Mode C: the label may come from RHEX or the retailer (OPPO.md, 2e) */
+  retailer?: boolean;
 }) {
   return (
     <>
@@ -27,8 +30,10 @@ export function TradeInShippingInstructions({
         </div>
         <div className="space-y-3 text-sm text-muted-foreground">
           <p>
-            We&apos;ll email your prepaid Australia Post label shortly. You
-            supply the packaging.
+            {retailer
+              ? "You'll receive your prepaid Australia Post label by email shortly."
+              : "We'll email your prepaid Australia Post label shortly."}{" "}
+            You supply the packaging.
           </p>
           <ul className="list-disc space-y-1 pl-5">
             {PACKING_STEPS.map((step) => (
@@ -49,7 +54,8 @@ export function TradeInShippingInstructions({
         <div className="flex items-center gap-2">
           <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            Once we send your label, you&apos;ll have{" "}
+            {retailer ? "Once your label arrives" : "Once we send your label"},
+            you&apos;ll have{" "}
             <span className="font-medium text-foreground">14 days</span> to
             post your device.
           </p>
@@ -65,6 +71,7 @@ export function TradeInLabelCard({
   tradeInRef,
   trackingNumber,
   postByAt,
+  labelFrom,
   shippedAt,
   posting,
   onMarkPosted,
@@ -73,6 +80,8 @@ export function TradeInLabelCard({
   tradeInRef?: string;
   trackingNumber?: string;
   postByAt?: string;
+  /** The retailer that emailed the customer its own label: no download here */
+  labelFrom?: string;
   /** Set once the customer (or RHEX) has marked the parcel as posted */
   shippedAt?: string;
   posting: boolean;
@@ -94,15 +103,21 @@ export function TradeInLabelCard({
           </p>
         )}
 
-        <Button asChild className="w-full" variant={shippedAt ? "outline" : "default"}>
-          <a href={`/api/quote/${quoteId}/label`}>
-            <Download className="mr-2 h-4 w-4" />
-            Download label (PDF)
-          </a>
-        </Button>
+        {!labelFrom && (
+          <Button asChild className="w-full" variant={shippedAt ? "outline" : "default"}>
+            <a href={`/api/quote/${quoteId}/label`}>
+              <Download className="mr-2 h-4 w-4" />
+              Download label (PDF)
+            </a>
+          </Button>
+        )}
 
         <ol className="list-decimal space-y-1 pl-5">
-          <li>Print the label and attach it to your box.</li>
+          <li>
+            {labelFrom
+              ? `Print the prepaid label ${labelFrom} emailed you and attach it to your box.`
+              : "Print the label and attach it to your box."}
+          </li>
           <li>
             Put a note inside the box with your reference{" "}
             <span className="font-mono font-medium text-foreground">

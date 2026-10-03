@@ -12,6 +12,8 @@ interface QuoteLabelReminderEmailProps {
   final: boolean;
   /** Mode C partner brand; null or unset for consumer emails */
   brand?: EmailBrand | null;
+  /** Mode C: the partner that emailed its own label (no download from RHEX) */
+  labelFrom?: string | null;
 }
 
 /** Day-7 and day-12 reminders to post the device (docs/TRADEIN-STATES-PLAN.md §3). */
@@ -23,6 +25,7 @@ export default function QuoteLabelReminderEmail({
   quoteId,
   final,
   brand = null,
+  labelFrom = null,
 }: QuoteLabelReminderEmailProps) {
   const quoteUrl = `https://rhex.app/sell/quote/${quoteId}`;
 
@@ -46,7 +49,7 @@ export default function QuoteLabelReminderEmail({
           : "A quick reminder: "}
         your <strong>{deviceName}</strong> (trade-in{" "}
         <strong>{tradeInRef}</strong>) needs to be posted with the prepaid
-        label we sent you.
+        label {labelFrom ? `${labelFrom} emailed you` : "we sent you"}.
       </Text>
 
       <Section style={styles.callout}>
@@ -60,8 +63,8 @@ export default function QuoteLabelReminderEmail({
 
       <Text style={styles.paragraph}>
         Pack it in a rigid box with padding, and put a note inside with
-        your reference <strong>{tradeInRef}</strong>. You can download your
-        label again from your trade-in page.
+        your reference <strong>{tradeInRef}</strong>.
+        {!labelFrom && " You can download your label again from your trade-in page."}
       </Text>
 
       <Section style={styles.buttonSection}>

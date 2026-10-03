@@ -8,6 +8,8 @@ import {
   PARTNER_MODES,
   customerEmailSwitches,
   neverArrivedResultOn,
+  labelArrangementFor,
+  parseLabelArrangement,
   parseCustomerEmails,
   parseEmailBrand,
   parseEmailList,
@@ -104,6 +106,7 @@ export async function GET(
       },
       customerEmails: customerEmailSwitches(data),
       neverArrivedResult: neverArrivedResultOn(data),
+      labels: labelArrangementFor(data),
       // Payment
       paymentMethod: data.paymentMethod ?? null,
       payIdPhone: data.payIdPhone ?? null,
@@ -209,6 +212,9 @@ export async function PUT(
       }
       if (body.neverArrivedResult !== undefined) {
         updateData.neverArrivedResult = parseNeverArrivedResult(body.neverArrivedResult);
+      }
+      if (body.labels !== undefined) {
+        updateData.labels = parseLabelArrangement(body.labels);
       }
     } catch (err) {
       return NextResponse.json(

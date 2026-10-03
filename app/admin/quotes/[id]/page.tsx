@@ -40,6 +40,7 @@ import {
   Download,
 } from "lucide-react";
 import { daysSince } from "@/lib/label-deadlines";
+import type { LabelArrangement, LabelParty } from "@/lib/partner-config";
 import {
   formatMoney,
   originalAmount,
@@ -160,6 +161,14 @@ interface Quote {
   trackingNumber?: string | null;
   labelCostAUD?: number | null;
   labelSentAt?: string | null;
+  /** Who makes and pays for this trade-in's labels (OPPO.md, 2e) */
+  labelArrangement?: LabelArrangement;
+  labelProvidedBy?: LabelParty | null;
+  labelPaidBy?: LabelParty | null;
+  returnLabelId?: string | null;
+  returnLabelProvidedBy?: LabelParty | null;
+  returnLabelPaidBy?: LabelParty | null;
+  returnLabelCostAUD?: number | null;
   postByAt?: string | null;
   expectedByAt?: string | null;
   payout?: {
@@ -191,6 +200,11 @@ interface Quote {
   } | null;
   statusHistory: StatusHistoryEntry[];
   allowedTransitions: QuoteStatus[];
+}
+
+/** "Reflow", or the partner's name, for who made or pays for a label. */
+function labelPartyName(party: LabelParty | null | undefined, partnerName: string): string {
+  return party === "partner" ? partnerName : "Reflow";
 }
 
 /** "$135.00 AUD ($146.00 NZD)", or just the NZD amount for NZD quotes. */
@@ -406,6 +420,16 @@ export default function QuoteDetailPage() {
   const [labelLoading, setLabelLoading] = useState(false);
   const [labelError, setLabelError] = useState<string | null>(null);
   const [labelFormKey, setLabelFormKey] = useState(0);
+  /** Who made the label being recorded; unset follows the trade-in's terms */
+  const [labelMaker, setLabelMaker] = useState<LabelParty | null>(null);
+
+  // ---- partner return label form state ------------------------------------
+  const [returnLabelFile, setReturnLabelFile] = useState<File | null>(null);
+  const [returnLabelTracking, setReturnLabelTracking] = useState("");
+  const [returnLabelCost, setReturnLabelCost] = useState("");
+  const [returnLabelLoading, setReturnLabelLoading] = useState(false);
+  const [returnLabelError, setReturnLabelError] = useState<string | null>(null);
+  const [returnLabelFormKey, setReturnLabelFormKey] = useState(0);
 
   // ---- mark paid dialog state ---------------------------------------------
   const [payOpen, setPayOpen] = useState(false);
@@ -413,6 +437,7 @@ export default function QuoteDetailPage() {
   // ---- mark returned dialog state -----------------------------------------
   const [returnedOpen, setReturnedOpen] = useState(false);
   const [returnTracking, setReturnTracking] = useState("");
+  const [returnCost, setReturnCost] = useState("");
 
   // ---- inspection dialog state --------------------------------------------
   const [inspectionOpen, setInspectionOpen] = useState(false);
@@ -476,12 +501,15 @@ export default function QuoteDetailPage() {
   // ---- send or replace the shipping label ---------------------------------
   const handleSendLabel = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quote || !labelFile) return;
+    if (!quote) return;
+    const maker = labelMaker ?? quote.labelArrangement?.inbound.providedBy ?? "reflow";
+    if (maker === "reflow" && !labelFile) return;
     setLabelLoading(true);
     setLabelError(null);
     try {
       const form = new FormData();
-      form.append("file", labelFile);
+      if (maker === "partner") form.append("providedBy", "partner");
+      else form.append("file", labelFile!);
       form.append("trackingNumber", labelTracking);
       form.append("labelCostAUD", labelCost);
       if (quote.labelId) form.append("replaceLabelId", quote.labelId);
@@ -498,11 +526,45 @@ export default function QuoteDetailPage() {
       setLabelFile(null);
       setLabelTracking("");
       setLabelCost("");
+      setLabelMaker(null);
       setLabelFormKey((k) => k + 1);
     } catch {
       setLabelError("Failed to send label");
     } finally {
       setLabelLoading(false);
+    }
+  };
+
+  // ---- upload the partner's return label ----------------------------------
+  const handleReturnLabel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quote || !returnLabelFile) return;
+    setReturnLabelLoading(true);
+    setReturnLabelError(null);
+    try {
+      const form = new FormData();
+      form.append("file", returnLabelFile);
+      form.append("trackingNumber", returnLabelTracking);
+      form.append("labelCostAUD", returnLabelCost);
+      if (quote.returnLabelId) form.append("replaceLabelId", quote.returnLabelId);
+      const res = await fetch(`/api/admin/quotes/${id}/return-label`, {
+        method: "POST",
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setReturnLabelError(data.error ?? "Failed to add return label");
+        return;
+      }
+      setQuote(data);
+      setReturnLabelFile(null);
+      setReturnLabelTracking("");
+      setReturnLabelCost("");
+      setReturnLabelFormKey((k) => k + 1);
+    } catch {
+      setReturnLabelError("Failed to add return label");
+    } finally {
+      setReturnLabelLoading(false);
     }
   };
 
@@ -677,6 +739,12 @@ export default function QuoteDetailPage() {
 
   const allowed = quote.allowedTransitions ?? [];
   const can = (target: QuoteStatus) => allowed.includes(target);
+
+  // Who makes this trade-in's labels (OPPO.md, 2e)
+  const partnerName = quote.partnerName || "The partner";
+  const partnerMakesLabel = quote.labelArrangement?.inbound.providedBy === "partner";
+  const partnerMakesReturnLabel = quote.labelArrangement?.return.providedBy === "partner";
+  const labelMakerNow: LabelParty = labelMaker ?? (partnerMakesLabel ? "partner" : "reflow");
   const deviceSummary = `${quote.device.make} ${quote.device.model} (${quote.device.storage})`;
   // Mode C cancellations before arrival (lib/quote-transitions.ts, OPPO.md 2d)
   const cancelBeforeArrival =
@@ -1061,7 +1129,9 @@ export default function QuoteDetailPage() {
                 <dd className="font-mono text-xs">{quote.trackingNumber}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">Sent</dt>
+                <dt className="text-muted-foreground">
+                  {quote.labelProvidedBy === "partner" ? "Recorded" : "Sent"}
+                </dt>
                 <dd>{formatDate(quote.labelSentAt)}</dd>
               </div>
               <div className="flex justify-between gap-4">
@@ -1081,33 +1151,54 @@ export default function QuoteDetailPage() {
                   {formatDate(quote.expectedByAt)}
                 </dd>
               </div>
+              {quote.partnerMode === "C" && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted-foreground">Made / paid by</dt>
+                  <dd>
+                    {labelPartyName(quote.labelProvidedBy, partnerName)} /{" "}
+                    {labelPartyName(quote.labelPaidBy, partnerName)}
+                  </dd>
+                </div>
+              )}
               {quote.labelCostAUD != null && (
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">Cost</dt>
                   <dd>${quote.labelCostAUD.toFixed(2)} AUD</dd>
                 </div>
               )}
-              {(quote.status === "accepted" || quote.status === "shipped") && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Label</dt>
-                  <dd>
-                    <a
-                      href={`/api/quote/${quote.id}/label`}
-                      className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      Download PDF
-                    </a>
-                  </dd>
-                </div>
-              )}
+              {(quote.status === "accepted" || quote.status === "shipped") &&
+                quote.labelProvidedBy !== "partner" && (
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-muted-foreground">Label</dt>
+                    <dd>
+                      <a
+                        href={`/api/quote/${quote.id}/label`}
+                        className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Download PDF
+                      </a>
+                    </dd>
+                  </div>
+                )}
             </dl>
           ) : (
             quote.acceptedAt && (
               <p className="text-sm text-amber-700">
-                Awaiting label for {daysSince(quote.acceptedAt)} day
-                {daysSince(quote.acceptedAt) === 1 ? "" : "s"}. Create it in
-                the AusPost portal, then upload it here.
+                {partnerMakesLabel ? (
+                  <>
+                    Waiting {daysSince(quote.acceptedAt)} day
+                    {daysSince(quote.acceptedAt) === 1 ? "" : "s"} for{" "}
+                    {partnerName}&apos;s label. Record its tracking number when
+                    {" "}{partnerName} sends it, or send a Reflow label instead.
+                  </>
+                ) : (
+                  <>
+                    Awaiting label for {daysSince(quote.acceptedAt)} day
+                    {daysSince(quote.acceptedAt) === 1 ? "" : "s"}. Create it in
+                    the AusPost portal, then upload it here.
+                  </>
+                )}
               </p>
             )
           )}
@@ -1118,15 +1209,38 @@ export default function QuoteDetailPage() {
               onSubmit={handleSendLabel}
               className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-[1fr_1fr_8rem_auto] sm:items-end"
             >
-              <div className="grid gap-1.5">
-                <Label htmlFor="label-file">Label PDF</Label>
-                <Input
-                  id="label-file"
-                  type="file"
-                  accept="application/pdf"
-                  onChange={(e) => setLabelFile(e.target.files?.[0] ?? null)}
-                />
-              </div>
+              {partnerMakesLabel && (
+                <div className="grid gap-1.5 sm:col-span-4">
+                  <Label htmlFor="label-maker">Label made by</Label>
+                  <Select
+                    value={labelMakerNow}
+                    onValueChange={(v) => setLabelMaker(v as LabelParty)}
+                  >
+                    <SelectTrigger id="label-maker" className="sm:w-80">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="partner">
+                        {partnerName} (record its tracking number)
+                      </SelectItem>
+                      <SelectItem value="reflow">Reflow (upload and email a label)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {labelMakerNow === "reflow" ? (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="label-file">Label PDF</Label>
+                  <Input
+                    id="label-file"
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => setLabelFile(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+              ) : (
+                <div />
+              )}
               <div className="grid gap-1.5">
                 <Label htmlFor="label-tracking">Tracking number</Label>
                 <Input
@@ -1150,18 +1264,134 @@ export default function QuoteDetailPage() {
               <Button
                 type="submit"
                 variant={quote.labelId ? "outline" : "default"}
-                disabled={labelLoading || !labelFile || !labelTracking.trim()}
+                disabled={
+                  labelLoading ||
+                  (labelMakerNow === "reflow" && !labelFile) ||
+                  !labelTracking.trim()
+                }
               >
                 {labelLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {quote.labelId ? "Replace Label" : "Send Label"}
+                {labelMakerNow === "partner"
+                  ? quote.labelId
+                    ? "Replace Label"
+                    : "Record Label"
+                  : quote.labelId
+                    ? "Replace Label"
+                    : "Send Label"}
               </Button>
               <p className="text-xs text-muted-foreground sm:col-span-4">
-                {quote.labelId
-                  ? "Replacing emails the new label, restarts the 14-day post-by window and queues the old label for a refund."
-                  : "The customer is emailed the label and has 14 days to post the device."}
+                {labelMakerNow === "partner"
+                  ? `${partnerName} sends the customer this label, so RHEX doesn't email it. The customer has 14 days from now to post the device.`
+                  : quote.labelId
+                    ? "Replacing emails the new label, restarts the 14-day post-by window and queues the old label for a refund."
+                    : "The customer is emailed the label and has 14 days to post the device."}
               </p>
               {labelError && (
                 <p className="text-sm text-destructive sm:col-span-4">{labelError}</p>
+              )}
+            </form>
+          )}
+        </div>
+      )}
+
+      {/* ---------------------------------------------------------------- */}
+      {/* 3d. Return Label                                                  */}
+      {/* ---------------------------------------------------------------- */}
+      {(quote.returnLabelId || (quote.status === "returning" && partnerMakesReturnLabel)) && (
+        <div className="mt-6 rounded-lg border border-border bg-card p-6">
+          <div className="mb-4 flex items-center gap-2">
+            <Truck className="h-5 w-5 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Return Label</h2>
+            <HelpLink page="trade-ins/return-device" className="ml-auto" />
+          </div>
+
+          {quote.returnLabelId ? (
+            <dl className="grid gap-3 text-sm sm:grid-cols-2">
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Tracking</dt>
+                <dd className="font-mono text-xs">{quote.returnTrackingNumber ?? "—"}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Made / paid by</dt>
+                <dd>
+                  {labelPartyName(quote.returnLabelProvidedBy, partnerName)} /{" "}
+                  {labelPartyName(quote.returnLabelPaidBy, partnerName)}
+                </dd>
+              </div>
+              {quote.returnLabelCostAUD != null && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted-foreground">Cost</dt>
+                  <dd>${quote.returnLabelCostAUD.toFixed(2)} AUD</dd>
+                </div>
+              )}
+              {quote.returnLabelProvidedBy === "partner" && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted-foreground">Label</dt>
+                  <dd>
+                    <a
+                      href={`/api/admin/trade-ins/labels/${quote.returnLabelId}`}
+                      className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Download PDF
+                    </a>
+                  </dd>
+                </div>
+              )}
+            </dl>
+          ) : (
+            <p className="text-sm text-amber-700">
+              {partnerName} makes the return label for this trade-in. Upload
+              the PDF and tracking number it sends, then print the label and
+              post the device back.
+            </p>
+          )}
+
+          {quote.status === "returning" && partnerMakesReturnLabel && (
+            <form
+              key={returnLabelFormKey}
+              onSubmit={handleReturnLabel}
+              className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-[1fr_1fr_8rem_auto] sm:items-end"
+            >
+              <div className="grid gap-1.5">
+                <Label htmlFor="return-label-file">Label PDF</Label>
+                <Input
+                  id="return-label-file"
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(e) => setReturnLabelFile(e.target.files?.[0] ?? null)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="return-label-tracking">Tracking number</Label>
+                <Input
+                  id="return-label-tracking"
+                  value={returnLabelTracking}
+                  onChange={(e) => setReturnLabelTracking(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="return-label-cost">Cost (AUD)</Label>
+                <Input
+                  id="return-label-cost"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Optional"
+                  value={returnLabelCost}
+                  onChange={(e) => setReturnLabelCost(e.target.value)}
+                />
+              </div>
+              <Button
+                type="submit"
+                variant={quote.returnLabelId ? "outline" : "default"}
+                disabled={returnLabelLoading || !returnLabelFile || !returnLabelTracking.trim()}
+              >
+                {returnLabelLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {quote.returnLabelId ? "Replace Label" : "Add Label"}
+              </Button>
+              {returnLabelError && (
+                <p className="text-sm text-destructive sm:col-span-4">{returnLabelError}</p>
               )}
             </form>
           )}
@@ -1407,6 +1637,7 @@ export default function QuoteDetailPage() {
             <Button
               onClick={() => {
                 setReturnTracking("");
+                setReturnCost("");
                 setActionError(null);
                 setReturnedOpen(true);
               }}
@@ -1834,16 +2065,46 @@ export default function QuoteDetailPage() {
                 <p className="mt-1">{quote.shippingAddress}</p>
               </div>
             )}
-            <div className="grid gap-1.5">
-              <Label htmlFor="return-tracking">Return tracking number</Label>
-              <Input
-                id="return-tracking"
-                placeholder="Optional"
-                className="font-mono"
-                value={returnTracking}
-                onChange={(e) => setReturnTracking(e.target.value)}
-              />
-            </div>
+            {quote.returnLabelId ? (
+              <p className="text-sm text-muted-foreground">
+                Posted with {partnerName}&apos;s return label, tracking{" "}
+                <span className="font-mono">{quote.returnTrackingNumber}</span>.
+              </p>
+            ) : (
+              <>
+                {partnerMakesReturnLabel && (
+                  <p className="text-sm text-amber-700">
+                    {partnerName} makes this trade-in&apos;s return label. Only
+                    mark it returned without one if you posted it with a
+                    Reflow label.
+                  </p>
+                )}
+                <div className="grid gap-3 sm:grid-cols-[1fr_8rem]">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="return-tracking">Return tracking number</Label>
+                    <Input
+                      id="return-tracking"
+                      placeholder="Optional"
+                      className="font-mono"
+                      value={returnTracking}
+                      onChange={(e) => setReturnTracking(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="return-cost">Cost (AUD)</Label>
+                    <Input
+                      id="return-cost"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Optional"
+                      value={returnCost}
+                      onChange={(e) => setReturnCost(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
             {actionError && (
               <p className="text-sm text-destructive">{actionError}</p>
             )}
@@ -1860,6 +2121,7 @@ export default function QuoteDetailPage() {
               onClick={async () => {
                 const ok = await transition("returned", {
                   returnTrackingNumber: returnTracking.trim() || undefined,
+                  returnLabelCostAUD: returnCost.trim() || undefined,
                 });
                 if (ok) setReturnedOpen(false);
               }}

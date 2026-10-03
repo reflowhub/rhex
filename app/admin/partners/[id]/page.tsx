@@ -50,9 +50,13 @@ import { useFX } from "@/lib/use-fx";
 import {
   CUSTOMER_EMAIL_SWITCHES,
   DEFAULT_SUPPORT_EMAIL,
+  REFLOW_LABELS,
   customerEmailSwitches,
   type CustomerEmailSwitch,
   type EmailBrandSettings,
+  type LabelArrangement,
+  type LabelDirection,
+  type LabelParty,
 } from "@/lib/partner-config";
 
 // ---------------------------------------------------------------------------
@@ -87,6 +91,7 @@ interface Partner {
   emailBrand: EmailBrandSettings;
   customerEmails: Record<CustomerEmailSwitch, boolean>;
   neverArrivedResult?: boolean;
+  labels?: LabelArrangement;
   currency: "AUD" | "NZD";
   contactPerson: string | null;
   contactPhone: string | null;
@@ -156,6 +161,19 @@ function formatCurrency(value: number): string {
 // Component
 // ---------------------------------------------------------------------------
 
+const LABEL_DIRECTION_NAMES: Record<LabelDirection, string> = {
+  inbound: "Inbound labels",
+  return: "Return labels",
+};
+
+/** "Made by partner, paid by Reflow (partner charges Reflow)" */
+function describeLabelTerms(labels: LabelArrangement, direction: LabelDirection): string {
+  const { providedBy, paidBy } = labels[direction];
+  const who = (p: LabelParty) => (p === "reflow" ? "Reflow" : "partner");
+  if (providedBy === paidBy) return `Made and paid by ${who(providedBy)}`;
+  return `Made by ${who(providedBy)}, paid by ${who(paidBy)} (${who(providedBy)} charges ${who(paidBy)})`;
+}
+
 export default function PartnerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -206,6 +224,7 @@ export default function PartnerDetailPage() {
     emailSupportPhone: "",
     customerEmails: customerEmailSwitches(undefined),
     neverArrivedResult: true,
+    labels: REFLOW_LABELS,
     commissionModel: "percentage",
     commissionPercent: 5,
     commissionFlat: 5,
@@ -410,6 +429,7 @@ export default function PartnerDetailPage() {
       emailSupportPhone: partner.emailBrand?.supportPhone ?? "",
       customerEmails: partner.customerEmails ?? customerEmailSwitches(undefined),
       neverArrivedResult: partner.neverArrivedResult ?? true,
+      labels: partner.labels ?? REFLOW_LABELS,
       commissionModel: partner.commissionModel || "percentage",
       commissionPercent: partner.commissionPercent ?? 5,
       commissionFlat: partner.commissionFlat ?? 5,
@@ -481,6 +501,7 @@ export default function PartnerDetailPage() {
             },
             customerEmails: editForm.customerEmails,
             neverArrivedResult: editForm.neverArrivedResult,
+            labels: editForm.labels,
           }),
           payoutFrequency: editForm.payoutFrequency,
           contactPerson: editForm.contactPerson.trim() || null,
@@ -779,6 +800,16 @@ export default function PartnerDetailPage() {
                       )}
                   </dd>
                 </div>
+                {(["inbound", "return"] as const).map((direction) => (
+                  <div key={direction} className="flex justify-between gap-4 pl-6">
+                    <dt className="shrink-0 text-muted-foreground">
+                      {LABEL_DIRECTION_NAMES[direction]}
+                    </dt>
+                    <dd className="text-right text-xs">
+                      {describeLabelTerms(partner.labels ?? REFLOW_LABELS, direction)}
+                    </dd>
+                  </div>
+                ))}
                 <div className="flex justify-between gap-4 pl-6">
                   <dt className="shrink-0 text-muted-foreground">Never arrived</dt>
                   <dd className="text-right text-xs">
@@ -1598,6 +1629,44 @@ export default function PartnerDetailPage() {
                     }
                   />
                 </div>
+                <p className="pt-2 text-sm font-medium">Shipping labels</p>
+                <p className="text-xs text-muted-foreground">
+                  Who makes each label and who pays for it. A label made by
+                  one side and paid by the other becomes a settlement line.
+                  Trade-ins keep the setting they were accepted under.
+                </p>
+                {(["inbound", "return"] as const).map((direction) => (
+                  <div key={direction} className="grid grid-cols-[7rem_1fr_1fr] items-center gap-2 text-sm">
+                    <span>{LABEL_DIRECTION_NAMES[direction]}</span>
+                    {(["providedBy", "paidBy"] as const).map((role) => (
+                      <Select
+                        key={role}
+                        value={editForm.labels[direction][role]}
+                        onValueChange={(val) =>
+                          setEditForm((f) => ({
+                            ...f,
+                            labels: {
+                              ...f.labels,
+                              [direction]: { ...f.labels[direction], [role]: val as LabelParty },
+                            },
+                          }))
+                        }
+                      >
+                        <SelectTrigger aria-label={`${LABEL_DIRECTION_NAMES[direction]} ${role === "providedBy" ? "made by" : "paid by"}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="reflow">
+                            {role === "providedBy" ? "Made by Reflow" : "Paid by Reflow"}
+                          </SelectItem>
+                          <SelectItem value="partner">
+                            {role === "providedBy" ? "Made by partner" : "Paid by partner"}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ))}
+                  </div>
+                ))}
                 <p className="pt-2 text-sm font-medium">Never arrived</p>
                 <label className="flex items-start gap-2 text-sm">
                   <input

@@ -3,15 +3,14 @@ import { adminDb } from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { toAdminQuote } from "@/lib/admin-quote";
 import { readLabelUpload } from "@/lib/label-upload";
-import { recordPartnerLabel, sendQuoteLabel } from "@/lib/shipping-labels";
+import { recordPartnerReturnLabel } from "@/lib/shipping-labels";
 
 // ---------------------------------------------------------------------------
-// POST /api/admin/quotes/[id]/label — Upload an AusPost label PDF and email
-// it to the customer, or record the label a Mode C partner made
+// POST /api/admin/quotes/[id]/return-label — Upload the return label a Mode C
+// partner made, for Reflow to print and post the device back
 // ---------------------------------------------------------------------------
 // multipart/form-data: file (PDF), trackingNumber, labelCostAUD (optional),
-// replaceLabelId (when replacing the current label). providedBy=partner
-// records the partner's label: tracking only, no file and no email.
+// replaceLabelId (when replacing the current return label)
 
 export async function POST(
   request: NextRequest,
@@ -22,29 +21,19 @@ export async function POST(
     if (adminUser instanceof NextResponse) return adminUser;
     const { id } = await params;
 
-    const form = await request.formData();
-    const partnerLabel = form.get("providedBy") === "partner";
-    const upload = await readLabelUpload(form, { withPdf: !partnerLabel });
+    const upload = await readLabelUpload(await request.formData(), { withPdf: true });
     if (!upload.ok) {
       return NextResponse.json({ error: upload.error }, { status: 400 });
     }
-    const { pdf, fileName, trackingNumber, labelCostAUD, replaceLabelId } = upload;
 
-    const result = partnerLabel
-      ? await recordPartnerLabel(id, {
-          trackingNumber,
-          labelCostAUD,
-          admin: adminUser,
-          replaceLabelId,
-        })
-      : await sendQuoteLabel(id, {
-          pdf: pdf!,
-          fileName: fileName!,
-          trackingNumber,
-          labelCostAUD,
-          admin: adminUser,
-          replaceLabelId,
-        });
+    const result = await recordPartnerReturnLabel(id, {
+      pdf: upload.pdf!,
+      fileName: upload.fileName!,
+      trackingNumber: upload.trackingNumber,
+      labelCostAUD: upload.labelCostAUD,
+      admin: adminUser,
+      replaceLabelId: upload.replaceLabelId,
+    });
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
@@ -52,9 +41,9 @@ export async function POST(
     const quoteDoc = await adminDb.collection("quotes").doc(id).get();
     return NextResponse.json(await toAdminQuote(id, quoteDoc.data()!));
   } catch (error) {
-    console.error("Error sending label:", error);
+    console.error("Error adding return label:", error);
     return NextResponse.json(
-      { error: "Failed to send label" },
+      { error: "Failed to add return label" },
       { status: 500 }
     );
   }

@@ -10,7 +10,7 @@ interface QuoteCancelledEmailProps {
   lostInTransit: boolean;
   /** Cancelled because the customer asked */
   customerRequest: boolean;
-  /** An unused label was sent, and is now cancelled */
+  /** An unused label was sent (by RHEX or the partner) */
   hadLabel: boolean;
   brand: EmailBrand;
 }
@@ -52,7 +52,8 @@ export default function QuoteCancelledEmail({
             <strong>Please don&apos;t use the shipping label.</strong>
           </Text>
           <Text style={styles.calloutDetail}>
-            It has been cancelled and can&apos;t be used to send your device.
+            This trade-in is cancelled, so it can&apos;t be used to send your
+            device.
           </Text>
         </Section>
       )}

@@ -6,6 +6,8 @@ Australia Post refunds labels that were never used if we ask within **90 days**.
 - the trade-in **expired** without being posted (day 44)
 - the trade-in was **cancelled** before it was posted
 
+Only labels we made go here. Labels a partner made, and return labels, never do.
+
 The **Why** column shows which. Work through this queue once a week. The oldest labels are at the top, and labels are flagged **Urgent** from day 75.
 
 ## Steps

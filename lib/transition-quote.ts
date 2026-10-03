@@ -13,7 +13,11 @@ import { originalAmount, payableAmount } from "@/lib/quote-money";
 import { returningReason } from "@/lib/returning-reason";
 import { queueLabelRefund } from "@/lib/shipping-labels";
 import { getRevisionResponseDays } from "@/lib/tradein-settings";
-import { neverArrivedResultOn } from "@/lib/partner-config";
+import {
+  labelArrangementFor,
+  neverArrivedResultOn,
+  type LabelArrangement,
+} from "@/lib/partner-config";
 import QuoteAcceptedEmail from "@/emails/quote-accepted";
 import QuoteApprovedEmail from "@/emails/quote-approved";
 import QuoteCancelledEmail from "@/emails/quote-cancelled";
@@ -108,14 +112,17 @@ export async function transitionQuote(
     }
     const before = snap.data()!;
 
-    // Mode C: whether a trade-in ending before arrival tells the partner
+    // Mode C: whether a trade-in ending before arrival tells the partner,
+    // and the label terms an accepted trade-in keeps
     let neverArrivedResult: boolean | undefined;
-    if (isModeC(before) && (to === "expired" || to === "cancelled")) {
+    let labelArrangement: LabelArrangement | undefined;
+    if (isModeC(before) && (to === "expired" || to === "cancelled" || to === "accepted")) {
       const partnerId = before.partnerId as string | undefined;
       const partner = partnerId
         ? (await tx.get(adminDb.collection("partners").doc(partnerId))).data()
         : undefined;
       neverArrivedResult = neverArrivedResultOn(partner);
+      labelArrangement = labelArrangementFor(partner);
     }
 
     const plan = planTransition(before, to, {
@@ -126,6 +133,7 @@ export async function transitionQuote(
       reason: opts.reason,
       revisionExpiryDays,
       neverArrivedResult,
+      labelArrangement,
     });
     if (!plan.ok) {
       return {
@@ -170,6 +178,34 @@ export async function transitionQuote(
         queuedAt: now,
         updatedAt: now,
       };
+    }
+
+    // Reflow's return label, recorded with the return (OPPO.md, 2e)
+    if (plan.returnLabel) {
+      const labelRef = adminDb.collection("shippingLabels").doc();
+      tx.set(labelRef, {
+        quoteId,
+        direction: "return",
+        providedBy: plan.returnLabel.providedBy,
+        paidBy: plan.returnLabel.paidBy,
+        partnerId: (before.partnerId as string | undefined) ?? null,
+        carrier: "auspost",
+        trackingNumber: plan.returnLabel.trackingNumber,
+        costAUD: plan.returnLabel.costAUD,
+        fileName: null,
+        size: null,
+        sentAt: now,
+        sentBy: actorId,
+        status: "active",
+        refundState: "none",
+        sandbox,
+      });
+      Object.assign(update, {
+        returnLabelId: labelRef.id,
+        returnLabelProvidedBy: plan.returnLabel.providedBy,
+        returnLabelPaidBy: plan.returnLabel.paidBy,
+        returnLabelCostAUD: plan.returnLabel.costAUD,
+      });
     }
 
     tx.update(ref, update);
