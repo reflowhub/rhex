@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dueLabelReminder } from "@/lib/label-deadlines";
+import { dueLabelReminder, labelDueAt } from "@/lib/label-deadlines";
 import type { QuoteData } from "@/lib/quote-transitions";
 
 const NOW = new Date("2026-10-02T00:00:00Z");
@@ -55,5 +55,36 @@ describe("dueLabelReminder", () => {
     expect(
       dueLabelReminder({ status: "accepted", customerEmail: "a@example.com" }, NOW)
     ).toBeNull();
+  });
+});
+
+describe("labelDueAt (Mode C, end of the next Sydney business day)", () => {
+  const due = (iso: string) => labelDueAt(new Date(iso)).toISOString();
+
+  it("a weekday acceptance is due by the end of the next day", () => {
+    // Mon 5 Oct 10:00 AEDT → overdue from Wed 7 Oct 00:00 AEDT
+    expect(due("2026-10-04T23:00:00Z")).toBe("2026-10-06T13:00:00.000Z");
+  });
+
+  it("Friday to Sunday acceptances are due by the end of Monday", () => {
+    const monday = "2026-10-12T13:00:00.000Z"; // Tue 13 Oct 00:00 AEDT
+    expect(due("2026-10-09T04:00:00Z")).toBe(monday); // Fri 15:00
+    expect(due("2026-10-10T01:00:00Z")).toBe(monday); // Sat 12:00
+    expect(due("2026-10-11T12:30:00Z")).toBe(monday); // Sun 23:30
+  });
+
+  it("uses the Sydney date, not UTC", () => {
+    // Tue 6 Oct 08:00 AEDT is still Monday in UTC
+    expect(due("2026-10-05T21:00:00Z")).toBe("2026-10-07T13:00:00.000Z");
+  });
+
+  it("handles daylight saving starting in between", () => {
+    // Fri 2 Oct 12:00 AEST → overdue from Tue 6 Oct 00:00 AEDT
+    expect(due("2026-10-02T02:00:00Z")).toBe("2026-10-05T13:00:00.000Z");
+  });
+
+  it("works in standard time", () => {
+    // Wed 15 Jul 09:00 AEST → overdue from Fri 17 Jul 00:00 AEST
+    expect(due("2026-07-14T23:00:00Z")).toBe("2026-07-16T14:00:00.000Z");
   });
 });

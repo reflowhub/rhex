@@ -128,6 +128,10 @@ interface Quote {
   partnerId?: string;
   partnerName?: string;
   partnerMode?: string;
+  /** Mode C: cancelling before arrival sends the partner accepted: false */
+  partnerNeverArrivedResult?: boolean;
+  /** Mode C: the partner's "cancelled" customer email switch */
+  partnerCancelledEmail?: boolean;
   inspectionGrade?: Grade;
   revisedPriceNZD?: number;
   revisedPriceDisplay?: number | null;
@@ -674,6 +678,17 @@ export default function QuoteDetailPage() {
   const allowed = quote.allowedTransitions ?? [];
   const can = (target: QuoteStatus) => allowed.includes(target);
   const deviceSummary = `${quote.device.make} ${quote.device.model} (${quote.device.storage})`;
+  // Mode C cancellations before arrival (lib/quote-transitions.ts, OPPO.md 2d)
+  const cancelBeforeArrival =
+    quote.partnerMode === "C" && (quote.status === "accepted" || quote.status === "shipped");
+  const cancelTellsPartner = cancelBeforeArrival && !!quote.partnerNeverArrivedResult;
+  const cancelEmailsCustomer =
+    cancelBeforeArrival &&
+    !!quote.partnerCancelledEmail &&
+    !!quote.customerEmail &&
+    (cancelReason === "customer_request" ||
+      cancelReason === "lost_in_transit" ||
+      cancelReason === "other");
 
   // ---- render: main -------------------------------------------------------
   return (
@@ -2120,7 +2135,10 @@ export default function QuoteDetailPage() {
             <DialogDescription>
               Cancel this quote for{" "}
               <span className="font-semibold">{deviceSummary}</span>? This
-              can&apos;t be undone and no email is sent to the customer.{" "}
+              can&apos;t be undone{" "}
+              {cancelEmailsCustomer
+                ? "and the customer is emailed that the trade-in is cancelled."
+                : "and no email is sent to the customer."}{" "}
               <HelpLink page="trade-ins/cancel" />
             </DialogDescription>
           </DialogHeader>
@@ -2157,6 +2175,16 @@ export default function QuoteDetailPage() {
                 onChange={(e) => setCancelNote(e.target.value)}
               />
             </div>
+            {cancelTellsPartner && (
+              <p className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  This tells {quote.partnerName || "the partner"} the trade-in
+                  isn&apos;t going ahead (accepted: false). If the device turns
+                  up later, it can&apos;t be received against this quote.
+                </span>
+              </p>
+            )}
             {actionError && (
               <p className="text-sm text-destructive">{actionError}</p>
             )}

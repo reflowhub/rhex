@@ -7,9 +7,11 @@ import { partnerApiMode } from "@/lib/api-key-auth";
 import {
   PARTNER_MODES,
   customerEmailSwitches,
+  neverArrivedResultOn,
   parseCustomerEmails,
   parseEmailBrand,
   parseEmailList,
+  parseNeverArrivedResult,
   parseOptionalEmail,
   parseResultWebhook,
 } from "@/lib/partner-config";
@@ -101,6 +103,7 @@ export async function GET(
         supportPhone: data.emailBrand?.supportPhone ?? null,
       },
       customerEmails: customerEmailSwitches(data),
+      neverArrivedResult: neverArrivedResultOn(data),
       // Payment
       paymentMethod: data.paymentMethod ?? null,
       payIdPhone: data.payIdPhone ?? null,
@@ -203,6 +206,9 @@ export async function PUT(
       }
       if (body.customerEmails !== undefined) {
         updateData.customerEmails = parseCustomerEmails(body.customerEmails);
+      }
+      if (body.neverArrivedResult !== undefined) {
+        updateData.neverArrivedResult = parseNeverArrivedResult(body.neverArrivedResult);
       }
     } catch (err) {
       return NextResponse.json(

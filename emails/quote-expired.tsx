@@ -8,6 +8,11 @@ interface QuoteExpiredEmailProps {
   tradeInRef: string;
   /** Mode C partner brand; null or unset for consumer emails */
   brand?: EmailBrand | null;
+  /**
+   * Mode C: the partner has been told the trade-in won't go ahead (its
+   * never-arrived setting), so a device that turns up can't complete it
+   */
+  partnerResultSent?: boolean;
 }
 
 /**
@@ -20,6 +25,7 @@ export default function QuoteExpiredEmail({
   deviceName,
   tradeInRef,
   brand = null,
+  partnerResultSent = false,
 }: QuoteExpiredEmailProps) {
   return (
     <TradeInLayout
@@ -57,8 +63,9 @@ export default function QuoteExpiredEmail({
             ahead and {brand.name} won&apos;t refund a trade-in value for it.
           </Text>
           <Text style={styles.paragraph}>
-            If you&apos;ve already posted your device, reply to this email with
-            your postage receipt and we&apos;ll sort it out.
+            {partnerResultSent
+              ? "If you've already posted your device, reply to this email with your postage receipt. If it reaches us, we'll contact you to arrange a new trade-in or post it back to you."
+              : "If you've already posted your device, reply to this email with your postage receipt and we'll sort it out."}
           </Text>
         </>
       ) : (

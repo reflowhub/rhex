@@ -31,6 +31,73 @@ export function labelDeadlines(labelSentAt: Date): {
   return { postByAt, expectedByAt };
 }
 
+// ---------------------------------------------------------------------------
+// Mode C label turnaround (docs/partners/OPPO.md, 2d)
+// ---------------------------------------------------------------------------
+
+const SYDNEY = "Australia/Sydney";
+
+/** Sydney calendar date of an instant. */
+function sydneyDay(at: Date): { y: number; m: number; d: number } {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: SYDNEY,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+    })
+      .formatToParts(at)
+      .map((p) => [p.type, Number(p.value)])
+  );
+  return { y: parts.year, m: parts.month, d: parts.day };
+}
+
+/** Sydney's UTC offset at an instant, in ms (+10h or +11h). */
+function sydneyOffsetMs(at: Date): number {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: SYDNEY,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+    })
+      .formatToParts(at)
+      .map((x) => [x.type, Number(x.value)])
+  );
+  const local = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute);
+  return local - Math.floor(at.getTime() / 60000) * 60000;
+}
+
+/** Midnight at the start of a Sydney calendar date (DST never changes at midnight). */
+function sydneyMidnight(y: number, m: number, d: number): Date {
+  const utcMidnight = Date.UTC(y, m - 1, d);
+  const guess = new Date(utcMidnight - 10 * 60 * 60 * 1000);
+  return new Date(utcMidnight - sydneyOffsetMs(guess));
+}
+
+/**
+ * When a Mode C label is due: by the end of the next Sydney business day
+ * (Monday to Friday; public holidays aren't counted) after acceptance. So
+ * Monday's acceptances are due by the end of Tuesday, and Friday's to
+ * Sunday's by the end of Monday. Returns the instant the label becomes
+ * overdue (midnight after the due day). Internal only: customers and the
+ * partner never see it.
+ */
+export function labelDueAt(acceptedAt: Date): Date {
+  const day = sydneyDay(acceptedAt);
+  // Walk forward from the day after acceptance to a weekday
+  let date = new Date(Date.UTC(day.y, day.m - 1, day.d + 1));
+  while (date.getUTCDay() === 0 || date.getUTCDay() === 6) {
+    date = new Date(date.getTime() + DAY_MS);
+  }
+  // Overdue from the midnight that ends that day
+  const next = new Date(date.getTime() + DAY_MS);
+  return sydneyMidnight(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate());
+}
+
 /** Whole days elapsed since `from`. */
 export function daysSince(from: Date | string, now: Date = new Date()): number {
   const start = typeof from === "string" ? new Date(from) : from;

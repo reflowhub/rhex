@@ -7,6 +7,7 @@ import {
   isOpsVisible,
   loadDevices,
   loadOpenTradeIns,
+  loadPartnerNames,
   summarizeQuote,
 } from "@/lib/trade-in-ops";
 
@@ -14,8 +15,11 @@ import {
 // GET /api/admin/trade-ins/lookup?q= — Find the quote a parcel belongs to
 // ---------------------------------------------------------------------------
 // Searches accepted and shipped quotes, plus expired quotes that had a label
-// (a late parcel can still be received). Matches on tracking number (the
-// scan contains it), TI- reference, IMEI, quote ID or customer name/email.
+// (a late parcel can still be received) and cancelled Mode C quotes (a lost
+// parcel that turns up). A Mode C quote whose result was sent to the partner
+// can't be received; the screen tells ops what to do instead. Matches on
+// tracking number (the scan contains it), TI- reference, IMEI, quote ID or
+// customer name/email.
 
 const MAX_RESULTS = 20;
 
@@ -36,6 +40,18 @@ async function loadExpiredWithLabel(): Promise<{ id: string; data: QuoteData }[]
   }
 }
 
+/** Cancelled Mode C quotes, e.g. lost in transit, in case the parcel turns up. */
+async function loadCancelledModeC(): Promise<{ id: string; data: QuoteData }[]> {
+  const snap = await adminDb
+    .collection("quotes")
+    .where("status", "==", "cancelled")
+    .where("partnerMode", "==", "C")
+    .get();
+  return snap.docs
+    .map((doc) => ({ id: doc.id, data: doc.data() }))
+    .filter(({ data }) => !!data.acceptedAt);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const adminUser = await requireAdmin(request);
@@ -46,12 +62,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Enter something to search for" }, { status: 400 });
     }
 
-    const [open, expired] = await Promise.all([
+    const [open, expired, cancelled] = await Promise.all([
       loadOpenTradeIns(),
       loadExpiredWithLabel(),
+      loadCancelledModeC(),
     ]);
 
-    const matches = [...open, ...expired]
+    const matches = [...open, ...expired, ...cancelled]
       .map(({ id, data }) => ({
         id,
         data,
@@ -60,10 +77,13 @@ export async function GET(request: NextRequest) {
       .filter((m) => m.matchedOn !== null)
       .slice(0, MAX_RESULTS);
 
-    const devices = await loadDevices(matches.map((m) => m.data));
+    const [devices, partners] = await Promise.all([
+      loadDevices(matches.map((m) => m.data)),
+      loadPartnerNames(matches.map((m) => m.data)),
+    ]);
     return NextResponse.json({
       matches: matches.map(({ id, data, matchedOn }) => ({
-        ...summarizeQuote(id, data, devices),
+        ...summarizeQuote(id, data, devices, partners),
         matchedOn,
       })),
     });

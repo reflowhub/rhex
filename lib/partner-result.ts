@@ -6,7 +6,7 @@
  * See docs/partners/oppo-trade-in-result-api.md and docs/partners/OPPO.md.
  */
 
-import { payableAmount } from "@/lib/quote-money";
+import { originalAmount, payableAmount } from "@/lib/quote-money";
 import type { QuoteStatus } from "@/lib/quote-status";
 
 /** Body of the result PUT, field names as in the partner's spec. */
@@ -40,14 +40,27 @@ export function isResultGrade(value: unknown): boolean {
  *   ignored a re-quote, RHEX rejected the device, or it was surrendered).
  *   Sends the last offered price and grade with accepted: false.
  *
- * Cancellations before the device arrives and unshipped expiry send nothing
- * (never-arrived handling is behind config, docs/partners/OPPO.md).
+ * - accepted → expired, accepted or shipped → cancelled: never arrived (posted
+ *   late, cancelled before arrival, or lost in transit). Sends the original
+ *   price and grade with accepted: false, only when the partner's
+ *   never-arrived setting is on. A quote that was never accepted sends nothing.
  */
 export function partnerResultFor(
   q: Record<string, unknown>,
   from: QuoteStatus,
-  to: QuoteStatus
+  to: QuoteStatus,
+  opts: { neverArrived?: boolean } = {}
 ): PartnerResultBody | null {
+  if (isNeverArrived(from, to)) {
+    if (!opts.neverArrived) return null;
+    const original = originalAmount(q);
+    return {
+      approvedQuotePrice: Math.round(original.amount * 100) / 100,
+      acceptGrading: String(q.grade ?? "").toUpperCase(),
+      accepted: false,
+    };
+  }
+
   const approved = to === "paid";
   const declined =
     to === "returning" || (from === "on_hold" && to === "cancelled");
@@ -64,6 +77,14 @@ export function partnerResultFor(
     acceptGrading: grade,
     accepted: approved,
   };
+}
+
+/** An accepted trade-in ending before the device arrived. */
+export function isNeverArrived(from: QuoteStatus, to: QuoteStatus): boolean {
+  return (
+    (from === "accepted" && to === "expired") ||
+    ((from === "accepted" || from === "shipped") && to === "cancelled")
+  );
 }
 
 /** The partner's result URL for a quote, from a template with `{quoteId}`. */

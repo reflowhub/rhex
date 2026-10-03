@@ -6,6 +6,8 @@ Every accepted trade-in needs a prepaid Australia Post label. The customer suppl
 
 Go to **Trade-in Ops → Awaiting label**. It lists accepted trade-ins with no label, oldest first. The **Waiting** column turns amber after 2 days, so start at the top.
 
+Partner trade-ins (such as OPPO) have a partner tag and a **Label due** date: the end of the next business day after the partner accepted (Sydney time, Monday to Friday). So a Monday trade-in is due by the end of Tuesday, and a Friday, Saturday or Sunday one by the end of Monday. Overdue ones turn red and move to the top, and the tab shows how many are overdue. Public holidays aren't counted, so allow for them yourself.
+
 If a row looks fake (bot, test or nonsense details), [clear it out](clear-not-genuine.md) instead of sending a label.
 
 ## Send the label

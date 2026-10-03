@@ -43,6 +43,8 @@ export interface TransitionContext {
   reason?: string | null;
   /** Days a customer has to respond to a revised offer */
   revisionExpiryDays?: number;
+  /** Mode C: the partner's never-arrived setting (lib/partner-config.ts) */
+  neverArrivedResult?: boolean;
 }
 
 /** Work done after commit, only by the call that made the change. */
@@ -54,10 +56,11 @@ export type SideEffect =
   | "paid_email"
   | "expired_email"
   | "returned_email"
-  /** Mode C only: device arrived, going back, approved (replaces paid_email) */
+  /** Mode C only: device arrived, going back, approved (replaces paid_email), cancelled */
   | "received_email"
   | "returning_email"
   | "approved_email"
+  | "cancelled_email"
   | "queue_label_refund"
   /** Take the quote's value off the linked customer's totalValueNZD */
   | "reverse_customer_value"
@@ -185,6 +188,7 @@ const CUSTOMER_EFFECTS: readonly SideEffect[] = [
   "received_email",
   "returning_email",
   "approved_email",
+  "cancelled_email",
   "reverse_customer_value",
   "restore_customer_value",
 ];
@@ -529,6 +533,23 @@ function withModeCEmail(
   return { ...result, effects: [...(result.effects ?? []), effect] };
 }
 
+/**
+ * Mode C: the customer is told when their trade-in is cancelled before the
+ * device arrives, unless it was fake, a duplicate or (on hold) surrendered.
+ */
+const EMAILED_CANCEL_REASONS: readonly CancelReason[] = [
+  "customer_request",
+  "lost_in_transit",
+  "other",
+];
+
+function withCancelEmail(result: ApplyResult, q: QuoteData): ApplyResult {
+  if ("error" in result || !isModeC(q)) return result;
+  const reason = result.fields.cancelReason as CancelReason;
+  if (!EMAILED_CANCEL_REASONS.includes(reason)) return result;
+  return { ...result, effects: [...(result.effects ?? []), "cancelled_email"] };
+}
+
 /** A linked customer's totalValueNZD drops when their quote ends unpaid. */
 function withCustomerValue(
   result: ApplyResult,
@@ -662,6 +683,16 @@ const revisionOpen = (q: QuoteData, ctx: TransitionContext) =>
 const heldFrom = (status: QuoteStatus) => (q: QuoteData) =>
   q.heldFrom === status ? null : `Quote was not held from ${status}`;
 
+/**
+ * Mode C: once the partner has the final result (e.g. never arrived), the
+ * trade-in is over for it, so a device that turns up can't be received
+ * against this quote (docs/partners/OPPO.md, 2d).
+ */
+const noPartnerResult = (q: QuoteData) =>
+  isModeC(q) && q.partnerResult
+    ? "The partner has already been sent this trade-in's final result, so the device can't be received against it. Contact the customer about a new trade-in, or post the device back."
+    : null;
+
 export const TRANSITIONS: readonly Rule[] = [
   {
     from: "quoted",
@@ -688,7 +719,13 @@ export const TRANSITIONS: readonly Rule[] = [
         ? "Your shipping label hasn't been sent yet"
         : null,
   },
-  { from: "accepted", to: "received", actors: ["admin"], apply: applyReceive },
+  {
+    from: "accepted",
+    to: "received",
+    actors: ["admin"],
+    state: noPartnerResult,
+    apply: applyReceive,
+  },
   {
     from: "accepted",
     to: "expired",
@@ -710,18 +747,31 @@ export const TRANSITIONS: readonly Rule[] = [
     from: "accepted",
     to: "cancelled",
     actors: ["admin"],
-    apply: (q, ctx) => withLabelRefund(applyCancel(q, ctx), q),
+    apply: (q, ctx) => withCancelEmail(withLabelRefund(applyCancel(q, ctx), q), q),
   },
 
-  { from: "shipped", to: "received", actors: ["admin"], apply: applyReceive },
-  { from: "shipped", to: "cancelled", actors: ["admin"], apply: applyCancel },
+  {
+    from: "shipped",
+    to: "received",
+    actors: ["admin"],
+    state: noPartnerResult,
+    apply: applyReceive,
+  },
+  {
+    from: "shipped",
+    to: "cancelled",
+    actors: ["admin"],
+    apply: (q, ctx) => withCancelEmail(applyCancel(q, ctx), q),
+  },
 
   {
     from: "expired",
     to: "received",
     actors: ["admin"],
     state: (q) =>
-      q.acceptedAt ? null : "Only a quote that had been accepted can be received",
+      q.acceptedAt
+        ? noPartnerResult(q)
+        : "Only a quote that had been accepted can be received",
     apply: (q, ctx) =>
       withCustomerValue(applyReceive(q, ctx), q, "restore_customer_value"),
   },
@@ -976,7 +1026,9 @@ export function planTransition(
   if (isModeB(q)) effects = effects.filter((e) => !CUSTOMER_EFFECTS.includes(e));
 
   const partnerResult = isModeC(q)
-    ? partnerResultFor({ ...q, ...applied.fields }, from, to)
+    ? partnerResultFor({ ...q, ...applied.fields }, from, to, {
+        neverArrived: ctx.neverArrivedResult === true,
+      })
     : null;
   if (partnerResult) effects = [...effects, "partner_result"];
 

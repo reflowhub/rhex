@@ -13,8 +13,10 @@ import { originalAmount, payableAmount } from "@/lib/quote-money";
 import { returningReason } from "@/lib/returning-reason";
 import { queueLabelRefund } from "@/lib/shipping-labels";
 import { getRevisionResponseDays } from "@/lib/tradein-settings";
+import { neverArrivedResultOn } from "@/lib/partner-config";
 import QuoteAcceptedEmail from "@/emails/quote-accepted";
 import QuoteApprovedEmail from "@/emails/quote-approved";
+import QuoteCancelledEmail from "@/emails/quote-cancelled";
 import QuoteExpiredEmail from "@/emails/quote-expired";
 import QuotePaidEmail from "@/emails/quote-paid";
 import QuoteReceivedEmail from "@/emails/quote-received";
@@ -106,6 +108,16 @@ export async function transitionQuote(
     }
     const before = snap.data()!;
 
+    // Mode C: whether a trade-in ending before arrival tells the partner
+    let neverArrivedResult: boolean | undefined;
+    if (isModeC(before) && (to === "expired" || to === "cancelled")) {
+      const partnerId = before.partnerId as string | undefined;
+      const partner = partnerId
+        ? (await tx.get(adminDb.collection("partners").doc(partnerId))).data()
+        : undefined;
+      neverArrivedResult = neverArrivedResultOn(partner);
+    }
+
     const plan = planTransition(before, to, {
       actor: opts.actor,
       actorId,
@@ -113,6 +125,7 @@ export async function transitionQuote(
       payload: opts.payload,
       reason: opts.reason,
       revisionExpiryDays,
+      neverArrivedResult,
     });
     if (!plan.ok) {
       return {
@@ -381,6 +394,26 @@ async function runSideEffects(
               deviceName: await deviceLabel(quote.deviceId),
               tradeInRef,
               brand,
+              // Mode C: the partner was told, so a late device goes back
+              partnerResultSent: !!quote.partnerResult,
+            }),
+          }));
+          break;
+        }
+
+        case "cancelled_email": {
+          if (!customerEmail) break;
+          await sendQuoteEmail(quote, "cancelled", async (brand) => ({
+            to: customerEmail,
+            subject: `Your trade-in has been cancelled (${tradeInRef})`,
+            react: QuoteCancelledEmail({
+              customerName,
+              deviceName: await deviceLabel(quote.deviceId),
+              tradeInRef,
+              lostInTransit: quote.cancelReason === "lost_in_transit",
+              customerRequest: quote.cancelReason === "customer_request",
+              hadLabel: !!quote.labelId && !quote.shippedAt,
+              brand: brand!,
             }),
           }));
           break;

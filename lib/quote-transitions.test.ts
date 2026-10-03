@@ -1213,20 +1213,125 @@ describe("Mode C (RHEX buys; the partner refunds the customer)", () => {
       expect(plan.partnerResult?.accepted).toBe(false);
     });
 
-    it("sends nothing when the device never arrived", () => {
-      const cancelled = planOk(modeC("accepted"), "cancelled", ctx("admin", { payload: { cancelReason: "customer_request" } }));
-      expect(cancelled.partnerResult).toBeNull();
-      const expired = planOk(
-        modeC("accepted", { labelSentAt: past(50), postByAt: past(40) }),
-        "expired",
-        ctx("system")
-      );
-      expect(expired.partnerResult).toBeNull();
-    });
-
     it("sends nothing once the device is back with the customer", () => {
       const plan = planOk(modeC("returning"), "returned", ctx("admin"));
       expect(plan.partnerResult).toBeNull();
+    });
+  });
+
+  describe("never arrived (partner setting, OPPO.md 2d)", () => {
+    const on = (actor: QuoteActor, extra: Partial<TransitionContext> = {}) =>
+      ctx(actor, { neverArrivedResult: true, ...extra });
+    const cancel = (reason: string, extra: Partial<TransitionContext> = {}) =>
+      on("admin", { payload: { cancelReason: reason }, ...extra });
+    const unposted = modeC("accepted", { acceptedAt: past(55), labelSentAt: past(50), postByAt: past(40) });
+    const NOT_ACCEPTED = { approvedQuotePrice: 180, acceptGrading: "B", accepted: false };
+
+    it("unposted expiry → not accepted, original AUD price and grade", () => {
+      const plan = planOk(unposted, "expired", on("system"));
+      expect(plan.partnerResult).toEqual(NOT_ACCEPTED);
+      expect(plan.effects).toEqual(["expired_email", "partner_result"]);
+    });
+
+    it("cancelled before arrival, or lost in transit → not accepted", () => {
+      const accepted = modeC("accepted", { acceptedAt: past(5) });
+      expect(planOk(accepted, "cancelled", cancel("customer_request")).partnerResult).toEqual(NOT_ACCEPTED);
+      expect(planOk(accepted, "cancelled", cancel("not_genuine")).partnerResult).toEqual(NOT_ACCEPTED);
+      const shipped = modeC("shipped", { acceptedAt: past(20), shippedAt: past(10) });
+      expect(planOk(shipped, "cancelled", cancel("lost_in_transit")).partnerResult).toEqual(NOT_ACCEPTED);
+    });
+
+    it("sends the original price even if a revised price is on the quote", () => {
+      const q = modeC("accepted", { revisedPriceNZD: 100, revisedPriceDisplay: 90, inspectionGrade: "D" });
+      expect(planOk(q, "cancelled", cancel("customer_request")).partnerResult).toEqual(NOT_ACCEPTED);
+    });
+
+    it("sends nothing when the setting is off", () => {
+      expect(planOk(unposted, "expired", ctx("system")).partnerResult).toBeNull();
+      expect(
+        planOk(modeC("shipped"), "cancelled", ctx("admin", { payload: { cancelReason: "lost_in_transit" }, neverArrivedResult: false })).partnerResult
+      ).toBeNull();
+    });
+
+    it("sends nothing for a quote that was never accepted", () => {
+      expect(planOk(modeC("quoted", { expiresAt: past() }), "expired", on("system")).partnerResult).toBeNull();
+      expect(planOk(modeC("quoted"), "cancelled", cancel("not_genuine")).partnerResult).toBeNull();
+    });
+
+    it("consumer and Mode B quotes are unchanged", () => {
+      const consumer = quote("accepted", { labelSentAt: past(50), postByAt: past(40) });
+      expect(planOk(consumer, "expired", on("system")).partnerResult).toBeNull();
+      const modeB = quote("accepted", { partnerMode: "B" });
+      expect(planOk(modeB, "cancelled", cancel("customer_request")).partnerResult).toBeNull();
+    });
+
+    describe("receiving after the result", () => {
+      const sent = { partnerResult: { ...NOT_ACCEPTED, status: "sent" } };
+      const receive = ctx("admin", { payload: { imei: "356789012345678" } });
+
+      it("a late device can't be received once the partner has the result", () => {
+        const q = modeC("expired", { acceptedAt: past(60), ...sent });
+        const plan = planTransition(q, "received", receive);
+        expect(plan.ok).toBe(false);
+        expect(!plan.ok && plan.message).toMatch(/already been sent this trade-in's final result/);
+        expect(allowedTransitions(q, "admin", NOW)).not.toContain("received");
+      });
+
+      it("still blocked while the result is pending or after it failed", () => {
+        for (const status of ["pending", "failed"]) {
+          const q = modeC("expired", { acceptedAt: past(60), partnerResult: { ...NOT_ACCEPTED, status } });
+          expect(planTransition(q, "received", receive).ok).toBe(false);
+        }
+      });
+
+      it("a late device can be received when no result was sent (setting off)", () => {
+        const q = modeC("expired", { acceptedAt: past(60) });
+        expect(planOk(q, "received", receive).update.lateArrival).toBe(true);
+      });
+
+      it("consumer late arrivals are unchanged", () => {
+        const q = quote("expired", { acceptedAt: past(60), ...sent });
+        expect(planTransition(q, "received", receive).ok).toBe(true);
+      });
+    });
+  });
+
+  describe("cancellation email", () => {
+    const cancel = (from: QuoteStatus, reason: string, extra: QuoteData = {}) =>
+      planOk(
+        modeC(from, { ...CUSTOMER_DETAILS, ...extra }),
+        "cancelled",
+        ctx("admin", { payload: { cancelReason: reason }, reason: reason === "other" ? "Wrong device" : null })
+      ).effects;
+
+    it("emails the customer for customer request, lost in transit and other", () => {
+      expect(cancel("accepted", "customer_request")).toContain("cancelled_email");
+      expect(cancel("shipped", "lost_in_transit")).toContain("cancelled_email");
+      expect(cancel("accepted", "other")).toContain("cancelled_email");
+    });
+
+    it("not for fake or duplicate acceptances, or before acceptance", () => {
+      expect(cancel("accepted", "not_genuine")).not.toContain("cancelled_email");
+      expect(cancel("accepted", "duplicate")).not.toContain("cancelled_email");
+      expect(cancel("quoted", "customer_request")).not.toContain("cancelled_email");
+    });
+
+    it("not when surrendered from hold", () => {
+      const effects = planOk(
+        modeC("on_hold", { heldFrom: "received" }),
+        "cancelled",
+        ctx("admin", { payload: { cancelReason: "surrendered" } })
+      ).effects;
+      expect(effects).not.toContain("cancelled_email");
+    });
+
+    it("consumer cancellations still send no email", () => {
+      const effects = planOk(
+        quote("accepted", CUSTOMER_DETAILS),
+        "cancelled",
+        ctx("admin", { payload: { cancelReason: "customer_request" } })
+      ).effects;
+      expect(effects).not.toContain("cancelled_email");
     });
   });
 

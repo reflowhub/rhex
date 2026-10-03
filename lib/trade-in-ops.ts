@@ -29,6 +29,28 @@ export async function loadDevices(quotes: QuoteData[]): Promise<DeviceMap> {
   return map;
 }
 
+export type PartnerNames = Map<string, string>;
+
+/** Partner names for the quotes' partnerIds, for the ops screens' partner tag. */
+export async function loadPartnerNames(quotes: QuoteData[]): Promise<PartnerNames> {
+  const ids = Array.from(
+    new Set(
+      quotes
+        .map((q) => q.partnerId)
+        .filter((id): id is string => typeof id === "string" && id !== "")
+    )
+  );
+  const map: PartnerNames = new Map();
+  if (ids.length === 0) return map;
+  const docs = await adminDb.getAll(
+    ...ids.map((id) => adminDb.collection("partners").doc(id))
+  );
+  for (const doc of docs) {
+    if (doc.exists) map.set(doc.id, (doc.data()!.name as string) ?? doc.id);
+  }
+  return map;
+}
+
 /**
  * Whether ops screens (queues, Receive Parcel) show a quote. Sandbox quotes
  * are hidden, except Mode C ones, which partners test end to end (labels,
@@ -39,8 +61,14 @@ export function isOpsVisible(q: QuoteData): boolean {
 }
 
 /** The fields the ops screens show for a quote. */
-export function summarizeQuote(id: string, q: QuoteData, devices: DeviceMap) {
+export function summarizeQuote(
+  id: string,
+  q: QuoteData,
+  devices: DeviceMap,
+  partners: PartnerNames = new Map()
+) {
   const device = devices.get(q.deviceId as string);
+  const partnerResult = q.partnerResult as Record<string, unknown> | undefined;
   return {
     id,
     tradeInRef: (q.tradeInRef as string) ?? null,
@@ -57,6 +85,15 @@ export function summarizeQuote(id: string, q: QuoteData, devices: DeviceMap) {
     labelSentAt: serializeTimestamp(q.labelSentAt),
     postByAt: serializeTimestamp(q.postByAt),
     expectedByAt: serializeTimestamp(q.expectedByAt),
+    partnerMode: (q.partnerMode as string) ?? null,
+    partnerName: partners.get(q.partnerId as string) ?? null,
+    shippingAddress: (q.shippingAddress as string) ?? null,
+    customerPhone: (q.customerPhone as string) ?? null,
+    /** Mode C: when the partner was sent the final result; the device can't be received after */
+    partnerResultSentAt:
+      q.partnerMode === "C" && partnerResult
+        ? serializeTimestamp(partnerResult.queuedAt)
+        : null,
   };
 }
 

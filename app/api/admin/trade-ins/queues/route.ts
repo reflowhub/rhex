@@ -3,9 +3,14 @@ import { adminDb } from "@/lib/firebase-admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { serializeTimestamp } from "@/lib/serialize";
 import { toDate } from "@/lib/quote-transitions";
-import { daysSince, REFUND_URGENT_DAYS } from "@/lib/label-deadlines";
+import { daysSince, labelDueAt, REFUND_URGENT_DAYS } from "@/lib/label-deadlines";
 import { QUOTE_STATUS_LABELS, isQuoteStatus } from "@/lib/quote-status";
-import { loadDevices, loadOpenTradeIns, summarizeQuote } from "@/lib/trade-in-ops";
+import {
+  loadDevices,
+  loadOpenTradeIns,
+  loadPartnerNames,
+  summarizeQuote,
+} from "@/lib/trade-in-ops";
 
 // ---------------------------------------------------------------------------
 // GET /api/admin/trade-ins/queues — Awaiting label, overdue, labels to refund
@@ -39,15 +44,30 @@ export async function GET(request: NextRequest) {
     const quoteById = new Map(
       [...open, ...labelQuotes].map((q) => [q.id, q.data])
     );
-    const devices = await loadDevices([...quoteById.values()]);
+    const [devices, partners] = await Promise.all([
+      loadDevices([...quoteById.values()]),
+      loadPartnerNames(open.map((q) => q.data)),
+    ]);
 
+    // Mode C labels are due by the end of the next business day (OPPO.md, 2d);
+    // overdue ones go first, then oldest first
     const awaitingLabel = open
       .filter(({ data }) => data.status === "accepted" && !data.labelId)
-      .map(({ id, data }) => ({
-        ...summarizeQuote(id, data, devices),
-        waitingDays: data.acceptedAt ? daysSince(toDate(data.acceptedAt)!, now) : null,
-      }))
-      .sort((a, b) => (b.waitingDays ?? 0) - (a.waitingDays ?? 0));
+      .map(({ id, data }) => {
+        const acceptedAt = toDate(data.acceptedAt);
+        const dueAt = data.partnerMode === "C" && acceptedAt ? labelDueAt(acceptedAt) : null;
+        return {
+          ...summarizeQuote(id, data, devices, partners),
+          waitingDays: acceptedAt ? daysSince(acceptedAt, now) : null,
+          labelDueAt: dueAt ? dueAt.toISOString() : null,
+          labelOverdue: dueAt !== null && dueAt <= now,
+        };
+      })
+      .sort(
+        (a, b) =>
+          Number(b.labelOverdue) - Number(a.labelOverdue) ||
+          (b.waitingDays ?? 0) - (a.waitingDays ?? 0)
+      );
 
     const overdue = open
       .filter(({ data }) => {
@@ -55,7 +75,7 @@ export async function GET(request: NextRequest) {
         return expectedBy !== null && expectedBy < now;
       })
       .map(({ id, data }) => ({
-        ...summarizeQuote(id, data, devices),
+        ...summarizeQuote(id, data, devices, partners),
         daysOverdue: daysSince(toDate(data.expectedByAt)!, now),
       }))
       .sort((a, b) => b.daysOverdue - a.daysOverdue);

@@ -8,6 +8,8 @@ import {
   parseEmailList,
   parseOptionalEmail,
   parseResultWebhook,
+  neverArrivedResultOn,
+  parseNeverArrivedResult,
 } from "@/lib/partner-config";
 
 describe("parseResultWebhook", () => {
@@ -120,5 +122,19 @@ describe("customer email switches", () => {
     expect(() => parseCustomerEmails({ revised: false })).toThrow("revised");
     expect(() => parseCustomerEmails({ label: "no" })).toThrow("on or off");
     expect(() => parseCustomerEmails(null)).toThrow();
+  });
+});
+
+describe("never-arrived result setting", () => {
+  it("is on unless switched off", () => {
+    expect(neverArrivedResultOn(undefined)).toBe(true);
+    expect(neverArrivedResultOn({})).toBe(true);
+    expect(neverArrivedResultOn({ neverArrivedResult: true })).toBe(true);
+    expect(neverArrivedResultOn({ neverArrivedResult: false })).toBe(false);
+  });
+
+  it("must be on or off", () => {
+    expect(parseNeverArrivedResult(false)).toBe(false);
+    expect(() => parseNeverArrivedResult("no")).toThrow("on or off");
   });
 });

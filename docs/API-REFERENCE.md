@@ -62,7 +62,9 @@ For retailers that offer trade-in with a new-device purchase. Reflow Hub (RHEX) 
 | Customer declines, or doesn't answer within 7 days | Revised price and grade, `accepted: false` | `returning` → `returned` |
 | RHEX can't accept the device (e.g. locked) and returns it | Last offered price and grade, `accepted: false` | `returning` → `returned` |
 | Device surrendered to authorities | Last offered price and grade, `accepted: false` | `cancelled` |
-| Device never sent | Nothing (to be agreed) | `expired` or `cancelled` |
+| Device never arrives: not posted, cancelled before it arrives, or lost in transit | Original price and grade, `accepted: false` | `expired` or `cancelled` |
+
+A device that never arrives is reported when the trade-in closes: for a device that isn't posted, 30 days after the 14-day post-by date (about 44 days after the label is sent); otherwise when RHEX cancels it. If the device reaches RHEX after that, the trade-in stays closed and RHEX deals with the customer directly. A quote that's never accepted just expires, and no result is sent.
 
 Each result is sent once, signed with `x-trade-in-timestamp` and `x-trade-in-signature` (HMAC-SHA256 of `${timestamp}.${rawBody}` with the shared secret), re-signed on every retry. RHEX retries `500`/`502` (and other `5xx`, `429` and timeouts) with backoff for about two days; `400`, `401` and `404` are not retried.
 
@@ -351,7 +353,7 @@ curl -H "X-API-Key: rhx_your_key" \
 | `completed` | Retailer accounts only, instead of `paid`: trade-in approved and the result sent to you to refund the customer |
 | `returning` | Revision rejected or expired, device being returned |
 | `returned` | Device returned to customer, trade-in closed |
-| `expired` | Quote not accepted before `expiresAt`, or accepted but the device was never sent. RHEX may still receive a device for an accepted quote that has expired, which moves it to `received` |
+| `expired` | Quote not accepted before `expiresAt`, or accepted but the device was never sent. RHEX may still receive a device for an accepted quote that has expired, which moves it to `received` (not for retailer accounts once the result has been sent) |
 | `cancelled` | Quote cancelled |
 
 > **New status values may be added.** Treat an unknown `status` as "in progress" rather than failing, and don't rely on the order of this table.
@@ -872,6 +874,8 @@ curl -X PUT \
 ---
 
 ## Typical Integration Flow
+
+Retailer trade-in accounts (Mode C) follow a shorter flow: no payment details at accept, the customer (not you) answers revised offers with RHEX, and RHEX sends the final outcome to your result endpoint. See "Retailer Trade-In Accounts (Mode C)" near the top of this page.
 
 1. **Search for devices** — `GET /api/v1/devices?q=iphone` to build your device catalogue / search UI
 2. **Show pricing** — `GET /api/v1/devices/{id}/price` to display grade-by-grade pricing to the customer
