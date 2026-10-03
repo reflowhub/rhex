@@ -23,7 +23,7 @@ Sandbox API keys let you test the full API lifecycle without affecting real trad
 - Sandbox and production are fully separated: a sandbox key can only read or act on sandbox quotes, and a production key can only read or act on production quotes. Requests for a quote from the other environment return `404`
 - Sandbox quotes are flagged and excluded from your partner portal, dashboard stats and earnings
 - Sandbox quotes expire after **1 hour** (production quotes expire after 14 days)
-- No emails are sent (acceptance confirmation, revision notifications, payment confirmation)
+- No emails are sent (acceptance confirmation, revision notifications, payment confirmation), except for retailer accounts (see below)
 - No customer records are created or updated
 - No commission entries are generated
 
@@ -47,13 +47,13 @@ Sandbox quotes use real device data and pricing — the differences are that no 
 
 ## Retailer Trade-In Accounts (Mode C)
 
-For retailers that offer trade-in with a new-device purchase. Reflow Hub (RHEX) buys the device from your customer; you refund the trade-in value to the customer.
+For retailers that offer trade-in with a new-device purchase. Reflow Hub (RHEX) buys the device from your customer; you make the trade-in payment to the customer (a partial refund of their order).
 
 1. At checkout, search for the device (`GET /devices`) and create a quote (`POST /quotes`). Quotes are at your partner price and valid for **24 hours**; the amount in your currency (`quotePrice`) is fixed when the quote is created.
 2. Accept the quote with the customer's details and their consent to RHEX's trade-in terms (`PUT /quotes/{id}/accept`, see [Accept Quote](#5-accept-quote)). Get the current terms version and link from `GET /terms`.
 3. RHEX emails the customer a prepaid Australia Post label and handles reminders, receiving, data wipe and inspection.
 4. If the device doesn't match the quote, RHEX emails the customer a revised offer; the customer has 7 days to accept or decline it with RHEX. You can't respond to a revised offer on the customer's behalf (`PUT /quotes/{id}/respond` returns `403`).
-5. When the outcome is final, RHEX sends your result endpoint a signed `PUT` with `approvedQuotePrice`, `acceptGrading` and `accepted`. On `accepted: true`, refund `approvedQuotePrice` to the customer.
+5. When the outcome is final, RHEX sends your result endpoint a signed `PUT` with `approvedQuotePrice`, `acceptGrading` and `accepted`. On `accepted: true`, make a trade-in payment of `approvedQuotePrice` to the customer; on `accepted: false`, make none.
 
 | Outcome | Result sent | Quote status |
 |---|---|---|
@@ -283,7 +283,7 @@ curl -X POST \
 ```
 
 **Notes:**
-- `quotePrice` is the amount you'll pay the customer (in display currency)
+- `quotePrice` is the amount you'll pay the customer (in display currency). For retailer accounts it's the trade-in payment if the device matches the quote; the final amount comes in the signed result
 - `quotePriceNZD` is always in NZD for reconciliation
 - The quote expires after 14 days (24 hours for retailer accounts; 1 hour in sandbox)
 
@@ -350,7 +350,7 @@ curl -H "X-API-Key: rhx_your_key" \
 | `revised` | Device inspected, quote revised — awaiting response |
 | `inspected` | Inspection complete (or revision accepted), awaiting payment |
 | `paid` | Trade-in completed, payment processed |
-| `completed` | Retailer accounts only, instead of `paid`: trade-in approved and the result sent to you to refund the customer |
+| `completed` | Retailer accounts only, instead of `paid`: trade-in approved and the result sent to you to make the trade-in payment |
 | `returning` | Revision rejected or expired, device being returned |
 | `returned` | Device returned to customer, trade-in closed |
 | `expired` | Quote not accepted before `expiresAt`, or accepted but the device was never sent. RHEX may still receive a device for an accepted quote that has expired, which moves it to `received` (not for retailer accounts once the result has been sent) |
@@ -426,7 +426,7 @@ PUT /api/v1/quotes/{id}/accept
 | `bankAccountName` | string | If bank | Account holder name |
 | `imei` | string | No | 15-digit IMEI (if not provided at quote creation) |
 
-> \* **Payment fields are refused for Dealer (Mode B) and Retailer (Mode C) accounts.** Mode B: RHEX pays you via your registered payment method. Mode C: you refund the customer.
+> \* **Payment fields are refused for Dealer (Mode B) and Retailer (Mode C) accounts.** Mode B: RHEX pays you via your registered payment method. Mode C: you make the trade-in payment to the customer.
 
 #### Retailer account request body
 
@@ -526,6 +526,7 @@ curl -X PUT \
   "displayCurrency": "AUD",
   "status": "accepted",
   "source": "api",
+  "tradeInRef": "TI-1042",
   "customerName": "John Smith",
   "customerEmail": "john@example.com",
   "createdAt": "2026-08-12T02:30:00.000Z",
@@ -542,9 +543,16 @@ curl -X PUT \
 
 **Validation Rules:**
 - Quote must be in `"quoted"` status (not already accepted or expired)
-- Quote must not be past its `expiresAt` date
+- Quote must not be past its `expiresAt` date (24 hours after creation for retailer accounts)
 - PayID requires `payIdPhone`
 - Bank transfer requires `bankBSB`, `bankAccountNumber`, and `bankAccountName`
+
+Retailer accounts (Mode C), each rejected with `400` and an `error` saying which field:
+- `customerFirstName`, `customerLastName`, `customerEmail`, `customerPhone` and `shippingAddress` are required, and `customerEmail` must be a valid address
+- `shippingAddress` must be an object with an Australian `state` and a 4-digit `postcode` (a one-line string is refused)
+- `termsAccepted` must be `true`, and `termsVersion` must equal the current `version` from `GET /terms`
+- `marketingConsent`, if sent, must be `true` or `false`
+- Any payment field (`paymentMethod`, PayID or bank fields) is refused
 
 ---
 
